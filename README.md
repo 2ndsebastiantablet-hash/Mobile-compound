@@ -27,13 +27,73 @@ To host it, push the repo to GitHub and enable **Pages** (Settings → Pages →
 - Each floor has 3–6 areas and ends in an elevator lobby. Reinforcements walk in through the far door, or come out of the side elevators.
 
 ### Enemies
-| | |
-|---|---|
-| **Clerk** | Basic gunman. Getting hit cancels his shot. |
-| **Temp** | Fast melee rusher. Charges straight at you. |
-| **Security** | Armored. Fires three-shot bursts. |
-| **Drone** | Flying security bot with fast laser bolts. |
-| **Executives** | Bosses on floors 5, 10, 15 and 20. They fire spread shots and call in reinforcements. |
+There are 55 enemy types: the 4 original grunts plus 50 new ones, and the floor bosses. Each one has a floor range, and areas fill up with random picks from the enemies allowed on that floor. Low floors are mostly office staff. Robots, drones and turrets show up in the data center, and mutants, oozes and lab horrors appear higher up. Bosses still appear on floors 5, 10, 15 and 20. The first time you meet a new enemy type, a **NEW HOSTILE** callout appears.
+
+Things to know:
+- Shoot charging lasers to cancel them. A red beam means one is warming up.
+- Armored enemies take reduced body damage, so aim for the head, visor or core.
+- Shields absorb hits until they break.
+- Cloaked enemies can't be hit until they reappear.
+- Kamikaze drones blow up anything near them when shot down.
+- Healers patch up their allies, and summoners and splitters add more enemies to the fight.
+
+| Enemy | Floors | Behavior |
+|---|---|---|
+| **CLERK** | 1–9 | takes cover, pops up; shoots |
+| **TEMP** | 2–10 | charges you (melee) |
+| **SECURITY** | 3–13 | takes cover, pops up; burst fire |
+| **SECURITY DRONE** | 6–14 | flies around; shoots |
+| **COFFEE INTERN** | 1–6 | strafes side to side; lobs coffee |
+| **MAIL CLERK** | 1–5 | takes cover, pops up; spread shot |
+| **JANITOR** | 1–7 | charges you (melee) |
+| **IT GUY** | 2–8 | takes cover, pops up; summons mouse bots + shoots |
+| **MOUSE BOT** | 2–9 | zig-zags in (melee) |
+| **AUDITOR** | 3–10 | takes cover, pops up; charged laser (shoot it to cancel) |
+| **HR REP** | 2–12 | strafes side to side; heals allies + shoots |
+| **SHREDDER BOT** | 3–9 | strafes side to side; rapid fire |
+| **COPIER MIMIC** | 2–8 | stationary; spread shot; armored (aim for the weak point) |
+| **MIDDLE MANAGER** | 5–12 | takes cover, pops up; burst fire + summons coffee interns |
+| **THE MAJOR** | 6–14 | strafes side to side; burst fire + lobs grenade |
+| **RIOT GUARD** | 4–12 | takes cover, pops up; shoots; front shield |
+| **SPIDER BOT** | 4–12 | leaps at you (melee) |
+| **QUAD DRONE** | 5–13 | flies around; burst fire |
+| **KAMIKAZE DRONE** | 5–15 | kamikaze dive; explodes |
+| **MUTATED TEMP** | 6–14 | leaps at you (melee) |
+| **CUBICLE LURKER** | 5–11 | burrows under the floor; shoots |
+| **CONSULTANT** | 7–15 | teleports; spread shot |
+| **SALES REP** | 6–13 | strafes side to side; homing orbs |
+| **SENTRY TURRET** | 9–16 | stationary; rapid fire; armored (aim for the weak point) |
+| **MECH WALKER** | 10–18 | strafes side to side; homing missiles + burst fire; armored (aim for the weak point) |
+| **SPIDER MECH** | 11–19 | strafes side to side; charged laser (shoot it to cancel); armored (aim for the weak point) |
+| **SERVER WRAITH** | 10–17 | flies around; shoots; cloaks |
+| **CABLE CRAWLER** | 10–16 | zig-zags in (melee) |
+| **GLITCH** | 11–18 | teleports; shoots; splits into glitch shards |
+| **GLITCH SHARD** | 11–18 | charges you (melee) |
+| **FIREWALL TANK** | 12–19 | strafes side to side; spread shot; armored (aim for the weak point) |
+| **NANO SWARM** | 10–18 | charges you (melee) |
+| **HAZMAT TECH** | 9–15 | takes cover, pops up; spread shot |
+| **CYBER HOUND** | 10–17 | leaps at you (melee) |
+| **OOZE** | 8–16 | zig-zags in (melee); splits into oozelings |
+| **OOZELING** | 8–16 | zig-zags in (melee) |
+| **SPITTER** | 12–18 | strafes side to side; lobs acid |
+| **BRUTE** | 13–20 | charges you (melee); armored (aim for the weak point) |
+| **WATCHER** | 12–20 | flies around; charged laser (shoot it to cancel) |
+| **BROOD POD** | 13–20 | stationary; summons larvas |
+| **LARVA** | summoned | zig-zags in (melee) |
+| **LEECH** | 11–17 | zig-zags in (melee); regenerates |
+| **SCREAMER** | 14–20 | takes cover, pops up; sonic waves |
+| **ABOMINATION** | 15–20 | strafes side to side; burst fire + spread shot; regenerates |
+| **EXEC ASSISTANT** | 15–20 | strafes side to side; burst fire |
+| **BODYGUARD** | 15–20 | takes cover, pops up; burst fire; front shield |
+| **LAWYER** | 14–20 | takes cover, pops up; homing orbs + summons clerks |
+| **GOLD DRONE** | 15–20 | circles the room; burst fire |
+| **ASSASSIN** | 16–20 | charges you (melee); cloaks |
+| **LASER SENTINEL** | 16–20 | takes cover, pops up; charged laser (shoot it to cancel); armored (aim for the weak point) |
+| **HEAVY GUNNER** | 14–20 | takes cover, pops up; rapid fire |
+| **JETPACK TROOPER** | 13–20 | flies around; burst fire |
+| **ORBITAL DRONE** | 17–20 | circles the room; spread shot |
+| **SHADOW BOARD MEMBER** | 18–20 | takes cover, pops up; spread shot + homing missiles + summons bodyguards |
+
 
 ### Weapons
 You start with a pistol. Enemies randomly drop guns, shown as a spinning model with a light beam in the gun's rarity color. Bosses always drop a rare or better gun. Tap a drop to grab it; anything left on the floor is collected automatically when the area is clear. You can carry **3 guns**, and **SWAP** cycles through them. If your hands are full when you pick one up, you choose which gun to drop, or leave the new one behind. Picking up a gun you already carry refills its ammo.
@@ -81,7 +141,9 @@ index.html / style.css     HUD, menus, status bar
 src/main.js                game loop, input, shooting, area/floor flow, viewmodel
 src/level.js               floor + room generator, furniture kits, elevators
 src/weapons.js             the 20 guns, rarity rolls, procedural gun models
-src/enemies.js             enemy models, AI, projectiles
+src/enemydefs.js           the enemy roster (data: floors, movement, attacks, traits)
+src/enemymodels.js         procedural bodies: humans, drones, mechs, spiders, quads, blobs, turrets...
+src/enemies.js             generic enemy AI + projectiles
 src/effects.js             gibs, particles, bullet holes
 src/textures.js            procedural pixel-art textures + 3x5 pixel font
 src/audio.js               WebAudio synth SFX and music

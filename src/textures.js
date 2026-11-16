@@ -357,29 +357,32 @@ export const flash = () => tex('flash', 32, 32, (p, r) => {
 }, { mip: false });
 
 // ---------------------------------------------------------------- characters
-export const SKINS = [[226, 180, 140], [196, 146, 108], [150, 100, 70], [110, 72, 50], [236, 196, 160]];
+export const SKINS = [[226, 180, 140], [196, 146, 108], [150, 100, 70], [110, 72, 50], [236, 196, 160], [170, 190, 150]];
 export const HAIRS = [[40, 28, 20], [90, 60, 30], [20, 20, 22], [160, 130, 70], [120, 120, 120], [130, 50, 24]];
 
+// face styles: normal, cap, grey, messy, shades, mustache, bald
 export function face(v) {
-  const key = `face${v.type}${v.skin}${v.hair}${v.glasses ? 1 : 0}`;
+  const st = v.style || 'normal';
+  const key = `face${st}${v.skin}${v.hair}${v.glasses ? 1 : 0}${v.capCol || ''}`;
   return tex(key, 16, 16, (p, r) => {
-    const skin = SKINS[v.skin], hair = HAIRS[v.hair];
+    const skin = SKINS[v.skin], hair = st === 'grey' ? [150, 150, 150] : HAIRS[v.hair];
+    const capC = v.capCol || [34, 44, 74];
     p.noise(skin, 0.06, r);
-    if (v.type === 'guard') {
-      p.noise([34, 44, 74], 0.1, r, 0, 0, 16, 4); p.rect(0, 4, 16, 1, [18, 22, 40]);
+    if (st === 'cap') {
+      p.noise(capC, 0.1, r, 0, 0, 16, 4); p.rect(0, 4, 16, 1, sh(capC, 0.55));
       p.rect(6, 1, 4, 2, [200, 170, 60]);
-    } else if (v.type === 'boss') {
-      p.noise([150, 150, 150], 0.1, r, 0, 0, 16, 3); p.set(4, 3, [150, 150, 150]); p.set(11, 3, [150, 150, 150]);
+    } else if (st === 'bald') {
+      for (let y = 2; y < 6; y++) { p.set(0, y, hair); p.set(15, y, hair); }
+      p.set(5, 1, sh(skin, 1.12)); p.set(6, 1, sh(skin, 1.12));
     } else {
       p.noise(hair, 0.15, r, 0, 0, 16, 3);
       for (let x = 0; x < 16; x++) if (r() < 0.5) p.set(x, 3, sh(hair, 0.9));
-      if (v.type === 'rusher') for (let x = 0; x < 16; x += 2) if (r() < 0.5) p.set(x, 0, sh(hair, 1.25));
+      if (st === 'messy') for (let x = 0; x < 16; x += 2) if (r() < 0.5) p.set(x, 0, sh(hair, 1.25));
     }
+    [[3, 5], [4, 5], [5, 6], [6, 6], [9, 6], [10, 6], [11, 5], [12, 5]].forEach(([x, y]) => p.set(x, y, sh(hair, 0.6)));
     const dark = [24, 14, 12];
-    // angry brows (inner ends low)
-    [[3, 5], [4, 5], [5, 6], [6, 6], [9, 6], [10, 6], [11, 5], [12, 5]].forEach(([x, y]) => p.set(x, y, v.type === 'boss' ? [120, 120, 120] : sh(hair, 0.6)));
-    const pupil = v.type === 'rusher' ? [220, 20, 20] : dark;
-    if (v.type === 'guard') {
+    const pupil = st === 'messy' ? [220, 20, 20] : v.eye || dark;
+    if (st === 'cap' || st === 'shades') {
       p.rect(3, 7, 4, 2, [20, 20, 24]); p.rect(9, 7, 4, 2, [20, 20, 24]); p.rect(7, 7, 2, 1, [20, 20, 24]);
       p.set(4, 7, [120, 160, 200]); p.set(10, 7, [120, 160, 200]);
     } else {
@@ -390,61 +393,98 @@ export function face(v) {
       }
     }
     p.set(7, 9, sh(skin, 0.75)); p.set(8, 9, sh(skin, 0.7)); p.set(7, 10, sh(skin, 0.8));
-    if (v.type === 'boss') {
+    if (st === 'grey') {
       for (let x = 4; x <= 11; x++) p.set(x, 12, [80, 20, 20]); p.set(4, 11, [80, 20, 20]); p.set(11, 11, [80, 20, 20]);
       for (let x = 5; x <= 10; x += 1) p.set(x, 12, x % 2 ? [240, 240, 230] : [80, 20, 20]);
-    } else if (v.type === 'rusher') {
+    } else if (st === 'messy') {
       p.rect(5, 11, 6, 3, [70, 10, 10]); for (let x = 5; x < 11; x += 2) p.set(x, 11, [240, 240, 230]);
     } else {
       for (let x = 5; x <= 10; x++) p.set(x, 12, [100, 30, 30]); p.set(6, 12, [230, 230, 220]); p.set(8, 12, [230, 230, 220]);
     }
+    if (st === 'mustache') { p.rect(4, 10, 8, 2, sh(hair, 0.8)); p.set(3, 11, sh(hair, 0.8)); p.set(12, 11, sh(hair, 0.8)); }
     for (let y = 0; y < 16; y++) { p.mul(15, y, 0.8); p.mul(0, y, 0.9); }
     for (let x = 0; x < 16; x++) p.mul(x, 15, 0.82);
   }, { mip: false });
 }
 
+function hairCol(v) { return v.style === 'cap' ? (v.capCol || [34, 44, 74]) : v.style === 'grey' ? [150, 150, 150] : v.style === 'bald' ? SKINS[v.skin] : HAIRS[v.hair]; }
 export function headSide(v, back) {
-  const key = `hside${back ? 'b' : 's'}${v.type}${v.skin}${v.hair}`;
+  const key = `hside${back ? 'b' : 's'}${v.style}${v.skin}${v.hair}${v.capCol || ''}`;
   return tex(key, 16, 16, (p, r) => {
-    const skin = SKINS[v.skin];
-    const hair = v.type === 'guard' ? [34, 44, 74] : v.type === 'boss' ? [150, 150, 150] : HAIRS[v.hair];
+    const skin = SKINS[v.skin], hair = hairCol(v);
     p.noise(skin, 0.06, r);
-    const hh = back ? (v.type === 'guard' ? 5 : 11) : (v.type === 'guard' ? 4 : 5);
+    const hh = back ? (v.style === 'cap' ? 5 : 11) : (v.style === 'cap' ? 4 : 5);
     p.noise(hair, 0.15, r, 0, 0, 16, hh);
-    if (!back) { p.rect(7, 7, 2, 3, sh(skin, 0.8)); }
+    if (v.style === 'bald') p.noise(HAIRS[v.hair], 0.15, r, 0, 4, 16, 3);
+    if (!back) p.rect(7, 7, 2, 3, sh(skin, 0.8));
     for (let x = 0; x < 16; x++) p.mul(x, 15, 0.82);
   }, { mip: false });
 }
-
 export function hairTop(v) {
-  const hair = v.type === 'guard' ? [34, 44, 74] : v.type === 'boss' ? [150, 150, 150] : HAIRS[v.hair];
-  return tex(`htop${v.type}${v.hair}`, 8, 8, (p, r) => p.noise(hair, 0.18, r), { mip: false });
+  return tex(`htop${v.style}${v.hair}${v.skin}${v.capCol || ''}`, 8, 8, (p, r) => p.noise(hairCol(v), 0.18, r), { mip: false });
 }
 
+// style: suit, shirt, uniform, polo, overalls, vest, blouse, military, armor, hazmat, glitch, ninja, flesh
 export const OUTFITS = {
-  grunt: { jacket: [64, 66, 76], shirt: [222, 222, 214], tie: [150, 30, 30], pants: [40, 40, 48] },
-  rusher: { jacket: [150, 172, 206], shirt: [150, 172, 206], tie: [200, 50, 50], pants: [150, 130, 92] },
-  guard: { jacket: [38, 48, 80], shirt: [38, 48, 80], tie: [20, 20, 24], pants: [30, 36, 60] },
-  boss: { jacket: [42, 30, 44], shirt: [235, 230, 220], tie: [220, 180, 50], pants: [36, 26, 38] },
+  grunt: { style: 'suit', jacket: [64, 66, 76], shirt: [222, 222, 214], tie: [150, 30, 30], pants: [40, 40, 48] },
+  rusher: { style: 'shirt', jacket: [150, 172, 206], shirt: [150, 172, 206], tie: [200, 50, 50], pants: [150, 130, 92] },
+  guard: { style: 'uniform', jacket: [38, 48, 80], shirt: [38, 48, 80], tie: [20, 20, 24], pants: [30, 36, 60] },
+  boss: { style: 'suit', pin: true, jacket: [42, 30, 44], shirt: [235, 230, 220], tie: [220, 180, 50], pants: [36, 26, 38] },
+  intern: { style: 'polo', jacket: [200, 60, 50], shirt: [230, 220, 200], pants: [150, 130, 92] },
+  mail: { style: 'polo', jacket: [120, 90, 50], shirt: [200, 170, 90], pants: [90, 70, 40] },
+  janitor: { style: 'overalls', jacket: [90, 110, 90], shirt: [180, 170, 140], pants: [80, 100, 80], gloves: [200, 180, 40] },
+  it: { style: 'polo', jacket: [40, 44, 52], shirt: [90, 200, 120], pants: [60, 60, 70] },
+  accountant: { style: 'vest', jacket: [110, 80, 50], shirt: [226, 226, 216], tie: [40, 60, 120], pants: [60, 56, 50] },
+  hr: { style: 'blouse', jacket: [200, 120, 150], shirt: [240, 220, 220], pants: [60, 50, 60] },
+  manager: { style: 'suit', jacket: [110, 80, 54], shirt: [220, 210, 180], tie: [60, 120, 60], pants: [80, 60, 40] },
+  major: { style: 'military', jacket: [86, 96, 58], shirt: [86, 96, 58], pants: [70, 78, 46], gloves: [40, 34, 26] },
+  riot: { style: 'armor', jacket: [34, 36, 42], shirt: [34, 36, 42], pants: [30, 30, 36], gloves: [20, 20, 22] },
+  consultant: { style: 'suit', jacket: [220, 220, 214], shirt: [40, 40, 44], tie: [200, 40, 40], pants: [210, 210, 204] },
+  sales: { style: 'suit', jacket: [40, 70, 160], shirt: [240, 240, 230], tie: [250, 200, 40], pants: [36, 56, 130] },
+  glitch: { style: 'glitch', jacket: [40, 220, 200], shirt: [240, 40, 200], pants: [30, 30, 40] },
+  hazmat: { style: 'hazmat', jacket: [220, 190, 40], shirt: [220, 190, 40], pants: [210, 180, 36], gloves: [30, 30, 30] },
+  flesh: { style: 'flesh', jacket: [170, 110, 110], shirt: [170, 110, 110], pants: [110, 60, 60], gloves: [150, 90, 90] },
+  brute: { style: 'flesh', jacket: [120, 140, 100], shirt: [120, 140, 100], pants: [60, 50, 40], gloves: [100, 120, 80] },
+  assistant: { style: 'blouse', jacket: [30, 30, 34], shirt: [220, 220, 220], pants: [30, 30, 34] },
+  bodyguard: { style: 'suit', jacket: [22, 22, 26], shirt: [230, 230, 230], tie: [20, 20, 22], pants: [20, 20, 24] },
+  lawyer: { style: 'suit', pin: true, jacket: [56, 58, 66], shirt: [230, 225, 215], tie: [120, 20, 40], pants: [50, 52, 60] },
+  ninja: { style: 'ninja', jacket: [24, 24, 30], shirt: [24, 24, 30], pants: [20, 20, 26], gloves: [16, 16, 20] },
+  heavy: { style: 'military', jacket: [70, 72, 78], shirt: [70, 72, 78], pants: [56, 58, 62], gloves: [30, 30, 30] },
+  jet: { style: 'military', jacket: [50, 70, 110], shirt: [50, 70, 110], pants: [40, 54, 86], gloves: [30, 30, 30] },
+  shadow: { style: 'suit', pin: true, jacket: [16, 12, 22], shirt: [60, 20, 80], tie: [180, 40, 255], pants: [14, 10, 20] },
 };
 
 export function torsoFront(type) {
   return tex('tfront' + type, 16, 16, (p, r) => {
-    const o = OUTFITS[type];
+    const o = OUTFITS[type], st = o.style;
     p.noise(o.jacket, 0.1, r);
-    if (type === 'boss') for (let x = 1; x < 16; x += 3) for (let y = 0; y < 16; y++) p.set(x, y, sh(o.jacket, 1.6));
-    if (type === 'guard') {
+    if (o.pin) for (let x = 1; x < 16; x += 3) for (let y = 0; y < 16; y++) p.set(x, y, sh(o.jacket, 1.5));
+    if (st === 'uniform' || st === 'military') {
       p.rect(3, 3, 2, 2, [220, 190, 70]); p.rect(10, 4, 3, 3, sh(o.jacket, 0.75)); p.rect(3, 6, 3, 3, sh(o.jacket, 0.75));
       p.rect(0, 13, 16, 2, [20, 20, 20]); p.rect(7, 13, 2, 2, [200, 180, 80]);
       for (let y = 0; y < 12; y++) p.set(8, y, sh(o.jacket, 0.7));
+      if (st === 'military') { [[2, 2, [200, 40, 40]], [3, 2, [40, 80, 200]], [4, 2, [230, 200, 60]], [5, 2, [60, 160, 60]]].forEach(([x, y, c]) => p.set(x, y, c)); p.rect(11, 1, 3, 1, [230, 200, 60]); }
       return;
     }
-    if (type === 'rusher') {
+    if (st === 'shirt') {
       for (let i = 0; i < 6; i++) p.set(9 + r() * 4, 6 + r() * 4, [120, 80, 50]);
       p.rect(7, 0, 2, 2, o.tie); p.rect(8, 2, 2, 7, o.tie); p.set(9, 9, o.tie);
-      p.rect(0, 14, 16, 2, [80, 60, 40]);
-      return;
+      p.rect(0, 14, 16, 2, [80, 60, 40]); return;
     }
+    if (st === 'polo') { p.rect(5, 0, 6, 2, sh(o.jacket, 1.25)); p.rect(7, 2, 2, 3, sh(o.jacket, 0.8)); p.rect(11, 4, 2, 2, o.shirt); p.rect(0, 14, 16, 2, sh(o.pants, 0.8)); return; }
+    if (st === 'overalls') { p.noise(o.shirt, 0.1, r, 0, 0, 16, 5); p.rect(3, 4, 10, 12, o.pants); p.rect(3, 0, 2, 5, o.pants); p.rect(11, 0, 2, 5, o.pants); p.rect(6, 6, 4, 3, sh(o.pants, 0.8)); p.set(4, 4, [200, 200, 60]); p.set(11, 4, [200, 200, 60]); return; }
+    if (st === 'vest') { p.noise(o.shirt, 0.06, r); for (let y = 3; y < 15; y++) for (let x = 2; x < 14; x++) if (Math.abs(x - 7.5) + 1 > (y < 6 ? 6 - y : 0)) p.set(x, y, sh(o.jacket, ((x + y) % 4 === 0) ? 1.25 : 1)); p.rect(7, 0, 2, 5, o.tie); return; }
+    if (st === 'blouse') { for (let y = 0; y < 5; y++) for (let x = 7 - (4 - y); x <= 8 + (4 - y); x++) p.set(x, y, sh(o.shirt, 0.95)); p.set(7, 6, [230, 200, 80]); p.set(8, 6, [230, 200, 80]); return; }
+    if (st === 'armor') { for (let y = 0; y < 16; y += 5) for (let x = 0; x < 16; x++) p.set(x, y, sh(o.jacket, 0.55)); for (let x = 0; x < 16; x += 8) for (let y = 0; y < 16; y++) p.set(x, y, sh(o.jacket, 0.55)); p.text('SWAT', 0, 6, [200, 200, 200]); return; }
+    if (st === 'hazmat') { p.rect(7, 0, 2, 16, sh(o.jacket, 0.7)); for (let a = 0; a < 6.28; a += 0.3) p.set(11 + Math.cos(a) * 2.4, 5 + Math.sin(a) * 2.4, [20, 20, 20]); p.set(11, 5, [20, 20, 20]); return; }
+    if (st === 'glitch') { for (let y = 0; y < 16; y++) { const c = [[40, 220, 200], [240, 40, 200], [30, 30, 40], [250, 250, 250], [40, 40, 240]][Math.floor(r() * 5)]; const x0 = r() * 10 | 0; for (let x = x0; x < x0 + 3 + r() * 10; x++) p.set(x, y, c); } return; }
+    if (st === 'ninja') { for (let i = 0; i < 16; i++) { p.set(i, i, sh(o.jacket, 1.8)); p.set(i, Math.min(15, i + 1), sh(o.jacket, 1.8)); } p.rect(0, 12, 16, 2, [120, 20, 20]); return; }
+    if (st === 'flesh') {
+      for (let i = 0; i < 5; i++) { let x = r() * 16, y = r() * 16; for (let k = 0; k < 10; k++) { p.set(x, y, sh(o.jacket, 0.6)); x += r() * 2 - 1; y += 1; } }
+      for (let i = 0; i < 4; i++) { const x = r() * 14 | 0, y = r() * 14 | 0; p.rect(x, y, 2, 2, sh(o.jacket, 1.3)); }
+      p.rect(6, 4, 4, 1, sh(o.jacket, 0.7)); p.rect(5, 8, 6, 1, sh(o.jacket, 0.75)); p.rect(5, 11, 6, 1, sh(o.jacket, 0.75)); return;
+    }
+    // suit
     for (let y = 0; y < 11; y++) {
       const hw = Math.max(0, 3 - Math.floor(y / 4));
       for (let x = 8 - hw - 1; x <= 8 + hw; x++) p.set(x, y, sh(o.shirt, 0.95 + r() * 0.08));
@@ -459,39 +499,91 @@ export function torsoFront(type) {
 export function torsoBack(type) {
   return tex('tback' + type, 16, 16, (p, r) => {
     const o = OUTFITS[type]; p.noise(o.jacket, 0.1, r);
-    if (type === 'boss') for (let x = 1; x < 16; x += 3) for (let y = 0; y < 16; y++) p.set(x, y, sh(o.jacket, 1.6));
+    if (o.pin) for (let x = 1; x < 16; x += 3) for (let y = 0; y < 16; y++) p.set(x, y, sh(o.jacket, 1.5));
     if (type === 'guard') p.text('SEC', 2, 4, [220, 220, 220]);
+    if (o.style === 'glitch') for (let y = 0; y < 16; y += 2) p.rect(r() * 8 | 0, y, 6, 1, [240, 40, 200]);
   }, { mip: false });
 }
 
 export function arm(type, skin) {
   return tex(`arm${type}${skin}`, 8, 16, (p, r) => {
-    const o = OUTFITS[type];
-    p.noise(type === 'rusher' ? o.shirt : o.jacket, 0.1, r);
-    if (type === 'rusher') p.noise(SKINS[skin], 0.06, r, 0, 6, 8, 10);
-    else p.rect(0, 11, 8, 1, o.shirt);
-    p.noise(SKINS[skin], 0.06, r, 0, 12, 8, 4);
+    const o = OUTFITS[type], st = o.style;
+    p.noise(st === 'shirt' || st === 'polo' ? o.jacket : o.jacket, 0.1, r);
+    if (st === 'shirt' || st === 'polo' || st === 'flesh') p.noise(o.gloves && st === 'flesh' ? o.jacket : SKINS[skin], 0.06, r, 0, 6, 8, 10);
+    else if (st === 'suit' || st === 'vest') p.rect(0, 11, 8, 1, o.shirt);
+    if (st === 'glitch') p.rect(0, r() * 10 | 0, 8, 2, [240, 40, 200]);
+    p.noise(o.gloves || SKINS[skin], 0.08, r, 0, 12, 8, 4);
   }, { mip: false });
 }
 
 export function leg(type) {
   return tex('leg' + type, 8, 16, (p, r) => {
     const o = OUTFITS[type]; p.noise(o.pants, 0.12, r);
-    p.rect(0, 14, 8, 2, [18, 16, 16]);
+    p.rect(0, 14, 8, 2, o.style === 'hazmat' ? [30, 30, 30] : o.style === 'flesh' ? sh(o.pants, 0.7) : [18, 16, 16]);
   }, { mip: false });
 }
 
-export const botFace = () => tex('botface', 16, 16, (p, r) => {
-  p.noise([70, 74, 82], 0.12, r);
-  p.rect(1, 5, 14, 5, [10, 10, 12]);
-  p.rect(3, 6, 10, 3, [230, 30, 20]); p.rect(6, 6, 4, 3, [255, 160, 120]);
-  for (let x = 2; x < 14; x += 3) p.set(x, 12, [30, 30, 34]);
-  p.frame(0, 0, 16, 16, [40, 42, 48]);
+// ---- robots & monsters
+export const panel = (base, accent, key) => tex('panel' + key, 16, 16, (p, r) => {
+  p.noise(base, 0.12, r);
+  for (let i = 0; i < 16; i++) { p.set(i, 0, sh(base, 0.6)); p.set(0, i, sh(base, 0.6)); p.set(i, 15, sh(base, 1.2)); }
+  for (let i = 4; i < 12; i++) p.set(i, 8, sh(base, 0.75));
+  for (const [x, y] of [[2, 2], [13, 2], [2, 13], [13, 13]]) { p.set(x, y, sh(base, 0.45)); p.set(x + 1, y, sh(base, 1.35)); }
+  if (accent) for (let y = 11; y < 15; y++) for (let x = 1; x < 15; x++) p.set(x, y, ((x + y) >> 1) % 2 ? accent : [20, 20, 20]);
 }, { mip: false });
 
-export const botSide = () => tex('botside', 16, 16, (p, r) => {
-  p.noise([86, 90, 98], 0.12, r);
-  p.frame(2, 2, 12, 12, [50, 52, 58]); p.text('7', 6, 5, [230, 190, 40]);
+export const flesh = (base, key) => tex('flesh' + key, 16, 16, (p, r) => {
+  p.noise(base, 0.25, r);
+  for (let i = 0; i < 3; i++) { let x = r() * 16, y = 0; for (let k = 0; k < 18; k++) { p.set(x, y, sh(base, 0.55)); x += r() * 2 - 1; y += 1; } }
+  for (let i = 0; i < 4; i++) { const x = r() * 14 | 0, y = r() * 14 | 0; p.rect(x, y, 2, 2, sh(base, 1.35)); p.set(x, y, [240, 230, 160]); }
 }, { mip: false });
 
+export const slime = (base, key) => tex('slime' + key, 16, 16, (p, r) => {
+  p.noise(base, 0.12, r);
+  for (let i = 0; i < 5; i++) { const x = r() * 13 | 0, y = r() * 13 | 0; p.frame(x, y, 3, 3, sh(base, 1.4)); }
+  p.rect(2, 2, 3, 1, sh(base, 1.7)); p.set(2, 3, sh(base, 1.7));
+}, { mip: false });
+
+export const tread = () => tex('tread', 16, 16, (p, r) => {
+  p.noise([30, 30, 32], 0.2, r);
+  for (let y = 0; y < 16; y += 4) { p.rect(0, y, 16, 2, [60, 60, 64]); }
+}, { mip: false });
+
+// kinds: helmet, gasmask, mutant, mask, glitch, visor, mono, multi, eyeball, pod, hound, copier, wraith
+export function eyes(kind, col = [255, 40, 30], base = [70, 74, 82]) {
+  const key = `eyes${kind}${col}${base}`;
+  return tex(key, 16, 16, (p, r) => {
+    const glow = col, hot = sh(col, 1.6);
+    if (kind === 'helmet') { p.noise([40, 42, 48], 0.1, r); p.rect(1, 5, 14, 5, [12, 12, 16]); p.set(3, 6, [120, 140, 170]); p.set(4, 6, [80, 100, 130]); p.rect(5, 12, 6, 2, [30, 30, 34]); return; }
+    if (kind === 'gasmask') {
+      p.noise([52, 58, 52], 0.12, r);
+      for (const cx of [4, 11]) for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) if (x * x + y * y <= 5) p.set(cx + x, 7 + y, x * x + y * y > 3 ? [20, 20, 20] : [110, 160, 120]);
+      p.rect(5, 11, 6, 5, [90, 92, 90]); for (let x = 6; x < 10; x += 2) p.set(x, 13, [30, 30, 30]); return;
+    }
+    if (kind === 'mutant') {
+      p.noise(base, 0.22, r);
+      for (const [x, y, s] of [[3, 4, 2], [10, 5, 3], [7, 2, 1]]) { p.rect(x, y, s, s, [250, 230, 60]); p.set(x + (s >> 1), y + (s >> 1), [20, 10, 10]); }
+      p.rect(3, 10, 10, 5, [60, 10, 10]); for (let x = 3; x < 13; x += 2) { p.set(x, 10, [240, 230, 200]); p.set(x + 1, 14, [240, 230, 200]); }
+      return;
+    }
+    if (kind === 'mask') { p.noise([24, 24, 30], 0.1, r); p.rect(2, 6, 12, 3, SKINS[0]); p.set(4, 7, [200, 20, 20]); p.set(11, 7, [200, 20, 20]); return; }
+    if (kind === 'glitch') { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, [[40, 220, 200], [240, 40, 200], [20, 20, 30], [250, 250, 250]][Math.floor(r() * 4)]); p.rect(3, 6, 3, 2, [0, 0, 0]); p.rect(10, 6, 3, 2, [0, 0, 0]); return; }
+    p.noise(base, 0.12, r);
+    p.frame(0, 0, 16, 16, sh(base, 0.6));
+    if (kind === 'visor') { p.rect(1, 5, 14, 5, [10, 10, 12]); p.rect(3, 6, 10, 3, glow); p.rect(6, 6, 4, 3, hot); for (let x = 2; x < 14; x += 3) p.set(x, 12, sh(base, 0.5)); return; }
+    if (kind === 'mono' || kind === 'eyeball') {
+      if (kind === 'eyeball') { p.noise([230, 220, 210], 0.06, r); for (let i = 0; i < 4; i++) { let x = 0, y = r() * 16; for (let k = 0; k < 6; k++) { p.set(x, y, [200, 40, 40]); x += 1; y += r() * 2 - 1; } } }
+      for (let y = -5; y <= 5; y++) for (let x = -5; x <= 5; x++) { const d = x * x + y * y; if (d <= 25) p.set(8 + x, 8 + y, kind === 'eyeball' ? (d <= 9 ? (d <= 3 ? [10, 10, 10] : glow) : d <= 25 && d > 20 ? sh(glow, 0.6) : p.get(8 + x, 8 + y)) : d <= 4 ? hot : d <= 16 ? glow : [12, 12, 14]); }
+      p.set(6, 6, [255, 255, 255]); return;
+    }
+    if (kind === 'multi') { for (const [x, y, s] of [[4, 5, 2], [10, 5, 2], [6, 3, 1], [9, 3, 1], [3, 8, 1], [12, 8, 1], [7, 8, 2]]) { p.rect(x, y, s, s, glow); p.set(x, y, hot); } p.rect(5, 12, 6, 2, [20, 20, 20]); return; }
+    if (kind === 'hound') { p.rect(2, 5, 4, 2, glow); p.rect(10, 5, 4, 2, glow); p.rect(3, 11, 10, 3, [20, 20, 20]); for (let x = 4; x < 12; x += 2) p.set(x, 11, [220, 220, 220]); return; }
+    if (kind === 'copier') { p.rect(1, 4, 14, 3, [20, 20, 20]); for (let x = 2; x < 14; x += 2) p.set(x, 4, [240, 240, 230]); p.rect(2, 10, 4, 2, glow); p.rect(9, 10, 5, 2, [60, 200, 80]); return; }
+    if (kind === 'pod') { for (let y = -4; y <= 4; y++) for (let x = -4; x <= 4; x++) if (x * x + y * y < 16) p.set(8 + x, 8 + y, x * x + y * y < 6 ? glow : [60, 10, 20]); return; }
+    if (kind === 'wraith') { p.noise([16, 20, 18], 0.3, r); p.rect(3, 6, 3, 2, glow); p.rect(10, 6, 3, 2, glow); for (let y = 9; y < 16; y += 2) p.rect(4, y, 8, 1, sh(glow, 0.3)); return; }
+  }, { mip: false });
+}
+
+export const botFace = () => eyes('visor', [230, 30, 20], [70, 74, 82]);
+export const botSide = () => panel([86, 90, 98], null, 'bot');
 export const gunMetal = () => metal([46, 48, 54], 'gun');

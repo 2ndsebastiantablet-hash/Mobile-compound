@@ -1,56 +1,58 @@
-// Enemy roster: blocky office workers (and a security drone) built from boxes.
+// Generic, data-driven enemy: body from enemymodels.js, behaviour from enemydefs.js.
 import * as THREE from '../vendor/three.module.min.js';
-import * as TX from './textures.js';
-import { box } from './level.js';
-import { rand, randi, clamp } from './util.js';
+import { DEFS, isFlyer, rosterFor } from './enemydefs.js';
+import { BUILDERS } from './enemymodels.js';
+import { rand, clamp, pick } from './util.js';
 
-const matCache = new Map();
-const lm = (t) => {
-  if (!matCache.has(t.uuid)) matCache.set(t.uuid, new THREE.MeshLambertMaterial({ map: t }));
-  return matCache.get(t.uuid);
-};
 const FLASH = new THREE.MeshBasicMaterial({ color: 0xffffff });
-const GLOW = new THREE.MeshBasicMaterial({ color: 0xffa020 });
-const GLOW_BOT = new THREE.MeshBasicMaterial({ color: 0xff3020 });
-const GUN = new THREE.MeshLambertMaterial({ map: TX.gunMetal() });
-
-export const STATS = {
-  grunt: { hp: 3, speed: 1.5, fire: [2.4, 4.0], aim: 0.65, score: 100, dmg: 9, pspeed: 4.6 },
-  rusher: { hp: 2, speed: 3.2, score: 120, dmg: 11 },
-  guard: { hp: 7, speed: 1.1, fire: [2.8, 4.2], aim: 0.75, burst: 3, score: 220, dmg: 7, pspeed: 5.2 },
-  bot: { hp: 4, speed: 2.0, fire: [1.8, 3.0], aim: 0.55, score: 160, dmg: 6, pspeed: 6.4 },
-  boss: { hp: 60, speed: 0.9, fire: [1.4, 2.1], aim: 0.8, score: 2500, dmg: 9, pspeed: 4.8 },
-};
-
+const CLOAK = new THREE.MeshBasicMaterial({ color: 0x8090a0, transparent: true, opacity: 0.12, depthWrite: false });
+const ROBOT = new Set(['drone', 'mech', 'turret', 'tank', 'swarm']);
 const tmpV = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
+
+export { DEFS };
 
 export class Enemy {
   constructor(game, type, spot, opts = {}) {
-    this.game = game; this.type = type; this.spot = spot;
-    const st = STATS[type];
+    const def = DEFS[type];
+    this.game = game; this.type = type; this.def = def; this.st = def; this.spot = spot;
     const f = game.floorNum;
-    this.st = st;
-    this.maxHp = this.hp = type === 'boss' ? st.hp + f * 4 : Math.round(st.hp * (1 + f * 0.04) * 10) / 10;
-    this.dmg = st.dmg * (1 + f * 0.03);
-    this.pspeed = (st.pspeed || 5) * (1 + f * 0.015);
-    this.fireMul = Math.max(0.55, 1 - f * 0.025);
+    this.traits = def.traits || {};
+    this.maxHp = this.hp = def.boss ? def.hp + f * 4 : Math.round(def.hp * (1 + f * 0.03) * 10) / 10;
+    this.dmg = def.dmg * (1 + f * 0.03);
+    this.pspeed = 4.6 * (1 + f * 0.015);
+    this.fireMul = Math.max(0.6, 1 - f * 0.02);
+    this.shieldHp = this.traits.shield || 0;
+    this.scale = def.scale || 1;
+    const mk = def.model.kind, ms = def.model.style;
+    this.gore = ROBOT.has(mk) || (mk === 'spider') || (mk === 'quad' && (ms === 'robot' || ms === 'hound')) || (mk === 'floater' && ms === 'wraith') ? 'spark'
+      : mk === 'blob' ? 'goo' : (mk === 'human' && def.model.outfit === 'glitch') ? 'spark' : 'blood';
+    this.flyer = isFlyer(type);
     this.meshes = [];
     this.root = new THREE.Group();
     this.body = new THREE.Group();
     this.root.add(this.body);
-    this.scale = type === 'boss' ? 1.55 : 1;
     this.root.scale.setScalar(this.scale);
-    if (type === 'bot') this.buildBot(); else this.buildHuman(type);
-    this.pos = new THREE.Vector3(spot.x, spot.y || 0, spot.z);
-    if (opts.enter) { this.pos.copy(opts.enter); if (type === 'bot') this.pos.y = 2.2; }
-    this.state = opts.enter ? 'enter' : 'dormant';
-    this.goal = new THREE.Vector3(spot.x, spot.y || 0, spot.z);
-    this.timer = 0; this.fireTimer = rand(Math.random, 0.4, 1.4); this.phase = Math.random() * 6;
-    this.crouch = spot.cover && type !== 'bot' && type !== 'rusher' ? 1 : 0;
-    this.crouchTarget = this.crouch;
-    this.flashT = 0; this.stagger = 0; this.aimAmt = 0; this.burstLeft = 0; this.swing = 0;
-    this.pattern = 0; this.summoned = 0; this.bob = Math.random() * 6;
-    this.root.position.copy(this.pos);
+    this.phase = Math.random() * 6; this.bob = Math.random() * 6;
+    this.flashT = 0; this.stagger = 0; this.aimAmt = 0; this.swingT = 0; this.crouch = 0; this.crouchTarget = 0;
+    this.centerY = 1.15; this.shoulderY = 1.42;
+    BUILDERS[mk](this, def.model);
+    this.hover = this.traits.hover || 0;
+    this.yOff = this.flyer && mk === 'human' ? -1.3 : 0; // jetpack humans: flight height is measured at the chest
+    this.pos = new THREE.Vector3(spot.x, this.flyer ? (spot.y || 2.1) : this.hover, spot.z);
+    if (opts.enter) { this.pos.copy(opts.enter); this.pos.y = this.flyer ? 2.2 : this.hover; }
+    if (opts.at) this.pos.copy(opts.at).setY(this.flyer ? Math.max(1.6, opts.at.y) : this.hover);
+    this.goal = new THREE.Vector3(spot.x, this.flyer ? (spot.y || 2.1) : this.hover, spot.z);
+    this.state = opts.enter ? 'enter' : opts.active ? 'active' : 'dormant';
+    this.atkIdx = 0; this.atkState = 'cool'; this.atkT = rand(Math.random, 1.0, 2.2); this.timer = 0; this.burstLeft = 0; this.burstGap = 0.18;
+    this.meleeT = 0.35; this.blinkT = rand(Math.random, 2, 3.5); this.hopT = 0.3; this.leap = null;
+    this.burrow = def.move === 'burrow' ? { phase: 'up', t: 2.4 } : null;
+    this.burrowY = 0;
+    this.cloak = this.traits.cloak ? { on: false, t: rand(Math.random, 1.5, 2.5) } : null;
+    this.orbitA = Math.random() * 6.28;
+    this.lastHit = -10; this.dive = null;
+    if (def.move === 'stand' && spot.cover && !def.nocover) this.crouch = this.crouchTarget = 1;
+    this.place();
     game.scene.add(this.root);
   }
 
@@ -62,69 +64,33 @@ export class Enemy {
     return m;
   }
 
-  buildHuman(type) {
-    const v = { type, skin: randi(Math.random, 0, 4), hair: randi(Math.random, 0, 5), glasses: Math.random() < 0.3 };
-    const side = lm(TX.headSide(v, false)), back = lm(TX.headSide(v, true)), top = lm(TX.hairTop(v));
-    const headMats = [side, side, top, side, lm(TX.face(v)), back];
-    const tb = lm(TX.torsoBack(type)), tf = lm(TX.torsoFront(type));
-    const torsoMats = [tb, tb, tb, tb, tf, tb];
-    const armM = lm(TX.arm(type, v.skin)), legM = lm(TX.leg(type));
-    const bulk = type === 'guard' ? 1.12 : 1;
-    const B = this.body;
-    this.legL = new THREE.Group(); this.legL.position.set(-0.11, 0.86, 0); B.add(this.legL);
-    this.legR = new THREE.Group(); this.legR.position.set(0.11, 0.86, 0); B.add(this.legR);
-    this.part(this.legL, box(0.18, 0.86, 0.2), legM, 0, -0.43, 0);
-    this.part(this.legR, box(0.18, 0.86, 0.2), legM, 0, -0.43, 0);
-    this.torso = new THREE.Group(); this.torso.position.set(0, 0.86, 0); B.add(this.torso);
-    this.part(this.torso, box(0.52 * bulk, 0.62, 0.28 * bulk), torsoMats, 0, 0.31, 0);
-    this.neck = new THREE.Group(); this.neck.position.set(0, 0.62, 0); this.torso.add(this.neck);
-    this.head = this.part(this.neck, box(0.3, 0.32, 0.3), headMats, 0, 0.17, 0, 'head');
-    this.armL = new THREE.Group(); this.armL.position.set(-0.34 * bulk, 0.56, 0); this.torso.add(this.armL);
-    this.armR = new THREE.Group(); this.armR.position.set(0.34 * bulk, 0.56, 0); this.torso.add(this.armR);
-    this.part(this.armL, box(0.14, 0.62, 0.16), armM, 0, -0.29, 0);
-    this.part(this.armR, box(0.14, 0.62, 0.16), armM, 0, -0.29, 0);
-    if (type !== 'rusher') {
-      const gl = type === 'boss' ? 0.34 : type === 'guard' ? 0.3 : 0.22;
-      this.part(this.armR, box(0.07, 0.11, gl), GUN, 0, -0.6, gl / 2 - 0.04);
-      this.glow = new THREE.Mesh(box(0.1, 0.1, 0.1), GLOW);
-      this.glow.position.set(0, -0.6, gl - 0.02); this.glow.visible = false; this.armR.add(this.glow);
-    }
-    this.shoulderY = 1.42;
-  }
-
-  buildBot() {
-    const f = lm(TX.botFace()), s = lm(TX.botSide());
-    const mats = [s, s, s, s, f, s];
-    const B = this.body;
-    this.torso = new THREE.Group(); B.add(this.torso);
-    this.head = this.part(this.torso, box(0.56, 0.42, 0.5), mats, 0, 0, 0, 'head');
-    this.part(this.torso, box(0.16, 0.12, 0.3), GUN, -0.36, -0.08, 0.05);
-    this.part(this.torso, box(0.16, 0.12, 0.3), GUN, 0.36, -0.08, 0.05);
-    this.part(this.torso, box(0.04, 0.25, 0.04), GUN, 0.15, 0.32, 0);
-    this.part(this.torso, box(0.3, 0.1, 0.3), GUN, 0, -0.26, 0);
-    this.glow = new THREE.Mesh(box(0.34, 0.1, 0.05), GLOW_BOT);
-    this.glow.position.set(0, 0.03, 0.26); this.glow.visible = false; this.torso.add(this.glow);
-    this.shoulderY = 0;
-  }
-
   get alive() { return this.state !== 'dead'; }
+  get targetable() {
+    return this.alive && this.state !== 'dormant' && !(this.cloak && this.cloak.on)
+      && !(this.burrow && (this.burrow.phase === 'under' || this.burrow.phase === 'sinking'));
+  }
 
   centerWorld(out) {
     out.copy(this.pos);
-    out.y += this.type === 'bot' ? 0 : (1.15 - this.crouch * 0.75) * this.scale;
+    out.y += (this.centerY - this.crouch * 0.75) * this.scale + this.burrowY + this.yOff + (this.leap ? this.leap.y : 0);
     return out;
   }
 
   activate() {
     if (this.state !== 'dormant') return;
-    if (this.type === 'rusher') { this.state = 'charge'; return; }
-    this.state = 'idle';
-    this.fireTimer = rand(Math.random, 1.0, 2.4) + (this.type === 'boss' ? 1.2 : 0);
+    this.state = 'active';
+    this.atkT = rand(Math.random, 1.0, 2.4) + (this.def.boss ? 1.2 : 0);
   }
 
+  // ------------------------------------------------------------------ update
   update(dt) {
     if (this.state === 'dead') return;
-    const g = this.game, cam = g.camPos;
+    const g = this.game, def = this.def, T = this.traits;
+    this.phase += dt; this.bob += dt * 3;
+    this.lastHit += dt;
+    if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) this.applyMats(); }
+    this.stagger = Math.max(0, this.stagger - dt * 4);
+    this.swingT = Math.max(0, this.swingT - dt);
     if (this.burnT > 0) {
       this.burnT -= dt; this.burnTick = (this.burnTick || 0) - dt;
       if (this.burnTick <= 0) {
@@ -134,124 +100,234 @@ export class Enemy {
         if (this.state !== 'dormant') { this.damage(this.burnDps * 0.35, 'body', c, true); if (this.state === 'dead') return; }
       }
     }
-    if (this.slowT > 0) {
-      this.slowT -= dt;
-      if (Math.random() < dt * 8) g.fx.ice(this.centerWorld(new THREE.Vector3()), 1);
-      dt *= 0.35;
-    }
-    const st = this.st;
-    this.phase += dt;
-    if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) this.setFlash(false); }
-    this.stagger = Math.max(0, this.stagger - dt * 4);
-
-    let moving = false;
-    const moveTo = (goal, speed) => {
-      tmpV.subVectors(goal, this.pos); if (this.type !== 'bot') tmpV.y = 0;
-      const d = tmpV.length();
-      if (d < 0.05) return true;
-      this.pos.addScaledVector(tmpV, Math.min(1, (speed * dt) / d)); moving = true;
-      return false;
-    };
-
-    switch (this.state) {
-      case 'dormant': break;
-      case 'enter':
-        if (moveTo(this.goal, st.speed * 1.4)) { this.state = this.type === 'rusher' ? 'charge' : 'idle'; this.fireTimer = rand(Math.random, 0.3, 1.0); }
-        break;
-      case 'idle': {
-        if (this.type === 'bot') {
-          if (moveTo(this.goal, st.speed)) this.pickGoal();
-        } else if (!this.spot.cover && this.type !== 'rusher') {
-          if (!moveTo(this.goal, st.speed)) { /* strafing */ } else if (Math.random() < dt * 0.6) this.pickGoal();
-        }
-        this.fireTimer -= dt;
-        if (this.fireTimer <= 0 && g.combatActive) {
-          this.crouchTarget = 0;
-          this.state = this.crouch > 0.05 ? 'rise' : 'aim';
-          this.timer = this.state === 'rise' ? 0.3 : st.aim;
-          if (this.state === 'aim') g.sfx.telegraph();
-        }
-        break;
+    if (this.slowT > 0) { this.slowT -= dt; if (Math.random() < dt * 8) g.fx.ice(this.centerWorld(new THREE.Vector3()), 1); dt *= 0.35; }
+    if (T.regen && this.lastHit > 2 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + T.regen * dt);
+    if (this.cloak && this.state === 'active') {
+      this.cloak.t -= dt;
+      const near = this.pos.distanceTo(g.camPos) < 2.8;
+      if (this.cloak.t <= 0 || (this.cloak.on && near)) {
+        this.cloak.on = !this.cloak.on && !near;
+        this.cloak.t = this.cloak.on ? rand(Math.random, 1.8, 2.6) : rand(Math.random, 2.2, 3.2);
+        g.fx.sparks(this.centerWorld(new THREE.Vector3()), 6); g.sfx.zap();
+        this.applyMats();
       }
-      case 'rise':
-        this.timer -= dt;
-        if (this.timer <= 0) { this.state = 'aim'; this.timer = st.aim; g.sfx.telegraph(); }
-        break;
-      case 'aim':
-        this.timer -= dt; this.aimAmt = Math.min(1, this.aimAmt + dt * 5);
-        if (this.glow) { this.glow.visible = Math.floor(this.timer * 18) % 2 === 0; this.glow.scale.setScalar(1 + (1 - this.timer / st.aim) * 1.2); }
-        if (this.timer <= 0) {
-          if (this.type === 'boss') this.bossAttack();
-          else { this.burstLeft = (st.burst || 1) - 1; this.shoot(); }
-          this.state = this.burstLeft > 0 ? 'burst' : 'recover'; this.timer = this.burstLeft > 0 ? 0.2 : 0.45;
-        }
-        break;
-      case 'burst':
-        this.timer -= dt;
-        if (this.timer <= 0) { this.shoot(); this.burstLeft--; this.timer = this.burstLeft > 0 ? 0.2 : 0.45; if (this.burstLeft <= 0) this.state = 'recover'; }
-        break;
-      case 'recover':
-        this.timer -= dt; this.aimAmt = Math.max(0, this.aimAmt - dt * 3);
-        if (this.timer <= 0) {
-          this.state = 'idle';
-          const [a, b] = st.fire; this.fireTimer = rand(Math.random, a, b) * this.fireMul;
-          if (this.spot.cover && Math.random() < 0.7) this.crouchTarget = 1;
-          if (this.type !== 'bot') this.pickGoal();
-        }
-        break;
-      case 'charge': {
-        const goal = tmpV.set(cam.x, 0, cam.z - 1.3).clone();
-        if (moveTo(goal, st.speed * (1 + g.floorNum * 0.02))) { this.state = 'melee'; this.timer = 0.35; this.swing = 0; }
-        break;
-      }
-      case 'melee':
-        this.timer -= dt; this.swing += dt;
-        if (this.timer <= 0) {
-          g.sfx.swing(); g.hurtPlayer(this.dmg, this);
-          this.timer = 1.05;
-        }
-        break;
     }
 
-    // crouch & posture
+    this.moving = false;
+    if (this.state === 'enter') {
+      if (this.moveTo(this.goal, def.speed * 1.4, dt)) { this.state = 'active'; this.atkT = rand(Math.random, 0.3, 1.0); }
+    } else if (this.state === 'active') {
+      this.updateMove(dt);
+      if (this.state === 'dead') return;
+      this.updateAttack(dt);
+    }
     this.crouch += (this.crouchTarget - this.crouch) * Math.min(1, dt * 10);
-    if (this.type === 'bot') {
-      this.bob += dt * 3;
-      this.root.position.set(this.pos.x, this.pos.y + Math.sin(this.bob) * 0.08, this.pos.z);
-      this.torso.rotation.z = Math.sin(this.bob * 0.7) * 0.15;
-      this.torso.rotation.x = -this.stagger * 0.5;
-    } else {
-      this.root.position.copy(this.pos);
-      this.body.position.y = -this.crouch * 0.75;
-      const w = moving ? Math.sin(this.phase * (this.type === 'rusher' ? 14 : 9)) : 0;
-      this.legL.rotation.x = w * 0.7; this.legR.rotation.x = -w * 0.7;
-      const pitch = Math.atan2(cam.y - (this.shoulderY * this.scale - this.crouch * 0.75), Math.hypot(cam.x - this.pos.x, cam.z - this.pos.z));
-      if (this.type === 'rusher') {
-        const sw = this.state === 'melee' ? Math.sin(this.swing * 6) : 0;
-        this.armL.rotation.x = -1.2 + w * 0.4 + sw * 0.9;
-        this.armR.rotation.x = -1.2 - w * 0.4 - sw * 0.9;
-        this.torso.rotation.x = 0.35 - this.stagger * 0.6;
-      } else {
-        const aim = this.state === 'aim' || this.state === 'burst' ? 1 : this.aimAmt;
-        this.armR.rotation.x = (-w * 0.5) * (1 - aim) + (-Math.PI / 2 - pitch) * aim;
-        this.armL.rotation.x = w * 0.5 * (1 - aim) + -0.4 * aim;
-        this.armL.rotation.z = 0.25 * aim;
-        this.torso.rotation.x = -this.stagger * 0.5;
-      }
-      this.neck.rotation.x = -pitch * 0.5;
-    }
-    this.root.rotation.y = Math.atan2(cam.x - this.pos.x, cam.z - this.pos.z) + (this.type === 'bot' ? 0 : Math.sin(this.phase * 0.8) * 0.05);
+    this.place();
+    if (this.anim) this.anim(dt, this.moving);
   }
 
+  place() {
+    const cam = this.game.camPos;
+    if (this.flyer || this.hover) this.root.position.set(this.pos.x, this.pos.y + this.yOff + Math.sin(this.bob) * 0.08, this.pos.z);
+    else this.root.position.copy(this.pos);
+    this.body.position.y = -this.crouch * 0.75 + this.burrowY / this.scale + (this.leap ? this.leap.y / this.scale : 0);
+    this.root.rotation.y = Math.atan2(cam.x - this.pos.x, cam.z - this.pos.z);
+  }
+
+  moveTo(goal, speed, dt) {
+    tmpV.subVectors(goal, this.pos);
+    if (!this.flyer) tmpV.y = 0;
+    const d = tmpV.length();
+    if (d < 0.05) return true;
+    this.pos.addScaledVector(tmpV, Math.min(1, (speed * dt) / d)); this.moving = true;
+    return false;
+  }
+
+  roomZ() { const r = this.game.room; return r ? [r.zf + 0.8, r.z0 - 3.5] : [-100, 100]; }
+
   pickGoal() {
-    if (this.type === 'bot') {
+    const def = this.def;
+    if (this.flyer) {
       const r = this.game.room;
       this.goal.set(rand(Math.random, -2.2, 2.2), rand(Math.random, 1.7, 2.5), r.z0 - rand(Math.random, 5, 10.5));
       return;
     }
-    if (this.spot.cover || this.type === 'rusher') { this.goal.set(this.spot.x, 0, this.spot.z); return; }
-    const lim = this.type === 'boss' ? 1.8 : 2.6;
-    this.goal.set(clamp(this.spot.x + rand(Math.random, -1.4, 1.4), -lim, lim), 0, this.spot.z + rand(Math.random, -0.6, 0.6));
+    if (def.move === 'stand' && this.spot.cover && !def.nocover) { this.goal.set(this.spot.x, 0, this.spot.z); return; }
+    const lim = def.boss ? 1.8 : 2.5, wide = def.move === 'strafe' ? 2.2 : 1.4;
+    const [zmin, zmax] = this.roomZ();
+    this.goal.set(clamp(this.spot.x + rand(Math.random, -wide, wide), -lim, lim), this.hover, clamp(this.spot.z + rand(Math.random, -1, 1), zmin, zmax));
+  }
+
+  // low critters stop further away so they stay above the HUD and stay tappable
+  meleeTarget() { const c = this.game.camPos; const low = !this.hover && this.centerY * this.scale < 0.7; return new THREE.Vector3(c.x, this.hover, c.z - (low ? 2.1 : 1.3)); }
+
+  doMelee(dt) {
+    this.meleeT -= dt;
+    if (this.meleeT <= 0) {
+      if (this.cloak && this.cloak.on) { this.cloak.on = false; this.applyMats(); }
+      this.swingT = 0.3; this.game.sfx.swing();
+      this.game.hurtPlayer(this.dmg, this);
+      if (this.traits.leech) this.hp = Math.min(this.maxHp, this.hp + 2);
+      this.meleeT = 1.0;
+    }
+  }
+
+  updateMove(dt) {
+    const g = this.game, def = this.def, sp = def.speed * (1 + g.floorNum * 0.015);
+    const planted = this.atkState === 'wind' || this.atkState === 'burst';
+    switch (def.move) {
+      case 'stand':
+        if (!planted && (!this.spot.cover || def.nocover)) { if (this.moveTo(this.goal, sp, dt) && Math.random() < dt * 0.6) this.pickGoal(); }
+        break;
+      case 'strafe': case 'boss': case 'fly':
+        if (!planted && this.moveTo(this.goal, sp, dt)) this.pickGoal();
+        break;
+      case 'turret': break;
+      case 'orbit': {
+        const c = this.spot;
+        this.orbitA += dt * sp / 1.4;
+        this.pos.set(c.x * 0.5 + Math.cos(this.orbitA) * 1.5, (c.y || 2.1) + Math.sin(this.orbitA * 2) * 0.25, c.z + Math.sin(this.orbitA) * 0.9);
+        this.moving = true;
+        break;
+      }
+      case 'charge': case 'crawl': {
+        const t = this.meleeTarget();
+        if (def.move === 'crawl' && this.pos.distanceTo(t) > 2) t.x += Math.sin(this.phase * 2.5) * 1.2;
+        if (this.moveTo(t, sp, dt) || this.pos.distanceTo(this.meleeTarget()) < 0.3) this.doMelee(dt);
+        break;
+      }
+      case 'leap': {
+        const t = this.meleeTarget();
+        if (this.leap) {
+          this.leap.k += dt / this.leap.dur;
+          const k = Math.min(1, this.leap.k);
+          this.pos.lerpVectors(this.leap.from, this.leap.to, k); this.leap.y = Math.sin(k * Math.PI) * 0.9;
+          this.moving = true;
+          if (k >= 1) { this.leap = null; this.hopT = rand(Math.random, 0.35, 0.8); g.fx.dust(this.pos.clone().setY(0.05), 4); }
+        } else if (this.pos.distanceTo(t) < 0.4) this.doMelee(dt);
+        else {
+          this.hopT -= dt;
+          if (this.hopT <= 0) {
+            const to = this.pos.clone().add(tmpV.subVectors(t, this.pos).setY(0).clampLength(0, 2.6));
+            this.leap = { from: this.pos.clone(), to, k: 0, dur: 0.55, y: 0 };
+          }
+        }
+        break;
+      }
+      case 'dive': {
+        if (this.dive) {
+          tmpV.subVectors(g.camPos, this.pos);
+          const d = tmpV.length();
+          this.pos.addScaledVector(tmpV, Math.min(1, (7 * dt) / d)); this.moving = true;
+          if (this.glow) this.glow.visible = Math.floor(this.phase * 20) % 2 === 0;
+          if (d < 0.7) { g.hurtPlayer(this.traits.kamikaze || this.dmg, this); this.die(false, null, true); }
+          return;
+        }
+        if (this.atkState === 'cool' && this.moveTo(this.goal, sp, dt)) this.pickGoal();
+        break;
+      }
+      case 'blink':
+        if (this.atkState === 'cool') {
+          this.blinkT -= dt;
+          if (this.blinkT <= 0 && g.combatActive) {
+            g.fx.sparks(this.centerWorld(new THREE.Vector3()), 10);
+            const s = g.randomSpot(this);
+            this.pos.set(s.x, 0, s.z); this.goal.copy(this.pos); this.spot = s;
+            g.fx.sparks(this.centerWorld(new THREE.Vector3()), 10); g.fx.pop(this.centerWorld(new THREE.Vector3())); g.sfx.zap();
+            this.blinkT = rand(Math.random, 2.5, 4); this.atkT = Math.min(this.atkT, 0.35);
+          }
+        }
+        break;
+      case 'burrow': {
+        const b = this.burrow;
+        b.t -= dt;
+        if (b.phase === 'up') { if (b.t <= 0 && this.atkState === 'cool') { b.phase = 'sinking'; b.t = 0.5; } }
+        else if (b.phase === 'sinking') { this.burrowY = -2 * (1 - Math.max(0, b.t) / 0.5); if (b.t <= 0) { b.phase = 'under'; b.t = 1.2; const s = g.randomSpot(this); this.goal.set(s.x, 0, s.z); g.fx.dust(this.pos.clone().setY(0.05), 8); } }
+        else if (b.phase === 'under') { this.burrowY = -2; this.moveTo(this.goal, 4, dt); this.moving = false; if (b.t <= 0) { b.phase = 'rising'; b.t = 0.5; g.fx.dust(this.pos.clone().setY(0.05), 10); } }
+        else if (b.phase === 'rising') { this.burrowY = -2 * (Math.max(0, b.t) / 0.5); if (b.t <= 0) { b.phase = 'up'; b.t = 2.4; this.burrowY = 0; this.atkT = rand(Math.random, 0.3, 0.7); } }
+        break;
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------ attacks
+  curAtk() { const a = this.def.atk; return Array.isArray(a) ? a[this.atkIdx % a.length] : a; }
+
+  canAttack() {
+    if (!this.game.combatActive) return false;
+    if (this.cloak && this.cloak.on) return false;
+    if (this.burrow && this.burrow.phase !== 'up') return false;
+    return true;
+  }
+
+  updateAttack(dt) {
+    const def = this.def, g = this.game;
+    if (def.move === 'dive') {
+      if (this.dive) return;
+      if (this.atkState === 'cool') { this.atkT -= dt; if (this.atkT <= 0 && this.canAttack()) { this.atkState = 'wind'; this.timer = def.wind; g.sfx.telegraph(); } }
+      else if (this.atkState === 'wind') { this.timer -= dt; if (this.glow) this.glow.visible = Math.floor(this.timer * 18) % 2 === 0; if (this.timer <= 0) this.dive = true; }
+      return;
+    }
+    if (!def.atk) return;
+    const atk = this.curAtk();
+    switch (this.atkState) {
+      case 'cool':
+        this.atkT -= dt;
+        if (this.atkT <= 0 && this.canAttack()) {
+          this.crouchTarget = 0;
+          if (this.crouch > 0.05) { this.atkState = 'rise'; this.timer = 0.3; } else this.startWind();
+        }
+        break;
+      case 'rise':
+        this.timer -= dt; if (this.timer <= 0) this.startWind();
+        break;
+      case 'wind':
+        this.timer -= dt; this.aimAmt = Math.min(1, this.aimAmt + dt * 5);
+        if (this.glow) { this.glow.visible = Math.floor(this.timer * 18) % 2 === 0; this.glow.scale.setScalar(1 + (1 - this.timer / this.windDur) * 1.4); }
+        if (atk.type === 'laser') {
+          const k = 1 - this.timer / this.windDur;
+          g.fx.beam(this.muzzle(new THREE.Vector3()), g.camPos.clone().add(new THREE.Vector3(0, -0.12, 0)), 0xff2010, 0.008 + k * 0.03, 0.04);
+        }
+        if (this.timer <= 0) {
+          this.execute(atk);
+          if (this.state === 'dead') return;
+          this.atkState = this.burstLeft > 0 ? 'burst' : 'recover'; this.timer = this.burstLeft > 0 ? this.burstGap : 0.45;
+        }
+        break;
+      case 'burst':
+        this.timer -= dt;
+        if (this.timer <= 0) {
+          this.shoot(atk.kind || (atk.type === 'rapid' ? 'shard' : atk.type === 'boss' ? 'big' : 'orb'), 0, atk);
+          this.burstLeft--; this.timer = this.burstLeft > 0 ? this.burstGap : 0.45;
+          if (this.burstLeft <= 0) this.atkState = 'recover';
+        }
+        break;
+      case 'recover':
+        this.timer -= dt; this.aimAmt = Math.max(0, this.aimAmt - dt * 3);
+        if (this.timer <= 0) {
+          this.atkState = 'cool';
+          const [a, b] = def.fire; this.atkT = rand(Math.random, a, b) * this.fireMul;
+          this.atkIdx++;
+          if (def.move === 'stand' && this.spot.cover && !def.nocover && Math.random() < 0.7) this.crouchTarget = 1;
+          if (!this.flyer && def.move !== 'turret') this.pickGoal();
+          if (this.burrow && this.burrow.phase === 'up') this.burrow.t = Math.min(this.burrow.t, 0.4);
+        }
+        break;
+    }
+  }
+
+  startWind() {
+    this.atkState = 'wind';
+    this.windDur = this.timer = this.def.wind || 0.6;
+    this.game.sfx.telegraph();
+  }
+
+  interrupt() {
+    if (this.atkState === 'wind' || this.atkState === 'rise') {
+      this.atkState = 'recover'; this.timer = 0.3; if (this.glow) this.glow.visible = false;
+      return true;
+    }
+    return false;
   }
 
   muzzle(out) {
@@ -260,105 +336,208 @@ export class Enemy {
     return out;
   }
 
-  shoot(spread = 0, offset = 0) {
+  execute(atk) {
+    const g = this.game, kind = atk.kind || 'orb';
+    this.burstLeft = 0; this.burstGap = 0.18;
+    switch (atk.type) {
+      case 'shot': this.shoot(kind, 0, atk); break;
+      case 'burst': this.burstLeft = (atk.n || 3) - 1; this.shoot(kind, 0, atk); break;
+      case 'rapid': this.burstLeft = (atk.n || 6) - 1; this.burstGap = 0.09; this.shoot(atk.kind || 'shard', 0, atk); break;
+      case 'spread': { const n = atk.n || 3, a = atk.angle || 0.12; for (let k = 0; k < n; k++) this.shoot(kind, (k - (n - 1) / 2) * a, atk); break; }
+      case 'lob': { const n = atk.n || 1; for (let k = 0; k < n; k++) this.shoot(kind, (k - (n - 1) / 2) * 0.15, { ...atk, lob: true }); break; }
+      case 'homing': { const n = atk.n || 1; for (let k = 0; k < n; k++) this.shoot(kind === 'orb' ? 'missile' : kind, (k - (n - 1) / 2) * 0.5, { ...atk, homing: true }); break; }
+      case 'sonic': { const n = atk.n || 5; for (let k = 0; k < n; k++) this.shoot('sonic', (k - (n - 1) / 2) * 0.13, atk); g.sfx.rail(); break; }
+      case 'laser': {
+        g.fx.beam(this.muzzle(new THREE.Vector3()), g.camPos.clone().add(new THREE.Vector3(0, -0.15, 0)), 0xff3020, 0.09, 0.22);
+        g.sfx.rail(); g.hurtPlayer(this.dmg, this);
+        break;
+      }
+      case 'summon': {
+        g.fx.pop(this.muzzle(new THREE.Vector3())); g.sfx.zap();
+        g.spawnMinion(atk.minion, this.pos, atk.n || 1);
+        break;
+      }
+      case 'heal': {
+        const from = this.muzzle(new THREE.Vector3());
+        let healed = 0;
+        for (const o of g.enemies) {
+          if (o === this || !o.alive || o.hp >= o.maxHp || o.pos.distanceTo(this.pos) > 7) continue;
+          o.hp = Math.min(o.maxHp, o.hp + o.maxHp * 0.4);
+          g.fx.lightning(from, o.centerWorld(new THREE.Vector3()), 0x60ff60); healed++;
+        }
+        if (healed) g.sfx.pickup(); else this.shoot('orb', 0, atk);
+        break;
+      }
+      case 'boss': this.bossAttack(); break;
+    }
+    if (this.glow) this.glow.visible = false;
+  }
+
+  shoot(kind, spread = 0, atk = {}) {
     const g = this.game;
+    if (!this.alive) return;
     const from = this.muzzle(new THREE.Vector3());
     const target = g.camPos.clone();
-    const miss = this.type === 'bot' ? 0.35 : 0.4;
-    target.x += rand(Math.random, -miss, miss) + offset; target.y += rand(Math.random, -miss * 0.6, miss * 0.4);
-    if (spread) { const dir = target.clone().sub(from); dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), spread); target.copy(from).add(dir); }
-    g.spawnProjectile(from, target, this.pspeed, this.dmg, this.type === 'bot' ? 'bolt' : this.type === 'boss' ? 'big' : 'orb');
+    const miss = 0.4;
+    target.x += rand(Math.random, -miss, miss); target.y += rand(Math.random, -miss * 0.6, miss * 0.4);
+    if (spread) { const dir = target.clone().sub(from); dir.applyAxisAngle(UP, spread); target.copy(from).add(dir); }
+    const speed = this.pspeed * (atk.speed || 1) * (kind === 'shard' ? 1.35 : kind === 'sonic' ? 0.8 : 1);
+    const dmg = this.dmg * (atk.dmg || 1);
+    g.spawnProjectile(from, target, speed, dmg, kind, { lob: atk.lob || kind === 'grenade', homing: atk.homing });
     g.sfx.enemyShot();
-    if (this.glow) this.glow.visible = false;
   }
 
   bossAttack() {
     const g = this.game;
-    const p = this.pattern++ % 4;
-    if (p === 0 || p === 2) { for (let k = -2; k <= 2; k++) this.shoot(k * 0.09); }
-    else if (p === 1) { this.burstLeft = 2; this.shoot(); }
+    const p = (this.pattern = (this.pattern || 0) + 1) % 4;
+    if (p === 0 || p === 2) { for (let k = -2; k <= 2; k++) this.shoot('big', k * 0.09); }
+    else if (p === 1) { this.burstLeft = 2; this.burstGap = 0.18; this.shoot('big'); }
     else {
       const frac = this.hp / this.maxHp;
-      if (this.summoned < 3 && frac < 1 - (this.summoned + 1) * 0.25) { this.summoned++; g.spawnReinforcement('grunt'); g.spawnReinforcement(g.floorNum >= 10 ? 'guard' : 'rusher'); }
-      else for (let k = -1; k <= 1; k++) this.shoot(k * 0.14);
+      this.summoned = this.summoned || 0;
+      if (this.summoned < 3 && frac < 1 - (this.summoned + 1) * 0.25) {
+        this.summoned++;
+        const pool = rosterFor(g.floorNum).filter(([id, d]) => !isFlyer(id) && d.move !== 'burrow' && d.move !== 'turret' && d.hp < 12).map(([id]) => id);
+        for (let k = 0; k < 2; k++) g.spawnReinforcement(pick(Math.random, pool.length ? pool : ['grunt']));
+      } else for (let k = -1; k <= 1; k++) this.shoot('big', k * 0.14);
     }
   }
 
-  setFlash(on) {
-    for (const m of this.meshes) m.material = on ? FLASH : m.userData.mat;
+  applyMats() {
+    const cloaked = this.cloak && this.cloak.on;
+    for (const m of this.meshes) m.material = cloaked ? CLOAK : m.userData.mat;
+    if (this.glow && cloaked) this.glow.visible = false;
   }
+  setFlash() { for (const m of this.meshes) m.material = FLASH; }
 
   damage(amount, part, point, quiet = false) {
-    if (this.state === 'dead' || this.state === 'enter' && this.type === 'boss') return false;
-    const head = part === 'head' && this.type !== 'bot';
-    const mult = head ? (this.type === 'boss' ? 2 : 3) : 1;
-    this.hp -= amount * mult;
+    if (this.state === 'dead') return false;
+    if (this.state === 'enter' && this.def.boss) return false;
+    if (this.burrow && this.burrow.phase === 'under') return false;
     const g = this.game;
-    if (!quiet) {
-      this.flashT = 0.07; this.setFlash(true); this.stagger = 1;
-      if (this.type === 'bot') g.fx.sparks(point, 6); else g.fx.blood(point, head ? 10 : 6);
+    if (part === 'shield' && this.shieldHp > 0) {
+      this.shieldHp -= amount;
+      g.fx.sparks(point, 5); g.sfx.metalHit();
+      if (this.shieldHp <= 0) {
+        for (const m of this.meshes.filter((m) => m.userData.part === 'shield')) {
+          g.scene.attach(m); g.fx.debris(m, new THREE.Vector3(rand(Math.random, -1, 1), 2.5, 1.5));
+          this.meshes.splice(this.meshes.indexOf(m), 1);
+        }
+        this.shieldMesh = null; g.sfx.botDeath();
+      }
+      return 'shield';
     }
-    if (this.hp <= 0) { this.die(head, point); return true; }
+    if (part === 'shield') part = 'body';
+    const human = this.def.model.kind === 'human';
+    const head = part === 'head';
+    let mult = head ? (human ? (this.def.boss ? 2 : 3) : 2) : 1;
+    if (!head && this.traits.armor) { mult *= this.traits.armor; if (!quiet) g.fx.sparks(point, 3); }
+    this.hp -= amount * mult;
+    this.lastHit = 0;
+    if (!quiet) {
+      this.flashT = 0.07; this.setFlash(); this.stagger = 1;
+      if (this.gore === 'spark') g.fx.sparks(point, 6); else if (this.gore === 'goo') g.fx.goo(point, 7); else g.fx.blood(point, head ? 10 : 6);
+    }
+    if (this.hp <= 0) { this.die(head && human, point); return head ? 'head' : 'body'; }
     if (this.state === 'dormant') this.activate();
     if (quiet) return 'body';
-    if (this.type === 'grunt' && (this.state === 'aim' || this.state === 'rise')) {
-      this.state = 'recover'; this.timer = 0.3; if (this.glow) this.glow.visible = false;
-    }
-    if (this.type === 'rusher' && this.state === 'charge') this.pos.z -= 0.25;
+    if (this.def.interrupt) this.interrupt();
+    if (this.def.move === 'charge') this.pos.z -= 0.2;
     return head ? 'head' : 'body';
   }
 
-  die(headshot, point) {
+  die(headshot, point, noScore = false) {
+    if (this.state === 'dead') return;
     this.state = 'dead';
     const g = this.game;
-    this.setFlash(false);
+    for (const m of this.meshes) m.material = m.userData.mat;
     if (this.glow) this.glow.visible = false;
     this.root.updateMatrixWorld(true);
     const center = this.centerWorld(new THREE.Vector3());
     for (const m of this.meshes) {
+      if (m.material.visible === false) continue;
       g.scene.attach(m);
       const vel = m.getWorldPosition(new THREE.Vector3()).sub(center).setY(0).normalize().multiplyScalar(rand(Math.random, 1, 3));
       vel.y = rand(Math.random, 2, 4.5);
-      if (point) vel.add(tmpV.subVectors(center, g.camPos).setY(0).normalize().multiplyScalar(2));
+      vel.add(tmpV.subVectors(center, g.camPos).setY(0).normalize().multiplyScalar(1.5));
       if (headshot && m === this.head) vel.y += 3;
       g.fx.debris(m, vel);
     }
-    if (this.type === 'bot') { g.fx.sparks(center, 24); g.sfx.botDeath(); }
+    if (this.gore === 'spark') { g.fx.sparks(center, 24); g.sfx.botDeath(); }
+    else if (this.gore === 'goo') { g.fx.goo(center, 24); g.sfx.death(); }
     else { g.fx.blood(center, 22); g.sfx.death(); }
     g.scene.remove(this.root);
-    g.onEnemyKilled(this, headshot);
+    const T = this.traits;
+    if (T.deathBlast) g.blast(center, T.deathBlast, 4);
+    if (T.split) g.spawnMinion(T.split.type, this.pos, T.split.n);
+    g.onEnemyKilled(this, headshot, noScore);
   }
 
   remove() { this.game.scene.remove(this.root); for (const m of this.meshes) if (m.parent) m.parent.remove(m); }
 }
 
 // ---------------------------------------------------------------- projectiles
-const ORB_GEO = new THREE.IcosahedronGeometry(0.09, 0);
-const BIG_GEO = new THREE.IcosahedronGeometry(0.17, 0);
-const BOLT_GEO = new THREE.BoxGeometry(0.07, 0.07, 0.35);
-const ORB_M = new THREE.MeshBasicMaterial({ color: 0xff8a1a });
-const ORB_CORE = new THREE.MeshBasicMaterial({ color: 0xfff0a0 });
-const BIG_M = new THREE.MeshBasicMaterial({ color: 0xd030ff });
-const BOLT_M = new THREE.MeshBasicMaterial({ color: 0x40e0ff });
+const G_ORB = new THREE.IcosahedronGeometry(0.09, 0);
+const G_BIG = new THREE.IcosahedronGeometry(0.17, 0);
+const G_BOLT = new THREE.BoxGeometry(0.07, 0.07, 0.35);
+const G_SHARD = new THREE.BoxGeometry(0.05, 0.05, 0.2);
+const G_BOX = new THREE.BoxGeometry(0.2, 0.16, 0.2);
+const G_MISSILE = new THREE.BoxGeometry(0.09, 0.09, 0.32);
+const G_SONIC = new THREE.BoxGeometry(0.5, 0.08, 0.06);
+const B = (c) => new THREE.MeshBasicMaterial({ color: c });
+const CORE = B(0xfff0a0);
+const PKINDS = {
+  orb: { geo: G_ORB, mat: B(0xff8a1a), core: true },
+  big: { geo: G_BIG, mat: B(0xd030ff), core: true },
+  bolt: { geo: G_BOLT, mat: B(0x40e0ff), aligned: true },
+  shard: { geo: G_SHARD, mat: B(0xf0f0f0), aligned: true },
+  plasma: { geo: G_ORB, mat: B(0x40ff80), core: true },
+  fire: { geo: G_ORB, mat: B(0xff5010), core: true },
+  coffee: { geo: G_ORB, mat: B(0x6a3a14) },
+  acid: { geo: G_ORB, mat: B(0x90ff20), core: true },
+  grenade: { geo: G_ORB, mat: B(0x405030), blink: true },
+  package: { geo: G_BOX, mat: new THREE.MeshLambertMaterial({ color: 0xa07040 }) },
+  missile: { geo: G_MISSILE, mat: B(0xd03020), aligned: true },
+  pitch: { geo: G_ORB, mat: B(0xff60c0), core: true },
+  sonic: { geo: G_SONIC, mat: B(0xc080ff), aligned: true },
+};
 
 export class Projectile {
-  constructor(game, from, target, speed, dmg, kind) {
+  constructor(game, from, target, speed, dmg, kind, opts = {}) {
     this.game = game; this.dmg = dmg; this.kind = kind; this.alive = true; this.life = 0;
-    const geo = kind === 'bolt' ? BOLT_GEO : kind === 'big' ? BIG_GEO : ORB_GEO;
-    this.mesh = new THREE.Mesh(geo, kind === 'bolt' ? BOLT_M : kind === 'big' ? BIG_M : ORB_M);
-    if (kind !== 'bolt') { const core = new THREE.Mesh(geo, ORB_CORE); core.scale.setScalar(0.55); this.mesh.add(core); }
+    const k = PKINDS[kind] || PKINDS.orb;
+    this.k = k;
+    this.mesh = new THREE.Mesh(k.geo, k.mat);
+    if (k.core) { const c = new THREE.Mesh(k.geo, CORE); c.scale.setScalar(0.55); this.mesh.add(c); }
     this.mesh.position.copy(from);
-    this.vel = target.clone().sub(from).normalize().multiplyScalar(speed);
-    if (kind === 'bolt') this.mesh.lookAt(target);
+    this.homing = opts.homing ? 2.2 : 0;
+    this.gravity = opts.lob ? 7 : 0;
+    this.speed = opts.homing ? speed * 0.7 : speed;
+    if (opts.lob) {
+      const T = Math.max(0.9, from.distanceTo(target) / (speed * 0.75));
+      this.vel = target.clone().sub(from).divideScalar(T); this.vel.y += 0.5 * this.gravity * T;
+    } else {
+      this.vel = target.clone().sub(from).normalize().multiplyScalar(this.speed);
+      if (opts.homing) this.vel.add(new THREE.Vector3(rand(Math.random, -2, 2), rand(Math.random, 1, 2.5), 0));
+    }
+    if (k.aligned) this.mesh.lookAt(target);
     game.scene.add(this.mesh);
   }
   update(dt) {
     this.life += dt;
-    this.mesh.position.addScaledVector(this.vel, dt);
-    if (this.kind !== 'bolt') { this.mesh.rotation.x += dt * 9; this.mesh.rotation.y += dt * 7; this.mesh.scale.setScalar(1 + Math.sin(this.life * 30) * 0.12); }
     const cam = this.game.camPos;
-    if (this.mesh.position.distanceTo(cam) < 0.42) { this.game.hurtPlayer(this.dmg, null); this.kill(); return; }
-    if (this.mesh.position.z > cam.z + 0.5 || this.life > 7) this.kill();
+    if (this.homing) {
+      const want = cam.clone().sub(this.mesh.position).normalize().multiplyScalar(this.speed);
+      this.vel.lerp(want, Math.min(1, this.homing * dt));
+      if (Math.random() < dt * 20) this.game.fx.emit(this.mesh.position.clone(), 1, 'dust', 0.3, -1, 0.4);
+    }
+    this.vel.y -= this.gravity * dt;
+    this.mesh.position.addScaledVector(this.vel, dt);
+    if (this.k.aligned) this.mesh.lookAt(this.mesh.position.clone().add(this.vel));
+    else { this.mesh.rotation.x += dt * 9; this.mesh.rotation.y += dt * 7; this.mesh.scale.setScalar(1 + Math.sin(this.life * 30) * 0.12); }
+    if (this.k.blink) this.mesh.material = Math.floor(this.life * 10) % 2 ? PKINDS.orb.mat : this.k.mat;
+    if (this.mesh.position.distanceTo(cam) < 0.45) { this.game.hurtPlayer(this.dmg, null); this.kill(); return; }
+    if (this.mesh.position.z > cam.z + 0.5 || this.life > 8 || this.mesh.position.y < -0.5) this.kill();
   }
   kill() { this.alive = false; this.game.scene.remove(this.mesh); }
 }

@@ -11,6 +11,7 @@ const MATS = {
   pop: [0xff9a20, 0xfff0a0, 0xd040ff].map((c) => new THREE.MeshBasicMaterial({ color: c })),
   fire: [0xff6010, 0xffb020, 0xfff080, 0xd02008].map((c) => new THREE.MeshBasicMaterial({ color: c })),
   ice: [0xa0e8ff, 0xffffff, 0x60a8ff].map((c) => new THREE.MeshBasicMaterial({ color: c })),
+  goo: [0x70d040, 0x40a020, 0xb0ff60].map((c) => new THREE.MeshBasicMaterial({ color: c })),
 };
 const BEAM_G = new THREE.BoxGeometry(1, 1, 1);
 const beamMats = new Map();
@@ -52,6 +53,7 @@ export class Effects {
   pop(p) { this.emit(p, 10, 'pop', 3, 0, 0.3); }
   fire(p, n) { this.emit(p, n, 'fire', 1.2, -3, 0.45); }
   ice(p, n) { this.emit(p, n, 'ice', 1.5, 4, 0.5); }
+  goo(p, n) { this.emit(p, n, 'goo', 2.4); }
 
   // straight beam between two points (tracers, railgun)
   beam(a, b, color, width = 0.03, life = 0.1) {
