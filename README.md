@@ -63,3 +63,12 @@ src/textures.js            procedural pixel-art textures + 3x5 pixel font
 src/audio.js               WebAudio synth SFX and music
 vendor/three.module.min.js three.js r170 (MIT)
 ```
+
+## Single-file build
+
+`dist/overtime.html` is the whole game in one self-contained file. It opens directly from disk, so no server is needed. To rebuild it:
+
+```sh
+npx esbuild src/main.js --bundle --format=iife --minify --outfile=bundle.js
+# then inline style.css and bundle.js into index.html (see commit history)
+```
