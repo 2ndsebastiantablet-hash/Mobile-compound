@@ -125,6 +125,20 @@ export class Enemy {
   update(dt) {
     if (this.state === 'dead') return;
     const g = this.game, cam = g.camPos;
+    if (this.burnT > 0) {
+      this.burnT -= dt; this.burnTick = (this.burnTick || 0) - dt;
+      if (this.burnTick <= 0) {
+        this.burnTick = 0.35;
+        const c = this.centerWorld(new THREE.Vector3());
+        g.fx.fire(c, 4);
+        if (this.state !== 'dormant') { this.damage(this.burnDps * 0.35, 'body', c, true); if (this.state === 'dead') return; }
+      }
+    }
+    if (this.slowT > 0) {
+      this.slowT -= dt;
+      if (Math.random() < dt * 8) g.fx.ice(this.centerWorld(new THREE.Vector3()), 1);
+      dt *= 0.35;
+    }
     const st = this.st;
     this.phase += dt;
     if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) this.setFlash(false); }
@@ -274,16 +288,19 @@ export class Enemy {
     for (const m of this.meshes) m.material = on ? FLASH : m.userData.mat;
   }
 
-  damage(amount, part, point) {
+  damage(amount, part, point, quiet = false) {
     if (this.state === 'dead' || this.state === 'enter' && this.type === 'boss') return false;
     const head = part === 'head' && this.type !== 'bot';
     const mult = head ? (this.type === 'boss' ? 2 : 3) : 1;
     this.hp -= amount * mult;
-    this.flashT = 0.07; this.setFlash(true); this.stagger = 1;
     const g = this.game;
-    if (this.type === 'bot') g.fx.sparks(point, 6); else g.fx.blood(point, head ? 10 : 6);
+    if (!quiet) {
+      this.flashT = 0.07; this.setFlash(true); this.stagger = 1;
+      if (this.type === 'bot') g.fx.sparks(point, 6); else g.fx.blood(point, head ? 10 : 6);
+    }
     if (this.hp <= 0) { this.die(head, point); return true; }
     if (this.state === 'dormant') this.activate();
+    if (quiet) return 'body';
     if (this.type === 'grunt' && (this.state === 'aim' || this.state === 'rise')) {
       this.state = 'recover'; this.timer = 0.3; if (this.glow) this.glow.visible = false;
     }

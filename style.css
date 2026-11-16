@@ -80,7 +80,7 @@ html, body {
 .h { font-size: 52px; line-height: .9; color: #f0c860; text-shadow: 4px 4px 0 #000; }
 .h.red { color: #d42c1c; }
 .stats { font-size: 24px; line-height: 1.15; text-shadow: 2px 2px 0 #000; white-space: pre; }
-.unlock { font-size: 26px; color: #60ff80; text-shadow: 2px 2px 0 #000; min-height: 4px; }
+.unlock { white-space: pre-line; font-size: 26px; color: #60ff80; text-shadow: 2px 2px 0 #000; min-height: 4px; }
 .best { font-size: 20px; color: #a8a090; }
 button.go {
   font-family: inherit; font-size: 34px; color: #1c1a17; background: #f0c860; padding: 6px 26px; min-width: 220px;
@@ -88,3 +88,21 @@ button.go {
 }
 button.go:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
 button.go.small { font-size: 24px; background: #8a8270; border-color: #c8c0b0 #3a3630 #3a3630 #c8c0b0; }
+
+#statusbar .wname { white-space: nowrap; overflow: hidden; text-overflow: clip; font-size: 22px; }
+#toast { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 96px); text-align: center; font-size: 28px; text-shadow: 2px 2px 0 #000; opacity: 0; transition: opacity .2s; }
+#toast.show { opacity: 1; }
+#gunChoice { background: rgba(0,0,0,.78); gap: 8px; justify-content: flex-start; padding-top: calc(env(safe-area-inset-top) + 28px); overflow-y: auto; }
+.h.mid { font-size: 40px; }
+.card, .slotBtn { width: 100%; max-width: 340px; background: #1c1a17; border: 3px solid #8a8270; padding: 6px 10px; text-align: left; font-family: inherit; color: #e8e0c8; }
+.card { box-shadow: 0 0 18px rgba(255,255,255,.12); }
+.gname { font-size: 28px; line-height: 1; }
+.grar { font-size: 16px; letter-spacing: 1px; }
+.gdesc { font-size: 20px; color: #c8c0b0; line-height: 1.05; }
+.gstat { font-size: 18px; color: #f0c860; }
+.gchint { font-size: 20px; color: #b8b0a0; margin-top: 4px; }
+#gcSlots { display: flex; flex-direction: column; gap: 6px; width: 100%; align-items: center; }
+.slotBtn { cursor: pointer; position: relative; }
+.slotBtn .gname { font-size: 24px; }
+.slotBtn .drop { position: absolute; right: 8px; top: 6px; font-size: 18px; color: #1c1a17; background: #d42c1c; padding: 0 6px; }
+.slotBtn:active { background: #2c2924; }

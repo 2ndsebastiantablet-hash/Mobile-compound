@@ -4,6 +4,7 @@ import { Enemy, Projectile } from './enemies.js';
 import { Effects } from './effects.js';
 import * as TX from './textures.js';
 import { initAudio, sfx, setMusic, setMuted, isMuted } from './audio.js';
+import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine } from './weapons.js';
 import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet } from './util.js';
 
 // ------------------------------------------------------------------ DOM
@@ -13,7 +14,7 @@ const ui = {
   hud: $('hud'), floor: $('floorLbl'), area: $('areaLbl'), score: $('scoreLbl'), combo: $('comboLbl'),
   hp: $('hpLbl'), ammo: $('ammoLbl'), reload: $('reloadLbl'), weapon: $('weaponLbl'),
   banner: $('banner'), sub: $('subBanner'), markers: $('markers'), hurt: $('hurt'), fade: $('fade'),
-  bossbar: $('bossbar'), bossName: $('bossName'), bossFill: $('bossFill'),
+  bossbar: $('bossbar'), bossName: $('bossName'), bossFill: $('bossFill'), gunChoice: $('gunChoice'), toast: $('toast'), slotLbl: $('slotLbl'),
   title: $('title'), pause: $('pause'), floorClear: $('floorClear'), gameOver: $('gameOver'), win: $('win'),
 };
 
@@ -44,62 +45,19 @@ const effects = new Effects(scene, camera);
 const raycaster = new THREE.Raycaster();
 
 // ------------------------------------------------------------------ weapons
-const WEAPONS = {
-  pistol: { name: 'PISTOL', mag: 12, reload: 1.0, cd: 0.13, dmg: 1, pellets: 1, spread: 0, auto: false, unlock: 1, sound: 'pistol', kick: 1 },
-  shotgun: { name: 'SHOTGUN', mag: 6, reload: 1.5, cd: 0.6, dmg: 0.8, pellets: 7, spread: 34, auto: false, unlock: 4, sound: 'shotgun', kick: 2.2 },
-  smg: { name: 'SMG', mag: 32, reload: 1.35, cd: 0.085, dmg: 0.55, pellets: 1, spread: 12, auto: true, unlock: 8, sound: 'smg', kick: 0.55 },
-};
-const ORDER = ['pistol', 'shotgun', 'smg'];
-
-const gunMats = {
-  metal: new THREE.MeshLambertMaterial({ map: TX.gunMetal() }),
-  dark: new THREE.MeshLambertMaterial({ map: TX.metal([30, 30, 34], 'gd') }),
-  wood: new THREE.MeshLambertMaterial({ map: TX.wood([96, 58, 30], 'g') }),
-  skin: new THREE.MeshLambertMaterial({ map: TX.plastic([214, 168, 130], 'skin') }),
-  sleeve: new THREE.MeshLambertMaterial({ map: TX.plastic([210, 210, 204], 'slv') }),
-  cuff: new THREE.MeshLambertMaterial({ map: TX.plastic([60, 62, 72], 'cuff') }),
-  flash: new THREE.MeshBasicMaterial({ map: TX.flash(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
-};
-function gm(parent, w, h, d, mat, x, y, z, rx = 0) {
-  const m = new THREE.Mesh(box(w, h, d), mat); m.position.set(x, y, z); m.rotation.x = rx; parent.add(m); return m;
-}
-function arm(g, x, y, z) {
-  gm(g, 0.1, 0.1, 0.12, gunMats.skin, x, y, z);
-  gm(g, 0.13, 0.13, 0.08, gunMats.cuff, x + 0.01, y - 0.03, z + 0.09, -0.35);
-  gm(g, 0.13, 0.13, 0.5, gunMats.sleeve, x + 0.02, y - 0.1, z + 0.36, -0.35);
-}
+const MAX_GUNS = 3;
+const FLASH_MAT = new THREE.MeshBasicMaterial({ map: TX.flash(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
 const models = {};
-{
-  const p = new THREE.Group();
-  gm(p, 0.07, 0.075, 0.32, gunMats.metal, 0, 0, -0.16);
-  gm(p, 0.064, 0.05, 0.26, gunMats.dark, 0, -0.055, -0.13);
-  gm(p, 0.06, 0.16, 0.08, gunMats.dark, 0, -0.13, -0.02, 0.25);
-  gm(p, 0.02, 0.02, 0.02, gunMats.dark, 0, 0.045, -0.3);
-  arm(p, 0, -0.12, 0.0);
-  models.pistol = { g: p, tip: new THREE.Vector3(0, 0, -0.34) };
-  const s = new THREE.Group();
-  gm(s, 0.05, 0.05, 0.72, gunMats.metal, 0, 0, -0.36);
-  gm(s, 0.045, 0.045, 0.55, gunMats.dark, 0, -0.055, -0.3);
-  gm(s, 0.085, 0.075, 0.2, gunMats.wood, 0, -0.06, -0.4);
-  gm(s, 0.075, 0.1, 0.24, gunMats.dark, 0, -0.02, 0.0);
-  gm(s, 0.065, 0.13, 0.32, gunMats.wood, 0, -0.08, 0.24, 0.12);
-  arm(s, 0, -0.11, 0.06);
-  gm(s, 0.1, 0.09, 0.12, gunMats.skin, 0, -0.12, -0.4);
-  models.shotgun = { g: s, tip: new THREE.Vector3(0, 0, -0.74), pump: s.children[2] };
-  const m = new THREE.Group();
-  gm(m, 0.075, 0.1, 0.38, gunMats.dark, 0, 0, -0.12);
-  gm(m, 0.035, 0.035, 0.16, gunMats.metal, 0, 0.01, -0.38);
-  gm(m, 0.045, 0.2, 0.06, gunMats.metal, 0, -0.14, -0.16, 0.15);
-  gm(m, 0.06, 0.13, 0.07, gunMats.dark, 0, -0.11, 0.04, 0.25);
-  gm(m, 0.02, 0.04, 0.02, gunMats.metal, 0, 0.07, -0.26);
-  arm(m, 0, -0.12, 0.02);
-  models.smg = { g: m, tip: new THREE.Vector3(0, 0.01, -0.47) };
-  for (const k of ORDER) {
-    const md = models[k];
-    md.flash = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), gunMats.flash);
+function viewModel(id) {
+  if (!models[id]) {
+    const md = buildGunModel(GUN[id], true);
+    md.flash = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), FLASH_MAT);
     md.flash.position.copy(md.tip); md.flash.visible = false; md.g.add(md.flash);
+    if (md.pump) md.pumpZ = md.pump.position.z;
     md.g.visible = false; gunRoot.add(md.g);
+    models[id] = md;
   }
+  return models[id];
 }
 
 // ------------------------------------------------------------------ game state
@@ -110,7 +68,7 @@ const G = {
   combatActive: false,
   enemies: [], projectiles: [], pickups: [],
 };
-const P = { hp: 100, weapon: 'pistol', ammo: {}, reloadT: 0, cd: 0, recoil: 0, flashT: 0, aimYaw: 0, aimPitch: 0, aimTY: 0, aimTP: 0, swapT: 0 };
+const P = { hp: 100, inv: [{ id: 'pistol', ammo: 12 }], slot: 0, invAtFloor: null, burstLeft: 0, burstT: 0, reloadT: 0, cd: 0, recoil: 0, flashT: 0, aimYaw: 0, aimPitch: 0, aimTY: 0, aimTP: 0, swapT: 0 };
 let score = 0, floorStartScore = 0, combo = 0, lastKill = -10, now = 0;
 let stats = newStats();
 let mode = 'title', paused = false;
@@ -122,7 +80,9 @@ let titleT = 0;
 const best = storeGet('overtime.best', { floor: 0, score: 0 });
 
 function newStats() { return { shots: 0, hits: 0, kills: 0, heads: 0, orbs: 0, dmg: 0, t: 0 }; }
-function unlocked(k) { return G.floorNum >= WEAPONS[k].unlock; }
+const cur = () => GUN[P.inv[P.slot].id];
+const curSlot = () => P.inv[P.slot];
+let pendingGuns = [], choiceOpen = false, gunsThisFloor = 0;
 
 // ------------------------------------------------------------------ sequences (generator coroutines)
 let seq = null, seqWait = 0;
@@ -264,23 +224,106 @@ G.onEnemyKilled = (e, head) => {
     for (const o of G.enemies) if (o !== e && o.alive) o.die(false);
     for (const p of G.projectiles) p.kill();
     shake = 1;
-  } else if (P.hp < 100 && Math.random() < (P.hp < 40 ? 0.3 : 0.12)) dropMedkit(e.pos);
+  }
+  // weapon drops: bosses always drop something good; floor 1 guarantees an early find
+  const gunChance = e.type === 'boss' ? 1 : (G.floorNum === 1 && gunsThisFloor === 0 && area && area.idx >= 1) ? 0.35 : 0.075;
+  if (Math.random() < gunChance) {
+    const id = rollGun(G.floorNum, Math.random, P.inv.map((s) => s.id), e.type === 'boss' ? 'rare' : null);
+    if (id) { dropGun(e.pos, id); return; }
+  }
+  if (P.hp < 100 && Math.random() < (P.hp < 40 ? 0.3 : 0.12)) dropMedkit(e.pos);
 };
 
 const MED_M = new THREE.MeshLambertMaterial({ map: TX.medkit() });
+const HIT_M = new THREE.MeshBasicMaterial({ visible: false });
+function addPickup(kind, pos, mesh, extra = {}) {
+  const root = new THREE.Group();
+  root.position.set(pos.x, 0, pos.z);
+  const spin = new THREE.Group(); spin.add(mesh); root.add(spin);
+  const hit = new THREE.Mesh(box(0.9, 0.8, 0.9), HIT_M); hit.position.y = 0.35; root.add(hit);
+  scene.add(root);
+  const p = { kind, mesh: root, spin, hit, t: Math.random() * 6, collect: false, ...extra };
+  hit.userData.pickup = p;
+  G.pickups.push(p);
+  return p;
+}
 function dropMedkit(pos) {
-  const m = new THREE.Mesh(box(0.34, 0.22, 0.26), MED_M);
-  m.position.set(pos.x, 0.25, pos.z);
-  scene.add(m);
-  G.pickups.push({ mesh: m, t: Math.random() * 6, collect: false });
+  addPickup('med', pos, new THREE.Mesh(box(0.34, 0.22, 0.26), MED_M));
+}
+const beamCache = {};
+function dropGun(pos, id) {
+  gunsThisFloor++;
+  const def = GUN[id], r = RARITY[def.rarity];
+  const md = buildGunModel(def, false);
+  md.g.scale.setScalar(1.5); md.g.rotation.z = 0.3;
+  const p = addPickup('gun', pos, md.g, { id });
+  if (!beamCache[def.rarity]) beamCache[def.rarity] = new THREE.MeshBasicMaterial({ color: r.hex, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
+  const beam = new THREE.Mesh(box(0.08, 2.4, 0.08), beamCache[def.rarity]); beam.position.y = 1.2; p.mesh.add(beam);
+  popText(new THREE.Vector3(pos.x, 1.2, pos.z), def.short, r.color);
+  sfx.gunPickup();
 }
 
 function collectPickup(p) {
   if (p.collect) return;
   p.collect = true; p.ct = 0;
+  if (p.kind === 'gun') { giveGun(p.id); return; }
   sfx.pickup();
   P.hp = Math.min(100, P.hp + 25);
   popText(p.mesh.position, '+25 HP', '#60ff80');
+}
+
+// ------------------------------------------------------------------ inventory
+function giveGun(id) {
+  const def = GUN[id];
+  const have = P.inv.findIndex((s) => s.id === id);
+  sfx.gunPickup();
+  if (have >= 0) { P.inv[have].ammo = def.mag; toast(`${def.short} AMMO REFILLED`, RARITY[def.rarity].color); return; }
+  if (P.inv.length < MAX_GUNS) {
+    P.inv.push({ id, ammo: def.mag });
+    equip(P.inv.length - 1, true);
+    toast(`GOT ${def.name}`, RARITY[def.rarity].color);
+    return;
+  }
+  pendingGuns.push(id);
+  if (!choiceOpen) openChoice();
+}
+
+function gunCardHTML(def, extra = '') {
+  const r = RARITY[def.rarity];
+  return `<div class="gname" style="color:${r.color}">${def.name}</div><div class="grar" style="color:${r.color}">${r.name}</div>`
+    + `<div class="gdesc">${def.desc}</div><div class="gstat">${statLine(def)}</div>${extra}`;
+}
+
+function openChoice() {
+  const id = pendingGuns.shift();
+  if (!id) { choiceOpen = false; ui.gunChoice.classList.add('hidden'); if (mode !== 'title') paused = false; return; }
+  choiceOpen = true; paused = true; hold = null;
+  const def = GUN[id];
+  $('gcNew').innerHTML = gunCardHTML(def);
+  $('gcNew').style.borderColor = RARITY[def.rarity].color;
+  const slots = $('gcSlots'); slots.innerHTML = '';
+  P.inv.forEach((s, i) => {
+    const d = GUN[s.id];
+    const b = document.createElement('button');
+    b.className = 'slotBtn'; b.style.borderColor = RARITY[d.rarity].color;
+    b.innerHTML = `<span class="drop">DROP</span>${gunCardHTML(d)}`;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation(); sfx.tap();
+      P.inv[i] = { id, ammo: def.mag };
+      equip(i, true);
+      toast(`GOT ${def.name}`, RARITY[def.rarity].color);
+      openChoice();
+    });
+    slots.appendChild(b);
+  });
+  ui.gunChoice.classList.remove('hidden');
+}
+
+let toastTimer = null;
+function toast(text, color) {
+  ui.toast.textContent = text; ui.toast.style.color = color || '#e8e0c8';
+  ui.toast.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => ui.toast.classList.remove('show'), 1600);
 }
 
 // ------------------------------------------------------------------ flow
@@ -290,10 +333,12 @@ function startGame(floor = 1, keepScore = false) {
   if (!keepScore) { score = 0; }
   floorStartScore = score;
   P.hp = 100;
-  for (const k of ORDER) P.ammo[k] = WEAPONS[k].mag;
-  P.reloadT = 0;
+  if (keepScore && P.invAtFloor) P.inv = P.invAtFloor.map((s) => ({ ...s }));
+  else P.inv = [{ id: 'pistol', ammo: GUN.pistol.mag }];
+  P.slot = 0;
+  autoReload();
+  pendingGuns = []; choiceOpen = false; ui.gunChoice.classList.add('hidden');
   G.floorNum = floor;
-  if (!unlocked(P.weapon)) P.weapon = 'pistol';
   startFloor(floor);
 }
 
@@ -304,7 +349,9 @@ function startFloor(n) {
   floorStartScore = score;
   ui.hud.classList.remove('hidden');
   ui.bossbar.classList.add('hidden');
-  equip(P.weapon, true);
+  P.invAtFloor = P.inv.map((s) => ({ ...s }));
+  gunsThisFloor = 0;
+  equip(P.slot, true);
   const room0 = G.floor.rooms[0];
   prepareArea(0);
   setMusic('calm');
@@ -392,7 +439,7 @@ function areaCleared() {
   }
 }
 
-function autoReload() { for (const k of ORDER) P.ammo[k] = WEAPONS[k].mag; P.reloadT = 0; }
+function autoReload() { for (const s of P.inv) s.ammo = GUN[s.id].mag; P.reloadT = 0; P.burstLeft = 0; }
 
 function floorComplete() {
   mode = 'floorclear';
@@ -408,7 +455,7 @@ function floorComplete() {
   const heal = Math.min(100 - P.hp, 30);
   P.hp += heal;
   let unlock = heal > 0 ? `+${heal} HP COFFEE BREAK` : '';
-  for (const k of ORDER) if (WEAPONS[k].unlock === n + 1) unlock = `NEW WEAPON: ${WEAPONS[k].name}`;
+  unlock += (unlock ? '\n' : '') + 'LOADOUT: ' + P.inv.map((s) => GUN[s.id].short).join(' / ');
   $('fcUnlock').textContent = unlock;
   showScreen(ui.floorClear);
 }
@@ -419,7 +466,6 @@ function nextFloor() {
   hideScreens();
   const n = G.floorNum + 1;
   G.floorNum = n;
-  for (const k of ORDER) if (WEAPONS[k].unlock === n) { P.weapon = k; sfx.unlock(); }
   startFloor(n);
 }
 
@@ -477,57 +523,68 @@ function toScreen(v, rect) {
   return { x: (tmp.x + 1) / 2 * rect.width, y: (1 - tmp.y) / 2 * rect.height, behind: tmp.z > 1 };
 }
 
-function equip(k, silent) {
-  P.weapon = k;
-  for (const w of ORDER) models[w].g.visible = w === k;
-  P.swapT = silent ? 0 : 1;
+function equip(i, silent) {
+  P.slot = clamp(i, 0, P.inv.length - 1);
+  const id = cur().id;
+  viewModel(id);
+  for (const k in models) models[k].g.visible = k === id;
+  P.swapT = silent ? 0 : 1; P.reloadT = 0; P.burstLeft = 0;
   if (!silent) sfx.reload();
   updateHud(true);
 }
 
 function swapWeapon() {
-  const avail = ORDER.filter(unlocked);
-  if (avail.length < 2) { sfx.empty(); return; }
-  const i = avail.indexOf(P.weapon);
-  equip(avail[(i + 1) % avail.length]);
-  P.reloadT = 0;
+  if (choiceOpen) return;
+  if (P.inv.length < 2) { sfx.empty(); toast('ONLY 1 GUN - FIND MORE'); return; }
+  equip((P.slot + 1) % P.inv.length);
+  toast(cur().name, RARITY[cur().rarity].color);
 }
 
 function startReload() {
-  const w = WEAPONS[P.weapon];
-  if (P.reloadT > 0 || P.ammo[P.weapon] >= w.mag) return;
-  P.reloadT = w.reload; P.reloadDur = w.reload;
+  const w = cur();
+  if (P.reloadT > 0 || curSlot().ammo >= w.mag) return;
+  P.reloadT = w.reload; P.reloadDur = w.reload; P.burstLeft = 0;
   sfx.reload();
 }
 
 function tryFire(x, y) {
   if (!G.combatActive || mode !== 'combat' || paused) return;
-  const w = WEAPONS[P.weapon];
-  if (P.reloadT > 0 || P.cd > 0 || P.swapT > 0.3) return;
-  if (P.ammo[P.weapon] <= 0) { sfx.empty(); startReload(); P.cd = 0.25; return; }
-  P.ammo[P.weapon]--; P.cd = w.cd;
+  const w = cur();
+  if (P.reloadT > 0 || P.cd > 0 || P.swapT > 0.3 || P.burstLeft > 0) return;
+  if (curSlot().ammo <= 0) { sfx.empty(); startReload(); P.cd = 0.25; return; }
+  P.cd = w.cd;
+  if (w.burst) { P.burstLeft = w.burst; P.burstT = 0; P.burstX = x; P.burstY = y; return; }
+  fireOnce(x, y);
+}
+
+function fireOnce(x, y) {
+  const w = cur(), slot = curSlot();
+  if (slot.ammo <= 0) { P.burstLeft = 0; startReload(); return; }
+  slot.ammo--;
   stats.shots++;
   sfx[w.sound]();
-  P.recoil = Math.min(1.6, P.recoil + w.kick);
+  P.recoil = Math.min(1.8, P.recoil + w.kick);
   P.flashT = 0.05;
-  muzzleLight.intensity = 6;
+  muzzleLight.intensity = w.explode ? 10 : 6;
   aimGunAt(x, y);
-  if (P.weapon === 'shotgun') P.pump = 1;
+  if (viewModel(w.id).pump) P.pump = 1;
   const rect = canvasRect();
   let best = null;
   for (let i = 0; i < w.pellets; i++) {
     let ox = 0, oy = 0;
     if (w.spread) { const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * w.spread; ox = Math.cos(a) * r; oy = Math.sin(a) * r; }
-    const res = resolveShot(x + ox, y + oy, w.dmg, rect, i === 0);
+    const res = resolveShot(x + ox, y + oy, w, rect, i === 0);
     if (res && (!best || res === 'head')) best = res;
   }
   if (best === 'head' || best === 'body') stats.hits++;
   marker(x, y, best === 'head' ? 'head' : best ? '' : 'miss');
-  if (P.ammo[P.weapon] <= 0) setTimeout(startReload, 180);
+  if (slot.ammo <= 0) setTimeout(startReload, 180);
   updateHud();
 }
 
-function resolveShot(x, y, dmg, rect, primary) {
+const V3 = () => new THREE.Vector3();
+
+function resolveShot(x, y, w, rect, primary) {
   // 1. incoming projectiles: generous screen-space hit
   let bp = null, bd = 46;
   for (const p of G.projectiles) {
@@ -536,7 +593,7 @@ function resolveShot(x, y, dmg, rect, primary) {
     if (s.behind) continue;
     const dist = Math.hypot(s.x - x, s.y - y);
     const r = 30 + 30 / Math.max(0.6, p.mesh.position.distanceTo(G.camPos));
-    if (dist < Math.max(r, bd) && dist < r) { bd = dist; bp = p; }
+    if (dist < r && dist < bd) { bd = dist; bp = p; }
   }
   if (bp) {
     effects.pop(bp.mesh.position.clone()); sfx.orbPop();
@@ -547,45 +604,118 @@ function resolveShot(x, y, dmg, rect, primary) {
   // 2. raycast
   const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
+  const ray = raycaster.ray;
   const targets = [];
   for (const e of G.enemies) if (e.alive && e.state !== 'dormant') targets.push(...e.meshes);
-  for (const p of G.pickups) if (!p.collect) targets.push(p.mesh);
   const hitsT = raycaster.intersectObjects(targets, false);
   const hitsL = raycaster.intersectObject(G.floor.group, true).filter((h) => !h.object.material.transparent && h.object.material.fog !== false);
   const levelHit = hitsL[0];
-  const th = hitsT[0];
-  if (th && (!levelHit || th.distance < levelHit.distance + 0.05)) {
-    if (th.object.userData.enemy) {
-      const r = th.object.userData.enemy.damage(dmg, th.object.userData.part, th.point);
-      if (primary) sfx[r === 'head' || th.object.userData.part === 'head' ? 'headshot' : th.object.userData.enemy.type === 'bot' ? 'metalHit' : 'hit']();
-      return th.object.userData.part === 'head' && th.object.userData.enemy.type !== 'bot' ? 'head' : 'body';
-    }
-    const pk = G.pickups.find((p) => p.mesh === th.object);
-    if (pk) { collectPickup(pk); return 'pickup'; }
+  const wallD = levelHit ? levelHit.distance : Infinity;
+  const maxD = Math.min(wallD + 0.05, w.range || Infinity);
+  const pk = raycaster.intersectObjects(G.pickups.filter((p) => !p.collect).map((p) => p.hit), false)[0];
+  if (pk && pk.distance < wallD + 0.3 && (!hitsT[0] || pk.distance < hitsT[0].distance)) { collectPickup(pk.object.userData.pickup); return 'pickup'; }
+
+  const hits = [], seen = new Set();
+  for (const h of hitsT) {
+    if (h.distance > maxD) break;
+    const e = h.object.userData.enemy;
+    if (seen.has(e)) continue;
+    seen.add(e);
+    hits.push({ e, part: h.object.userData.part, point: h.point, dist: h.distance });
+    if (hits.length > w.pierce) break;
   }
   // 3. aim assist (screen space, small radius, not through walls, not on hidden enemies)
-  let ae = null, ad = 30;
-  for (const e of G.enemies) {
-    if (!e.alive || e.state === 'dormant' || e.crouch > 0.5) continue;
-    const c = e.centerWorld(new THREE.Vector3());
-    const s = toScreen(c, rect);
-    if (s.behind) continue;
-    const d = Math.hypot(s.x - x, s.y - y);
-    const dist = c.distanceTo(G.camPos);
-    if (d < ad && (!levelHit || dist < levelHit.distance + 0.4 || (e.crouch < 0.2 && levelHit.distance > dist - 1.6))) { ad = d; ae = { e, c }; }
+  if (!hits.length) {
+    let ae = null, ad = 30;
+    for (const e of G.enemies) {
+      if (!e.alive || e.state === 'dormant' || e.crouch > 0.5) continue;
+      const c = e.centerWorld(V3());
+      const s = toScreen(c, rect);
+      if (s.behind) continue;
+      const d = Math.hypot(s.x - x, s.y - y);
+      const dist = c.distanceTo(G.camPos);
+      if (w.range && dist > w.range) continue;
+      if (d < ad && (!levelHit || dist < levelHit.distance + 0.4 || (e.crouch < 0.2 && levelHit.distance > dist - 1.6))) { ad = d; ae = { e, part: 'body', point: c, dist }; }
+    }
+    if (ae) hits.push(ae);
   }
-  if (ae) {
-    ae.e.damage(dmg, 'body', ae.c);
-    if (primary) sfx[ae.e.type === 'bot' ? 'metalHit' : 'hit']();
-    return 'body';
+
+  const muzzle = camera.localToWorld(new THREE.Vector3(0.08, -0.16, -0.45));
+  const far = levelHit ? levelHit.point.clone() : ray.at(w.range || 30, V3());
+  if (w.range && levelHit && levelHit.distance > w.range) far.copy(ray.at(w.range, V3()));
+
+  if (w.explode) {
+    const at = hits.length ? hits[0].point.clone() : far.clone().addScaledVector(ray.direction, -0.25);
+    effects.beam(muzzle, at, 0xffa040, 0.03, 0.06);
+    return explode(at, w);
   }
-  if (levelHit) {
+
+  let best = null;
+  hits.forEach((h, i) => {
+    const r = applyHit(h.e, h.part, h.point, w, primary && i === 0, ray.direction);
+    if (!best || r === 'head') best = r;
+  });
+
+  if (w.tracer) {
+    const end = w.pierce >= 99 || !hits.length ? far : hits[hits.length - 1].point;
+    if (w.chain) effects.lightning(muzzle, end, w.tracer);
+    else effects.beam(muzzle, end, w.tracer, w.pierce >= 99 ? 0.07 : 0.025, w.pierce >= 99 ? 0.25 : 0.08);
+  }
+  if (w.burn && primary) {
+    const stop = hits.length ? hits[0].dist : Math.min(wallD, w.range);
+    for (let t = 1.2; t < stop; t += 1.3) effects.fire(ray.at(t, V3()), 1);
+  }
+  if (!hits.length && levelHit && !(w.range && levelHit.distance > w.range)) {
     const n = levelHit.face.normal.clone().transformDirection(levelHit.object.matrixWorld);
-    effects.hole(levelHit.point, n);
-    effects.dust(levelHit.point.clone().addScaledVector(n, 0.03), 3);
-    if (primary) effects.impact(levelHit.point.clone().addScaledVector(n, 0.05));
+    if (w.burn) effects.fire(levelHit.point.clone().addScaledVector(n, 0.05), 3);
+    else {
+      effects.hole(levelHit.point, n);
+      effects.dust(levelHit.point.clone().addScaledVector(n, 0.03), 3);
+      if (primary) effects.impact(levelHit.point.clone().addScaledVector(n, 0.05));
+    }
   }
-  return null;
+  return best;
+}
+
+function applyHit(e, part, point, w, sound, dir) {
+  const head = part === 'head' && e.type !== 'bot';
+  e.damage(head ? (w.dmg * w.headMult) / 3 : w.dmg, part, point);
+  if (w.burn) { e.burnT = 3; e.burnDps = w.burn; }
+  if (w.freeze) { e.slowT = w.freeze; effects.ice(point, 6); }
+  if (w.knock && e.alive && e.type !== 'boss' && area) {
+    e.pos.addScaledVector(dir.clone().setY(0).normalize(), w.knock);
+    e.pos.z = Math.max(e.pos.z, area.room.zf + 0.6); e.pos.x = clamp(e.pos.x, -3, 3);
+  }
+  if (w.leech) { P.hp = Math.min(100, P.hp + w.leech); effects.emit(point, 3, 'ice', 1); }
+  if (w.chain) chainFrom(e, point, w);
+  if (sound) sfx[head ? 'headshot' : e.type === 'bot' ? 'metalHit' : 'hit']();
+  return head ? 'head' : 'body';
+}
+
+function chainFrom(e, point, w) {
+  const from = point.clone();
+  const others = G.enemies.filter((o) => o !== e && o.alive && o.state !== 'dormant')
+    .map((o) => ({ o, c: o.centerWorld(V3()) }))
+    .filter((x) => x.c.distanceTo(from) < 5.5)
+    .sort((a, b) => a.c.distanceTo(from) - b.c.distanceTo(from))
+    .slice(0, w.chain);
+  let prev = from;
+  for (const { o, c } of others) { effects.lightning(prev, c, w.tracer || 0x80e0ff); o.damage(w.dmg * 0.8, 'body', c); prev = c; }
+}
+
+function explode(at, w) {
+  sfx.explode();
+  shake = Math.min(1, shake + 0.6);
+  effects.explosion(at, w.explode);
+  let hit = null;
+  for (const e of G.enemies) {
+    if (!e.alive || e.state === 'dormant') continue;
+    const c = e.centerWorld(V3());
+    const d = c.distanceTo(at);
+    if (d < w.explode + 0.3) { e.damage(w.dmg * (1 - Math.min(1, d / w.explode) * 0.6), 'body', c); hit = 'body'; }
+  }
+  for (const p of G.projectiles) if (p.alive && p.mesh.position.distanceTo(at) < w.explode) { effects.pop(p.mesh.position.clone()); p.kill(); stats.orbs++; }
+  return hit;
 }
 
 function aimGunAt(x, y) {
@@ -645,10 +775,12 @@ onBtn('quitBtn', () => { paused = false; toTitle(); });
 onBtn('nextBtn', () => { sfx.tap(); nextFloor(); });
 onBtn('retryBtn', () => { score = floorStartScore; startGame(G.floorNum, true); });
 onBtn('menuBtn', toTitle);
+onBtn('gcLeave', () => { sfx.tap(); openChoice(); });
 onBtn('winBtn', toTitle);
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'combat' && !paused) togglePause(); });
 
 function togglePause() {
+  if (choiceOpen) return;
   if (mode === 'title' || mode === 'floorclear' || mode === 'dead') return;
   paused = !paused;
   ui.pause.classList.toggle('hidden', !paused);
@@ -657,7 +789,7 @@ function togglePause() {
 
 // ------------------------------------------------------------------ HUD
 const hudCache = {};
-function setText(el, key, v) { if (hudCache[key] !== v) { hudCache[key] = v; el.textContent = v; } }
+function setText(el, key, v) { if (hudCache[key] !== v) { hudCache[key] = v; el.textContent = v; return true; } return false; }
 function updateHud(force) {
   if (force) for (const k in hudCache) delete hudCache[k];
   setText(ui.floor, 'f', `FLOOR ${String(G.floorNum).padStart(2, '0')}`);
@@ -665,10 +797,11 @@ function updateHud(force) {
   setText(ui.score, 's', String(score).padStart(6, '0'));
   setText(ui.combo, 'c', combo > 1 && now - lastKill < 2.5 ? `x${combo} COMBO` : '');
   setText(ui.hp, 'h', String(Math.ceil(P.hp)));
-  setText(ui.ammo, 'am', String(P.ammo[P.weapon]));
+  setText(ui.ammo, 'am', String(curSlot().ammo));
   setText(ui.reload, 'r', P.reloadT > 0 ? 'RELOADING' : 'AMMO');
   ui.reload.classList.toggle('reloading', P.reloadT > 0);
-  setText(ui.weapon, 'w', WEAPONS[P.weapon].name);
+  if (setText(ui.weapon, 'w', cur().short)) ui.weapon.style.color = RARITY[cur().rarity].color;
+  setText(ui.slotLbl, 'sl', `SWAP ${P.slot + 1}/${P.inv.length}`);
   if (area?.boss && area.boss.alive) ui.bossFill.style.width = `${Math.max(0, (area.boss.hp / area.boss.maxHp) * 100)}%`;
 }
 
@@ -700,7 +833,7 @@ function updateGun(dt) {
   P.aimYaw += (P.aimTY - P.aimYaw) * Math.min(1, dt * 25);
   P.aimPitch += (P.aimTP - P.aimPitch) * Math.min(1, dt * 25);
   P.swapT = Math.max(0, P.swapT - dt * 3);
-  let ry = 0.04 + P.aimYaw, rx = P.aimPitch + P.recoil * 0.22, rz = 0;
+  let ry = 0.16 + P.aimYaw, rx = P.aimPitch + P.recoil * 0.22, rz = 0;
   let px = gunBase.x, py = gunBase.y - P.swapT * 0.3, pz = gunBase.z + P.recoil * 0.05;
   if (P.reloadT > 0) {
     const k = 1 - P.reloadT / P.reloadDur, s = Math.sin(k * Math.PI);
@@ -711,11 +844,11 @@ function updateGun(dt) {
   if (mode === 'dead') py -= 0.4;
   gunRoot.position.set(px, py, pz);
   gunRoot.rotation.set(rx, ry, rz, 'YXZ');
-  const md = models[P.weapon];
+  const md = viewModel(cur().id);
   P.flashT -= dt;
   md.flash.visible = P.flashT > 0;
   if (md.flash.visible) { md.flash.rotation.z = Math.random() * 6; md.flash.scale.setScalar(rand(Math.random, 0.8, 1.4)); }
-  if (P.pump > 0) { P.pump = Math.max(0, P.pump - dt * 2.2); models.shotgun.pump.position.z = -0.4 + Math.sin(P.pump * Math.PI) * 0.1; }
+  if (P.pump > 0) { P.pump = Math.max(0, P.pump - dt * 2.2); if (md.pump) md.pump.position.z = md.pumpZ + Math.sin(P.pump * Math.PI) * 0.1; }
   muzzleLight.intensity = Math.max(0, muzzleLight.intensity - dt * 80);
 }
 
@@ -734,7 +867,7 @@ function update(dt) {
   G.projectiles = G.projectiles.filter((p) => p.alive);
   for (let i = G.pickups.length - 1; i >= 0; i--) {
     const p = G.pickups[i]; p.t += dt;
-    p.mesh.rotation.y += dt * 2; p.mesh.position.y = 0.25 + Math.sin(p.t * 3) * 0.06;
+    p.spin.rotation.y += dt * 2; p.spin.position.y = (p.kind === 'gun' ? 0.45 : 0.25) + Math.sin(p.t * 3) * 0.06;
     if (p.collect) {
       p.ct += dt; p.mesh.position.lerp(G.camPos, Math.min(1, dt * 6)); p.mesh.scale.setScalar(Math.max(0.01, 1 - p.ct * 2));
       if (p.ct > 0.5) { scene.remove(p.mesh); G.pickups.splice(i, 1); }
@@ -751,8 +884,15 @@ function update(dt) {
 
   // weapon timers
   P.cd = Math.max(0, P.cd - dt);
-  if (P.reloadT > 0) { P.reloadT -= dt; if (P.reloadT <= 0) { P.reloadT = 0; P.ammo[P.weapon] = WEAPONS[P.weapon].mag; sfx.tap(); } }
-  if (hold && WEAPONS[P.weapon].auto) tryFire(hold.x, hold.y);
+  if (P.reloadT > 0) { P.reloadT -= dt; if (P.reloadT <= 0) { P.reloadT = 0; curSlot().ammo = cur().mag; sfx.tap(); } }
+  if (P.burstLeft > 0) {
+    P.burstT -= dt;
+    if (P.burstT <= 0) {
+      P.burstLeft--; P.burstT = 0.07;
+      if (G.combatActive && mode === 'combat') fireOnce(P.burstX, P.burstY); else P.burstLeft = 0;
+    }
+  }
+  if (hold && cur().auto) tryFire(hold.x, hold.y);
 
   if (mode === 'title') {
     titleT += dt;
@@ -778,7 +918,7 @@ toTitle();
 requestAnimationFrame(frame);
 
 // expose for debugging / automated checks
-window.__game = { probe(x, y) {
+window.__game = { giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);

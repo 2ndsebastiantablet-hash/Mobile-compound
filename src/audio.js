@@ -77,6 +77,16 @@ export const sfx = {
   step() { noise(0.05, 0.15, 'lowpass', 400, 100); },
   unlock() { [262, 330, 392, 523, 659, 784].forEach((f, i) => tone('square', f, f, 0.1, 0.13, i * 0.07)); },
   tap() { tone('square', 660, 660, 0.04, 0.12); },
+  revolver() { noise(0.28, 1.0, 'lowpass', 4000, 150); tone('square', 140, 35, 0.2, 0.6); },
+  rifle() { noise(0.12, 0.75, 'lowpass', 7000, 400); tone('square', 260, 70, 0.08, 0.4); },
+  sniper() { noise(0.5, 1.0, 'lowpass', 6000, 100); tone('sawtooth', 200, 30, 0.45, 0.6); noise(0.6, 0.2, 'bandpass', 800, 200, 0.1); },
+  rail() { tone('sawtooth', 2400, 80, 0.5, 0.35); tone('square', 120, 40, 0.4, 0.4); noise(0.3, 0.4, 'highpass', 6000, 1000); },
+  launcher() { noise(0.25, 0.6, 'lowpass', 1200, 100); tone('sine', 300, 80, 0.2, 0.5); },
+  explode() { noise(0.9, 1.0, 'lowpass', 2500, 40); tone('sine', 90, 25, 0.8, 0.9); },
+  zap() { tone('sawtooth', 1800, 300, 0.1, 0.18); noise(0.08, 0.3, 'highpass', 5000, 3000); },
+  flame() { noise(0.1, 0.35, 'bandpass', 900, 500, 0, sfxBus, 0.5); },
+  staple() { tone('square', 1100, 500, 0.04, 0.3); noise(0.04, 0.4, 'highpass', 3000, 1500); },
+  gunPickup() { [330, 440, 660].forEach((f, i) => tone('square', f, f, 0.08, 0.15, i * 0.05)); noise(0.1, 0.2, 'bandpass', 2000, 900, 0.15); },
 };
 
 // ------------------------------------------------------------------ music

@@ -30,10 +30,11 @@
     <div id="banner"></div>
     <div id="subBanner"></div>
     <div id="markers"></div>
+    <div id="toast"></div>
     <div id="statusbar">
       <div class="cell"><div class="big" id="hpLbl">100</div><div class="lbl">HEALTH</div></div>
       <div class="cell"><div class="big" id="ammoLbl">12</div><div class="lbl" id="reloadLbl">AMMO</div></div>
-      <button class="cell btn" id="weaponBtn"><div class="wname" id="weaponLbl">PISTOL</div><div class="lbl">SWAP</div></button>
+      <button class="cell btn" id="weaponBtn"><div class="wname" id="weaponLbl">PISTOL</div><div class="lbl" id="slotLbl">SWAP 1/1</div></button>
       <button class="cell btn" id="reloadBtn"><div class="wname">R</div><div class="lbl">RELOAD</div></button>
     </div>
   </div>
@@ -44,6 +45,7 @@
     <div class="howto">
       <p>TAP enemies to shoot. Heads take triple damage.</p>
       <p>TAP incoming fireballs to destroy them.</p>
+      <p>Grab dropped guns. Carry up to 3 and tap SWAP to switch.</p>
       <p>Clear each area to advance. Reach the top floor.</p>
     </div>
     <button class="go" id="startBtn">CLOCK IN</button>
@@ -55,6 +57,14 @@
     <button class="go" id="resumeBtn">RESUME</button>
     <button class="go small" id="muteBtn">SOUND: ON</button>
     <button class="go small" id="quitBtn">QUIT</button>
+  </div>
+
+  <div id="gunChoice" class="screen hidden">
+    <div class="h mid">NEW WEAPON</div>
+    <div class="card" id="gcNew"></div>
+    <div class="gchint">Your hands are full. Drop one to take it:</div>
+    <div id="gcSlots"></div>
+    <button class="go small" id="gcLeave">LEAVE IT</button>
   </div>
 
   <div id="floorClear" class="screen hidden">

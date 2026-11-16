@@ -36,9 +36,32 @@ To host it, push the repo to GitHub and enable **Pages** (Settings → Pages →
 | **Executives** | Bosses on floors 5, 10, 15 and 20. They fire spread shots and call in reinforcements. |
 
 ### Weapons
-- **Pistol**: 12 rounds, accurate.
-- **Shotgun** (unlocks on floor 4): 7-pellet spread.
-- **SMG** (unlocks on floor 8): hold to spray.
+You start with a pistol. Enemies randomly drop guns, shown as a spinning model with a light beam in the gun's rarity color. Bosses always drop a rare or better gun. Tap a drop to grab it; anything left on the floor is collected automatically when the area is clear. You can carry **3 guns**, and **SWAP** cycles through them. If your hands are full when you pick one up, you choose which gun to drop, or leave the new one behind. Picking up a gun you already carry refills its ammo.
+
+| Gun | Rarity | What it does |
+|---|---|---|
+| Pistol | Common | Starter sidearm |
+| Revolver | Common | Heavy rounds, 4x headshots |
+| Staple Gun | Common | Tap fast, huge clip |
+| Pump Shotgun | Common | 7-pellet spread |
+| SMG | Common | Hold to spray |
+| Double Barrel | Uncommon | 12 pellets, 2 shells |
+| Assault Rifle | Uncommon | Accurate full-auto |
+| Burst Rifle | Uncommon | 3-round burst per tap |
+| Nail Gun | Uncommon | Full-auto, pierces 1 enemy |
+| Sniper Rifle | Rare | Huge damage, pierces, 4x heads |
+| Grenade Launcher | Rare | Explosive splash damage |
+| Tesla Coil | Rare | Lightning chains to 3 more enemies |
+| Flamethrower | Rare | Short range, sets enemies on fire |
+| Cryo Blaster | Rare | Freezes and slows enemies |
+| Hand Cannon | Rare | Knocks enemies back |
+| Minigun | Epic | 120-round belt |
+| Railgun | Epic | Beam pierces every enemy in line |
+| Rocket Launcher | Epic | One rocket, massive explosion |
+| Leech Pistol | Epic | Each hit heals you |
+| Golden Gun | Legendary | One shot kills anything in its path |
+
+Higher rarities only start dropping on later floors.
 
 ### The tower
 | Floors | Zone |
@@ -57,6 +80,7 @@ The city skyline outside the windows sinks lower as you climb.
 index.html / style.css     HUD, menus, status bar
 src/main.js                game loop, input, shooting, area/floor flow, viewmodel
 src/level.js               floor + room generator, furniture kits, elevators
+src/weapons.js             the 20 guns, rarity rolls, procedural gun models
 src/enemies.js             enemy models, AI, projectiles
 src/effects.js             gibs, particles, bullet holes
 src/textures.js            procedural pixel-art textures + 3x5 pixel font
