@@ -7,6 +7,7 @@ The look is a low-res, chunky-pixel 3D style in the spirit of mid-90s shooters. 
 ## Project layout
 ```
 index.html                 launcher page: pick a version to test
+docs/ROADMAP.md            development timeline for the remaining features
 play.bat / play.sh         double-click: start the local test server + open the launcher
 package.json               npm scripts (start / build)
 tools/
