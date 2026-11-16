@@ -171,8 +171,24 @@ export const DEFS = {
 
 export const NEW_COUNT = Object.keys(DEFS).length - 5;
 
-export function rosterFor(floor) {
-  return Object.entries(DEFS).filter(([, d]) => !d.boss && !d.minion && d.w > 0 && floor >= d.floors[0] && floor <= d.floors[1]);
+// enemy family, used by floor variants to decide who dominates a floor
+export function category(id) {
+  const d = DEFS[id], m = d.model, k = m.kind;
+  if (['drone', 'mech', 'turret', 'tank', 'swarm', 'spider'].includes(k)) return 'robot';
+  if (k === 'quad') return m.style === 'robot' || m.style === 'hound' ? 'robot' : 'mutant';
+  if (k === 'floater') return m.style === 'wraith' ? 'robot' : 'mutant';
+  if (k === 'blob' || k === 'pod') return 'mutant';
+  if (m.head === 'mutant' || m.outfit === 'flesh' || m.outfit === 'brute') return 'mutant';
+  if (m.outfit === 'glitch') return 'robot';
+  if (['guard', 'riot', 'bodyguard', 'heavy', 'major', 'jet', 'ninja'].includes(m.outfit)) return 'security';
+  return 'office';
+}
+
+// Floors 1-20 use each enemy's own range. Above 20 the whole upper-tower roster is in play.
+export function rosterFor(floor, focus) {
+  return Object.entries(DEFS)
+    .filter(([, d]) => !d.boss && !d.minion && d.w > 0 && (floor > 20 ? d.floors[1] >= 14 : floor >= d.floors[0] && floor <= d.floors[1]))
+    .map(([id, d]) => [id, { ...d, w: d.w * (focus && category(id) === focus ? 2.5 : 1) }]);
 }
 
 export function isFlyer(type) { const m = DEFS[type].move; return m === 'fly' || m === 'orbit' || m === 'dive'; }

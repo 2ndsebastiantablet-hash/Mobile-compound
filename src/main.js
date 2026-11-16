@@ -1,5 +1,5 @@
 import * as THREE from '../vendor/three.module.min.js';
-import { buildFloor, themeFor, box, EYE, RD, TOP_FLOOR } from './level.js';
+import { buildFloor, floorPlan, MOODS, box, EYE, RD, TOP_FLOOR } from './level.js';
 import { Enemy, Projectile } from './enemies.js';
 import { DEFS, rosterFor, isFlyer, isMelee } from './enemydefs.js';
 import { Effects } from './effects.js';
@@ -88,14 +88,17 @@ const seenTypes = new Set(storeGet('overtime.seen', []));
 let pendingIntro = [], introT = 0;
 
 // ------------------------------------------------------------------ sequences (generator coroutines)
-let seq = null, seqWait = 0;
-function run(gen) { seq = gen(); seqWait = 0; seq.next(0); }
+let seq = null, seqWait = 0, seqUntil = null;
+function run(gen) { seq = gen(); seqWait = 0; seqUntil = null; seq.next(0); }
 function* tween(dur, fn) { let t = 0; fn(0); while (t < dur) { t += yield; fn(Math.min(1, t / dur)); } }
 function stepSeq(dt) {
   if (!seq) return;
   if (seqWait > 0) { seqWait -= dt; if (seqWait > 0) return; dt = -seqWait; seqWait = 0; }
+  if (seqUntil) { if (!seqUntil()) return; seqUntil = null; }
   const r = seq.next(dt);
-  if (r.done) seq = null; else if (typeof r.value === 'number' && r.value > 0) seqWait = r.value;
+  if (r.done) seq = null;
+  else if (typeof r.value === 'number' && r.value > 0) seqWait = r.value;
+  else if (typeof r.value === 'function') seqUntil = r.value;
 }
 function fade(to, dur) { ui.fade.style.transition = `opacity ${dur}s linear`; ui.fade.style.opacity = to; }
 
@@ -110,18 +113,24 @@ function clearFloor() {
   G.floor = null;
 }
 
-function loadFloor(n) {
+function loadFloor(n, variant) {
   clearFloor();
   G.floorNum = n;
-  const f = buildFloor(n);
+  G.diff = n <= 20 ? n : 20 + (n - 20) * 0.5;
+  G.variant = variant;
+  const plan = floorPlan(n, variant);
+  const f = buildFloor(n, plan);
   G.floor = f; scene.add(f.group);
-  const th = f.theme;
-  scene.fog = new THREE.Fog(th.fog, 3, 22);
-  scene.background = new THREE.Color(th.fog);
-  renderer.setClearColor(th.fog);
+  const th = f.theme, md = MOODS[plan.mood];
+  const fogCol = md.fogCol ?? th.fog;
+  scene.fog = new THREE.Fog(fogCol, 3, md.fog || 22);
+  scene.background = new THREE.Color(fogCol);
+  renderer.setClearColor(fogCol);
   hemi.color.set(th.hemi[0]); hemi.groundColor.set(th.hemi[1]);
-  for (const l of roomLights) l.color.set(th.light);
-  gunScene.children[0].color.set(th.light);
+  hemi.intensity = 1.5 * (md.hemi || 1); amb.intensity = 0.35 * (md.hemi || 1);
+  const lc = new THREE.Color(md.light || th.light); if (md.tint) lc.lerp(new THREE.Color(md.tint), 0.4);
+  for (const l of roomLights) { l.color.copy(lc); l.intensity = 9 * (md.room || 1); }
+  gunScene.children[0].color.copy(lc); gunScene.children[0].intensity = 0.9 * Math.max(0.5, md.hemi || 1);
   setRoom(0);
   setLights(f.rooms[0], f.rooms[0], 0);
 }
@@ -133,7 +142,7 @@ function setLights(a, b, k) {
 
 // ------------------------------------------------------------------ area planning
 function weightedType() {
-  const pool = rosterFor(G.floorNum);
+  const pool = rosterFor(G.floorNum, G.floor && G.floor.plan.focus);
   let total = pool.reduce((a, [, d]) => a + d.w, 0), r = Math.random() * total;
   for (const [id, d] of pool) if ((r -= d.w) <= 0) return id;
   return 'grunt';
@@ -143,11 +152,20 @@ function prepareArea(i) {
   const f = G.floorNum, room = G.floor.rooms[i];
   const last = i === G.floor.rooms.length - 1;
   room.spots.forEach((s) => (s.taken = null));
-  const n = Math.min(12, 3 + Math.floor(f * 0.55) + Math.floor(i * 0.5));
-  const initialN = Math.min(n, 3 + Math.floor(f / 5));
+  const df = G.diff || f;
+  const n = Math.min(12, 3 + Math.floor(df * 0.55) + Math.floor(i * 0.5));
+  const initialN = Math.min(n, 3 + Math.floor(df / 5));
   const types = [];
-  for (let k = 0; k < n; k++) types.push(weightedType());
-  area = { idx: i, room, queue: [], waveT: 2.5, maxAlive: Math.min(7, 3 + Math.floor(f / 4)), clearing: false, boss: null };
+  // cap the heavy hitters so an area is never a wall of tanks
+  let heavy = 0;
+  const maxHeavy = f > 20 ? 2 : 1;
+  for (let k = 0; k < n; k++) {
+    let t = weightedType();
+    for (let tries = 0; tries < 8 && DEFS[t].hp >= 12 && heavy >= maxHeavy; tries++) t = weightedType();
+    if (DEFS[t].hp >= 12) heavy++;
+    types.push(t);
+  }
+  area = { idx: i, room, queue: [], waveT: 2.5, maxAlive: Math.min(7, 3 + Math.floor((G.diff || f) / 4)), clearing: false, boss: null };
   if (last && G.floor.isBoss) {
     const bossSpot = { x: 0, z: room.z0 - 9.8, cover: false };
     const b = new Enemy(G, 'boss', bossSpot);
@@ -161,7 +179,7 @@ function prepareArea(i) {
   area.queue = rest;
 }
 
-function bossName(f) { return ['', 'REGIONAL MANAGER', 'VP OF OPERATIONS', 'CHIEF FINANCIAL OFFICER', 'THE CHAIRMAN'][f / 5] || 'THE MANAGER'; }
+function bossName(f) { return ['', 'REGIONAL MANAGER', 'VP OF OPERATIONS', 'CHIEF FINANCIAL OFFICER', 'CHIEF OPERATING OFFICER', 'HEAD OF R&D', 'DIRECTOR OF ROBOTICS', 'CHIEF ARCHIVIST', 'CHIEF EXECUTIVE OFFICER', 'THE PRESIDENT', 'THE CHAIRMAN'][f / 5] || 'THE MANAGER'; }
 
 function visibleSpots(room) {
   const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
@@ -389,13 +407,14 @@ function startGame(floor = 1, keepScore = false) {
   autoReload();
   pendingGuns = []; choiceOpen = false; ui.gunChoice.classList.add('hidden');
   G.floorNum = floor;
-  startFloor(floor);
+  startFloor(floor, keepScore);
 }
 
-function startFloor(n) {
+function startFloor(n, sameVariant = false) {
   mode = 'intro'; G.combatActive = false;
   stats = newStats(); combo = 0;
-  loadFloor(n);
+  // each floor has 3 versions; roll one (a retry replays the same version)
+  loadFloor(n, sameVariant && G.variant != null && G.floorNum === n ? G.variant : Math.floor(Math.random() * 3));
   floorStartScore = score;
   ui.hud.classList.remove('hidden');
   ui.bossbar.classList.add('hidden');
@@ -411,7 +430,7 @@ function startFloor(n) {
     if (el) { G.camPos.copy(el.inside); } else G.camPos.copy(room0.stand).add(new THREE.Vector3(0, 0, 1.2));
     applyCamera();
     fade(0, 0.8);
-    banner(`FLOOR ${String(n).padStart(2, '0')}`, G.floor.isBoss ? 'WARNING: EXECUTIVE PRESENT' : themeFor(n).name, 2.2);
+    banner(`FLOOR ${String(n).padStart(2, '0')}`, (G.floor.isBoss ? 'EXECUTIVE PRESENT · ' : '') + G.floor.plan.name, 2.4);
     yield 0.6;
     if (el) { sfx.ding(); yield 0.4; el.target = 1; sfx.door(); yield 0.9; }
     const from = G.camPos.clone();
@@ -446,6 +465,40 @@ function beginCombat() {
   updateHud(true);
 }
 
+function startAmbush(room) {
+  area = { idx: area.idx, room, queue: [], waveT: 99, maxAlive: 0, clearing: false, boss: null, ambush: true };
+  mode = 'combat'; G.combatActive = true;
+  setMusic('combat');
+  banner('AMBUSH!', null, 0.9);
+  sfx.telegraph(); sfx.door();
+  const n = 1 + (G.floorNum >= 6 ? 1 : 0) + (G.floorNum >= 25 ? 1 : 0);
+  for (let k = 0; k < n; k++) {
+    let type = 'grunt';
+    for (let tries = 0; tries < 12; tries++) { type = weightedType(); const d = DEFS[type]; if (d.move !== 'turret' && d.move !== 'burrow') break; }
+    const side = n === 1 ? (Math.random() < 0.5 ? -1 : 1) : (k % 2 ? 1 : -1);
+    const spot = { x: side * rand(Math.random, 0.5, 1.3), y: 2.0, z: G.camPos.z - rand(Math.random, 3.0, 4.4), cover: false };
+    const e = new Enemy(G, type, spot, { active: true });
+    // pop up from behind the furniture
+    if (!isFlyer(type)) { e.crouch = 1; e.crouchTarget = 0; }
+    e.atkT = rand(Math.random, 0.7, 1.2) + k * 0.4;
+    effects.dust(e.pos.clone().setY(0.1), 10);
+    G.enemies.push(e); introduce(type);
+  }
+  updateHud(true);
+}
+
+function ambushCleared() {
+  area.clearing = true;
+  G.combatActive = false;
+  mode = 'moving';
+  setMusic('calm');
+  for (const p of G.projectiles) p.kill();
+  G.projectiles = [];
+  for (const p of G.pickups) collectPickup(p);
+  sfx.clear();
+  banner('CLEAR', null, 0.8);
+}
+
 function areaCleared() {
   area.clearing = true;
   G.combatActive = false;
@@ -463,8 +516,17 @@ function areaCleared() {
     run(function* () {
       yield 1.1;
       autoReload();
+      const to = rooms[i + 1].stand;
+      if (Math.random() < Math.min(0.5, 0.22 + G.floorNum * 0.01)) {
+        // AMBUSH: stop halfway and make the player react
+        const mid = G.camPos.clone().lerp(to, 0.45);
+        yield* walk(G.camPos.clone(), mid, null);
+        startAmbush(rooms[i]);
+        yield () => area.clearing;
+        yield 0.7;
+      }
       prepareArea(i + 1);
-      yield* walk(G.camPos.clone(), rooms[i + 1].stand, [rooms[i], rooms[i + 1]]);
+      yield* walk(G.camPos.clone(), to, [rooms[i], rooms[i + 1]]);
       setRoom(i + 1);
       beginCombat();
     });
@@ -544,7 +606,7 @@ function toTitle() {
   hideScreens();
   ui.hud.classList.add('hidden');
   mode = 'title'; G.combatActive = false; seq = null;
-  loadFloor(1);
+  loadFloor(1, 0);
   prepareArea(0);
   G.camPos.copy(G.floor.rooms[0].stand);
   yaw = 0; pitch = BASE_PITCH; roll = 0;
@@ -928,10 +990,26 @@ function update(dt) {
   if (pendingIntro.length && introT <= 0 && mode === 'combat' && !choiceOpen) { toast(`NEW HOSTILE: ${pendingIntro.shift()}`, '#ff7050'); introT = 1.8; }
 
   if (G.combatActive && area && !area.clearing) {
-    const alive = G.enemies.filter((e) => e.alive).length;
-    area.waveT -= dt;
-    if (area.queue.length && alive < area.maxAlive && area.waveT <= 0) { spawnReinforcement(area.queue.shift()); area.waveT = rand(Math.random, 0.9, 2.0); }
-    if (!area.queue.length && alive === 0 && (!area.boss || !area.boss.alive)) areaCleared();
+    let alive = 0;
+    for (const e of G.enemies) {
+      if (!e.alive) continue;
+      // safety net: an enemy stranded outside the current room (behind the camera, deep in
+      // another room, or outside the walls) for 2s is removed so the area can always finish
+      const out = !e.def.boss && (e.pos.z > G.camPos.z + 0.3 || e.pos.z < area.room.zf - 3 || Math.abs(e.pos.x) > 4);
+      e.strayT = out ? (e.strayT || 0) + dt : 0;
+      if (e.strayT > 2) { e.remove(); e.state = 'dead'; continue; }
+      alive++;
+    }
+    if (area.ambush) {
+      if (alive === 0) ambushCleared();
+    } else {
+      area.waveT -= dt;
+      if (area.queue.length && alive < area.maxAlive && area.waveT <= 0) {
+        spawnReinforcement(area.queue.shift()); area.waveT = rand(Math.random, 0.9, 2.0);
+        alive++; // count it now, or the area could "clear" the same frame the last wave spawns
+      }
+      if (!area.queue.length && alive === 0 && (!area.boss || !area.boss.alive)) areaCleared();
+    }
   }
 
   // weapon timers
@@ -970,7 +1048,7 @@ toTitle();
 requestAnimationFrame(frame);
 
 // expose for debugging / automated checks
-window.__game = { get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
+window.__game = { get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);

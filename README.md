@@ -1,6 +1,6 @@
 # OVERTIME
 
-A portrait, touch-first on-rails shooter set in a 20-floor office tower. You stand in place with a fixed camera. Tap enemies to shoot them. When an area is clear you walk to the next one automatically. Clear every area on a floor, ride the elevator up, and keep climbing until you reach the boardroom.
+A portrait, touch-first on-rails shooter set in a 50-floor office tower. You stand in place with a fixed camera. Tap enemies to shoot them. When an area is clear you walk to the next one automatically. Clear every area on a floor, ride the elevator up, and keep climbing until you reach the boardroom.
 
 The look is a low-res, chunky-pixel 3D style in the spirit of mid-90s shooters. Everything is drawn in code at runtime: blocky box models, tiny nearest-filtered textures, flat fluorescent lighting and fog. The game ships no image or audio files. Every texture, model, sound effect and music loop is generated procedurally.
 
@@ -25,9 +25,10 @@ To host it, push the repo to GitHub and enable **Pages** (Settings → Pages →
 - Fast kills chain into a **combo multiplier**.
 - Dead enemies sometimes drop **medkits**. Tap them, or they get collected when the area is cleared.
 - Each floor has 3–6 areas and ends in an elevator lobby. Reinforcements walk in through the far door, or come out of the side elevators.
+- **Ambushes:** while you walk between areas, enemies sometimes pop out of hiding. You stop, they fire quickly, and you have to react before the walk continues.
 
 ### Enemies
-There are 55 enemy types: the 4 original grunts plus 50 new ones, and the floor bosses. Each one has a floor range, and areas fill up with random picks from the enemies allowed on that floor. Low floors are mostly office staff. Robots, drones and turrets show up in the data center, and mutants, oozes and lab horrors appear higher up. Bosses still appear on floors 5, 10, 15 and 20. The first time you meet a new enemy type, a **NEW HOSTILE** callout appears.
+There are 55 enemy types: the 4 original grunts plus 50 new ones, and the floor bosses. Each one has a floor range, and areas fill up with random picks from the enemies allowed on that floor. Low floors are mostly office staff. Robots, drones and turrets show up in the data center, and mutants, oozes and lab horrors appear higher up. Bosses appear every 5 floors. The first time you meet a new enemy type, a **NEW HOSTILE** callout appears.
 
 Things to know:
 - Shoot charging lasers to cancel them. A red beam means one is warming up.
@@ -123,16 +124,23 @@ You start with a pistol. Enemies randomly drop guns, shown as a spinning model w
 
 Higher rarities only start dropping on later floors.
 
-### The tower
-| Floors | Zone |
-|---|---|
-| 1–4 | Mailroom levels: offices, mailroom, break room |
-| 5–9 | Cubicle farm |
-| 10–14 | Data center |
-| 15–19 | Executive suites |
-| 20 | The boardroom |
+### The tower: 50 floors, 3 versions each
+The tower has 10 zones. Each zone has **three alternate themes**, and when you reach a floor one version is picked at random. A version is a theme (look, floor and wall materials, room types) plus a lighting mood (normal, **Night Shift**, red **Lockdown**, **Blackout**, toxic **Contaminated**) plus an enemy focus (office staff, security, robots or mutants). Retrying a floor replays the same version.
 
-The city skyline outside the windows sinks lower as you climb.
+| Floors | Version A | Version B | Version C |
+|---|---|---|---|
+| 1–4 | Mailroom Levels | Records Department | Reception Wing |
+| 5–9 | Cubicle Farm | Call Center | Open Plan |
+| 10–14 | Data Center | Server Vault | IT Helldesk |
+| 15–20 | Executive Suites | Gold Floor | Trophy Hall |
+| 21–25 | R&D Labs | Biohazard Wing | Clean Room |
+| 26–30 | Robotics Wing | Assembly Line | Test Chambers |
+| 31–35 | The Archives | The Library | Cold Storage |
+| 36–40 | Sky Garden | The Atrium | Greenhouse |
+| 41–45 | The Penthouse | Casino Lounge | Marble Halls |
+| 46–50 | Reactor Core | Black Site | Chairman's Sanctum |
+
+Room types are offices, cubicles, break rooms, conference rooms, mailrooms, server rooms, executive offices, labs (specimen tanks), factories (conveyors and robot arms), archives, roof gardens, lounges (bar, piano, pool table) and reactor rooms. There's a boss every 5 floors, ending with the Chairman on floor 50. The city skyline outside the windows sinks as you climb. Above floor 20 the whole upper-tower roster is in play, and the difficulty curve flattens.
 
 ## Code layout
 

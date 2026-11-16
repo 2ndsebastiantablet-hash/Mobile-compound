@@ -93,6 +93,37 @@ export const carpet = (th) => tex('carpet' + th.key, 64, 64, (p, r) => {
   for (let i = 0; i < 64; i++) { p.mul(i, 0, 0.72); p.mul(0, i, 0.72); }
 });
 
+export const floorTex = (th) => {
+  const st = th.floorStyle || 'carpet';
+  if (st === 'carpet') return carpet(th);
+  return tex('floor' + st + th.key, 64, 64, (p, r) => {
+    const a = th.carpet, b = th.carpet2;
+    if (st === 'tile') {
+      p.noise(a, 0.06, r);
+      for (let i = 0; i < 64; i++) for (let k = 0; k < 64; k += 16) { p.set(i, k, b); p.set(k, i, b); }
+      for (let i = 0; i < 30; i++) p.set(r() * 64, r() * 64, sh(a, 0.85));
+    } else if (st === 'metal') {
+      p.noise(a, 0.12, r);
+      for (let y = 0; y < 64; y += 8) for (let x = ((y >> 3) % 2) * 4; x < 64; x += 8) { p.rect(x, y + 2, 3, 1, sh(a, 1.35)); p.rect(x + 1, y + 3, 3, 1, sh(a, 0.6)); }
+      for (let i = 0; i < 64; i++) { p.set(i, 0, b); p.set(0, i, b); }
+    } else if (st === 'wood') {
+      for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+        const plank = ((y >> 3) + ((x >> 5) % 2) * 3) % 4;
+        const base = plank % 2 ? a : b;
+        p.set(x, y, sh(base, (0.9 + 0.1 * Math.sin(x * 0.7 + plank * 2)) * (0.95 + r() * 0.08)));
+      }
+      for (let i = 0; i < 64; i++) for (let k = 0; k < 64; k += 8) p.set(i, k, sh(b, 0.6));
+    } else if (st === 'marble') {
+      for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) p.set(x, y, sh(((x >> 5) + (y >> 5)) % 2 ? a : b, 0.95 + r() * 0.06));
+      for (let i = 0; i < 6; i++) { let x = r() * 64, y = r() * 64; for (let k = 0; k < 40; k++) { p.set(x, y, sh(a, 0.7)); x += r() * 2 - 0.5; y += r() * 2 - 1; } }
+      for (let i = 0; i < 64; i++) { p.set(i, 0, sh(b, 0.7)); p.set(0, i, sh(b, 0.7)); p.set(i, 32, sh(b, 0.7)); p.set(32, i, sh(b, 0.7)); }
+    } else if (st === 'grass') {
+      p.noise(a, 0.35, r);
+      for (let i = 0; i < 400; i++) { const x = r() * 64, y = r() * 64; p.set(x, y, sh(b, 1.2)); p.set(x, y - 1, sh(b, 1.4)); }
+    }
+  });
+};
+
 export const lino = (th) => tex('lino' + th.key, 64, 64, (p, r) => {
   for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
     const chk = ((x >> 4) + (y >> 4)) % 2;
@@ -110,6 +141,31 @@ export const ceiling = (th) => tex('ceil' + th.key, 32, 32, (p, r) => {
 });
 
 export const wall = (th) => tex('wall' + th.key, 64, 64, (p, r) => {
+  if (th.wallStyle === 'tile') {
+    p.noise(th.wall, 0.05, r);
+    for (let i = 0; i < 64; i++) for (let k = 0; k < 64; k += 16) { p.set(i, k, sh(th.wall, 0.72)); p.set(k, i, sh(th.wall, 0.72)); }
+    for (let i = 0; i < 6; i++) { const x = r() * 60 | 0, y = r() * 60 | 0; p.rect(x, y, 2, 1, sh(th.wall, 0.85)); }
+    return;
+  }
+  if (th.wallStyle === 'metal') {
+    p.noise(th.wall, 0.1, r);
+    for (let i = 0; i < 64; i++) for (let k = 0; k < 64; k += 32) { p.set(i, k, sh(th.wall, 0.55)); p.set(k, i, sh(th.wall, 0.55)); p.set(i, k + 1, sh(th.wall, 1.25)); }
+    for (let y = 4; y < 64; y += 32) for (let x = 4; x < 64; x += 24) { p.set(x, y, sh(th.wall, 0.4)); p.set(x + 1, y + 1, sh(th.wall, 1.4)); }
+    for (let y = 44; y < 52; y++) for (let x = 0; x < 64; x++) p.set(x, y, ((x + y) >> 2) % 2 ? sh(th.wall, 0.75) : sh(th.wall, 0.95));
+    return;
+  }
+  if (th.wallStyle === 'marble') {
+    p.noise(th.wall, 0.05, r);
+    for (let i = 0; i < 5; i++) { let x = r() * 64, y = 0; for (let k = 0; k < 80; k++) { p.set(x, y, sh(th.wall, 0.78)); x += r() * 2 - 0.9; y += 0.8; } }
+    for (let i = 0; i < 64; i++) p.set(i, 31, sh(th.wall, 0.82));
+    return;
+  }
+  if (th.wallStyle === 'concrete') {
+    p.noise(th.wall, 0.2, r);
+    for (let i = 0; i < 64; i++) { p.set(i, 21, sh(th.wall, 0.75)); p.set(i, 42, sh(th.wall, 0.75)); }
+    for (const [x, y] of [[10, 10], [42, 10], [26, 31], [10, 52], [42, 52]]) p.rect(x, y, 2, 2, sh(th.wall, 0.55));
+    return;
+  }
   if (th.wallStyle === 'panel') {
     for (let x = 0; x < 64; x++) {
       const plank = Math.floor(x / 16), f0 = 0.85 + ((plank * 37) % 7) / 30;
@@ -184,7 +240,7 @@ export const lightPanel = (on = true) => tex('light' + on, 32, 16, (p, r) => {
 }, { mip: false });
 
 export const skyline = (floor) => tex('sky' + floor, 128, 64, (p, r) => {
-  const horizon = Math.max(14, 44 - floor * 1.4); // the city sinks as you climb
+  const horizon = Math.max(10, 44 - floor * 0.7); // the city sinks as you climb
   for (let y = 0; y < 64; y++) {
     const t = y / 64;
     const c = [14 + 40 * t, 14 + 22 * t, 40 + 50 * t];

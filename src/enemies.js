@@ -16,7 +16,7 @@ export class Enemy {
   constructor(game, type, spot, opts = {}) {
     const def = DEFS[type];
     this.game = game; this.type = type; this.def = def; this.st = def; this.spot = spot;
-    const f = game.floorNum;
+    const f = game.diff || game.floorNum; // difficulty curve flattens above floor 20
     this.traits = def.traits || {};
     this.maxHp = this.hp = def.boss ? def.hp + f * 4 : Math.round(def.hp * (1 + f * 0.03) * 10) / 10;
     this.dmg = def.dmg * (1 + f * 0.03);
@@ -173,7 +173,7 @@ export class Enemy {
   }
 
   updateMove(dt) {
-    const g = this.game, def = this.def, sp = def.speed * (1 + g.floorNum * 0.015);
+    const g = this.game, def = this.def, sp = def.speed * (1 + (g.diff || g.floorNum) * 0.015);
     const planted = this.atkState === 'wind' || this.atkState === 'burst';
     switch (def.move) {
       case 'stand':
