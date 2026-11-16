@@ -459,6 +459,7 @@ export class Enemy {
     if (this.state === 'enter' && this.def.boss) return false;
     if (this.burrow && this.burrow.phase === 'under') return false;
     const g = this.game;
+    if (this.tutorialShield) { g.fx.sparks(point, 3); g.sfx.metalHit(); return 'immune'; }
     if (this.brain) {
       const r = this.brain.gate(part);
       if (r === 'immune') { g.fx.sparks(point, 4); g.sfx.metalHit(); g.bossImmune(this); return 'immune'; }

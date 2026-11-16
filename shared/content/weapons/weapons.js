@@ -176,6 +176,9 @@ function buildMelee(def, withArm) {
   return { g, tip, melee: true };
 }
 
+// tint the player's sleeve (each employee has their own colour)
+export function setSleeve(hex) { mats().sleeve.color.set(hex).multiplyScalar(1 / 0.82); }
+
 export function buildGunModel(def, withArm = true) {
   if (def.melee) return buildMelee(def, withArm);
   const M = mats(), s = def.m;

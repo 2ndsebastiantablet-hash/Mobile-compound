@@ -23,8 +23,9 @@ shared/                    everything the versions have in common
     bosses/                bosses.js (60 bosses: attack scripts + vulnerability rules)
     weapons/               weapons.js (40 weapons + procedural gun/melee models)
     perks/                 perks.js (31 run perks, offer rolls, stat modifiers)
+    meta/                  upgrades.js (HQ upgrades + weapon levels), characters.js (employees), achievements.js
   game/                    game.js (game loop, input, shooting, floor/area flow, HUD, viewmodel),
-                           settings.js, save.js (autosave), tutorial.js
+                           settings.js, save.js (autosave), tutorial.js, profile.js (wallet, unlocks, stats), hq.js (HQ screens)
   ui/                      base.css (HUD, menus, overlays shared by all versions)
 versions/
   mobile/                  index.html + mobile.css (portrait, touch)
@@ -59,6 +60,11 @@ The PC version shows the whole room in widescreen, the gun follows your cursor, 
 - **Saving:** your run is autosaved at the start of every floor. **Continue** on the title screen picks it up again, even after closing the game. Retrying after death, or choosing *Restart floor* from the pause menu, replays that floor's save with full health.
 - **Settings** (title screen or pause menu): music and sound volume, aim assist (off/low/normal/high), graphics quality (render resolution and particles), screen shake, left-handed HUD (mobile), and replaying the tutorial.
 - **Perks:** after every floor you choose **1 of 3 random perks**, and they last for the rest of the run. There are 31 across offense, defense and utility, for example Hollow Points, Marksman, Explosive Rounds, Second Wind, Bloodsucker, Deflector Field, Auto-Loader and Lucky Charm. Many stack (shown as 1/3, 2/3…). After a boss or mini-boss floor at least one rare-or-better perk is offered. You get one free reroll per run. Your perks are listed in the pause menu and saved with the run.
+- **Cash & HQ:** kills, bosses and cleared floors pay cash, which goes into a permanent wallet (dying never loses it). Spend it at **HQ** on the title screen:
+  - **Upgrades:** 11 permanent boosts for every future run (Vitality, Firepower, Speed Loader, Body Plating, First Aid Kit, Bounty Hunter, Perk Scholar, More Options, Backpack, Signing Bonus, Life Insurance).
+  - **Armory:** level up any weapon you've found, up to level 5 (+12% damage and +10% magazine per level; level 5 also reloads faster).
+  - **Employees:** 8 starting characters, each with their own weapon and perks (The Temp, Night Guard, The Intern, The Janitor, IT Technician, Junior Executive, The Contractor, The Chairman's Heir). Unlock them through milestones or buy them.
+  - **Awards:** 31 achievements with cash rewards.
 - **Tutorial:** a new player's first area on floor 1 walks through shooting, headshots, shooting fireballs, reloading, picking up and switching weapons. It can be skipped.
 
 - **Tap enemies** to shoot. Headshots do triple damage.

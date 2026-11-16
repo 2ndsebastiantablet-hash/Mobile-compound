@@ -7,7 +7,7 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 
 ---
 
-## Where we are now: v0.8, Phases 1–2 done
+## Where we are now: v0.9, Phases 1–3 done
 - 50 floors × 3 versions, 85 enemies, 60 bosses, 40 weapons, ambushes
 - Mobile and PC on-rails versions, organized project, standalone builds
 
@@ -23,12 +23,12 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 - [x] **Perk choice between floors:** pick 1 of 3 random perks after every floor (31 perks, stackable, 1 free reroll per run, rare+ guaranteed after boss floors)
 - ~~Cover / duck button~~ (dropped: not wanted)
 
-## Phase 3: Progression & economy (1–2 sessions · week 2–3)
-- [ ] **Cash drops** from enemies and bosses
-- [ ] **Upgrade shop between runs:** max HP, starting weapon, reload speed, extra slot
-- [ ] **Weapon upgrade levels:** damage, magazine, special effect
-- [ ] **Unlockable loadouts or characters**
-- [ ] **Achievements**
+## Phase 3: Progression & economy (1 session) ✅ DONE (v0.9)
+- [x] **Cash** from every kill, boss and cleared floor (banked instantly, never lost)
+- [x] **HQ upgrade shop:** 11 permanent upgrades (health, damage, reload, armor, floor heals, cash, rerolls, 4th perk choice, 4th weapon slot, starting weapon, life insurance)
+- [x] **Armory:** weapon levels 1–5 (+damage, +magazine, mastery bonus)
+- [x] **8 employees** with their own starting weapons and perks, unlocked by milestones or cash
+- [x] **31 achievements** with cash rewards
 
 ## Phase 4: Balance & performance (2–3 sessions · weeks 3–5) ★ needs your playtesting
 - [ ] Difficulty curve floors 1–50 (enemy counts, damage, accuracy)

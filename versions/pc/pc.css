@@ -31,3 +31,7 @@ body.pc #bossState { font-size: 24px; }
 body.pc #perkCards { flex-direction: row; max-width: 980px; }
 body.pc .perkCard { flex: 1; min-height: 170px; }
 body.pc .perkCard:hover { filter: brightness(1.15); transform: translateY(-3px); }
+
+body.pc #cashLbl { font-size: 26px; }
+body.pc .hq-row:hover { border-color: #8a8270; }
+body.pc .hq-buy:hover { filter: brightness(1.1); }

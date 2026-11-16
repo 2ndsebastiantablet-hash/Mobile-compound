@@ -25,15 +25,15 @@ export class Tutorial {
       },
       { // 3. shooting projectiles out of the air
         hint: 'ENEMIES FLASH BEFORE THEY FIRE - SHOOT THE FIREBALL!',
-        enter: () => { this.orbs = ctx.stats().orbs; this.e = ctx.spawn('grunt', -0.8, 9, false); this.e.atkT = 1.2; },
+        // he can't be hurt until you've shot one of his fireballs down
+        enter: () => { this.orbs = ctx.stats().orbs; this.e = ctx.spawn('grunt', -0.8, 9, false); this.e.atkT = 1.2; this.e.tutorialShield = true; },
         ring: () => { const p = ctx.G.projectiles.find((q) => q.alive); return p ? p.mesh.position : null; },
-        update: () => { if (!this.e.alive && ctx.stats().orbs <= this.orbs) { this.e = ctx.spawn('grunt', -0.8, 9, false); this.e.atkT = 1.0; } },
         check: () => ctx.stats().orbs > this.orbs,
         praise: 'FIREBALL DESTROYED!',
       },
       { // 3b. finish off the shooter
         hint: 'NOW TAKE HIM OUT',
-        enter: () => { if (!this.e.alive) this.skipNow = true; },
+        enter: () => { if (!this.e.alive) this.skipNow = true; else this.e.tutorialShield = false; },
         ring: () => this.e && this.e.alive && this.e.centerWorld(this.e.pos.clone()),
         check: () => this.skipNow || !this.e.alive,
       },

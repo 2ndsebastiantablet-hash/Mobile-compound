@@ -23,7 +23,7 @@
   <div id="hud" class="hidden">
     <div id="topbar">
       <div><div id="floorLbl">FLOOR 01</div><div id="areaLbl">AREA 1/4</div></div>
-      <div class="right"><div id="scoreLbl">0</div><div id="comboLbl"></div></div>
+      <div class="right"><div id="scoreLbl">0</div><div id="cashLbl"></div><div id="comboLbl"></div></div>
       <button id="pauseBtn" aria-label="Pause">II</button>
     </div>
     <div id="bossbar" class="hidden"><div id="bossName">THE CHAIRMAN</div><div id="bossState"></div><div class="bar"><div id="bossFill"></div></div></div>
@@ -58,7 +58,9 @@
     </div>
     <button class="go hidden" id="continueBtn">CONTINUE</button>
     <button class="go" id="startBtn">CLOCK IN</button>
+    <button class="go small" id="hqBtn">HQ · UPGRADES</button>
     <button class="go small" id="settingsBtn">SETTINGS</button>
+    <div class="tag" id="titleCash"></div>
     <div class="best" id="bestLbl"></div>
   </div>
 
@@ -71,6 +73,23 @@
     <div class="perkOwned" id="pausePerks"></div>
     <div class="best">YOUR RUN IS SAVED AT THE START OF EVERY FLOOR</div>
   </div>
+
+  <div id="hq" class="screen hidden">
+    <div class="hq-head"><div class="h mid">HQ</div><div class="hq-cash" id="hqCash">$0</div></div>
+    <div id="hqTabs">
+      <button data-tab="upgrades">UPGRADES</button><button data-tab="armory">ARMORY</button><button data-tab="employees">EMPLOYEES</button><button data-tab="achievements">AWARDS</button>
+    </div>
+    <div id="hqBody"></div>
+    <button class="go" id="hqBack">BACK</button>
+  </div>
+
+  <div id="charSelect" class="screen hidden">
+    <div class="h mid">WHO'S CLOCKING IN?</div>
+    <div id="charList"></div>
+    <button class="go small" id="charBack">BACK</button>
+  </div>
+
+  <div id="achPop"></div>
 
   <div id="settings" class="screen hidden">
     <div class="h mid">SETTINGS</div>

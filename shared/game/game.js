@@ -10,8 +10,13 @@ import { SCHEMA, settings, setSetting, onSettingsChange, AIM_MULT, RES_MOBILE, R
 import { saveRun, loadRun, clearRun } from './save.js';
 import { Tutorial } from './tutorial.js';
 import { PERKS, PERK, PERK_RARITY, rollPerks, mods } from '../content/perks/perks.js';
+import { profile, addCash, stat, statMax, touch, flushProfile } from './profile.js';
+import { applyUpgrades, weaponBonus } from '../content/meta/upgrades.js';
+import { CHAR } from '../content/meta/characters.js';
+import { ACHIEVEMENTS } from '../content/meta/achievements.js';
+import { initHQ, bindHQ, openHQ, closeHQ, openCharSelect, unlockedCount, allUnlocked, money } from './hq.js';
 import { setMusic } from '../audio/music.js';
-import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine } from '../content/weapons/weapons.js';
+import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine, setSleeve } from '../content/weapons/weapons.js';
 import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet } from '../engine/util.js';
 
 // ------------------------------------------------------------------ DOM
@@ -21,7 +26,7 @@ const ui = {
   hud: $('hud'), floor: $('floorLbl'), area: $('areaLbl'), score: $('scoreLbl'), combo: $('comboLbl'),
   hp: $('hpLbl'), ammo: $('ammoLbl'), reload: $('reloadLbl'), weapon: $('weaponLbl'),
   banner: $('banner'), sub: $('subBanner'), markers: $('markers'), hurt: $('hurt'), fade: $('fade'),
-  bossbar: $('bossbar'), bossName: $('bossName'), bossFill: $('bossFill'), gunChoice: $('gunChoice'), bossState: $('bossState'), perks: $('perks'), settings: $('settings'), confirm: $('confirm'), continueBtn: $('continueBtn'),
+  bossbar: $('bossbar'), bossName: $('bossName'), bossFill: $('bossFill'), gunChoice: $('gunChoice'), bossState: $('bossState'), perks: $('perks'), cash: $('cashLbl'), settings: $('settings'), confirm: $('confirm'), continueBtn: $('continueBtn'),
   tutHint: $('tutHint'), tutRing: $('tutRing'), tutSkip: $('tutSkip'), toast: $('toast'), slotLbl: $('slotLbl'),
   title: $('title'), pause: $('pause'), floorClear: $('floorClear'), gameOver: $('gameOver'), win: $('win'),
 };
@@ -56,7 +61,6 @@ const effects = new Effects(scene, camera);
 const raycaster = new THREE.Raycaster();
 
 // ------------------------------------------------------------------ weapons
-const MAX_GUNS = 3;
 const FLASH_MAT = new THREE.MeshBasicMaterial({ map: TX.flash(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
 const models = {};
 function viewModel(id) {
@@ -95,8 +99,12 @@ const cur = () => GUN[P.inv[P.slot].id];
 const curSlot = () => P.inv[P.slot];
 let pendingGuns = [], choiceOpen = false, gunsThisFloor = 0;
 // run perks: level per perk id, derived modifiers M, free rerolls left
-let perkLv = {}, M = mods(perkLv), rerolls = 1, perkOffer = null;
-const magOf = (def) => (def.melee ? 0 : Math.max(1, Math.round(def.mag * M.mag)));
+let perkLv = {}, M = applyUpgrades(mods(perkLv), profile.upgrades), rerolls = 1, perkOffer = null;
+const recalc = () => { M = applyUpgrades(mods(perkLv), profile.upgrades); };
+const wlv = (id) => weaponBonus(profile.weapons[id] || 0); // Armory upgrade level
+const magOf = (def) => (def.melee ? 0 : Math.max(1, Math.round(def.mag * M.mag * wlv(def.id).mag)));
+// this run: cash earned, revives left, character, best combo (for achievements)
+let runCash = 0, runChar = 'temp', runMaxCombo = 0;
 const healP = (n) => { if (n > 0) P.hp = Math.min(M.maxHp, P.hp + n); };
 const seenTypes = new Set(storeGet('overtime.seen', []));
 let pendingIntro = [], introT = 0;
@@ -221,7 +229,7 @@ function freeSpot(type) {
 
 function introduce(type) {
   if (mode === 'title' || seenTypes.has(type) || DEFS[type].boss) return;
-  seenTypes.add(type); storeSet('overtime.seen', [...seenTypes]);
+  seenTypes.add(type); storeSet('overtime.seen', [...seenTypes]); statMax('typesSeen', seenTypes.size);
   pendingIntro.push(DEFS[type].name);
 }
 
@@ -323,7 +331,8 @@ G.hurtPlayer = (dmg, src) => {
   if (!src && M.deflect && Math.random() < M.deflect) { popText(G.camPos.clone().add(new THREE.Vector3(0, -0.2, -1.2)), 'DEFLECTED', '#80e0ff'); sfx.zap(); return; }
   dmg *= M.armor;
   P.hp = Math.max(0, P.hp - dmg);
-  if (P.hp <= 0 && M.secondWind && !P.windUsed) { P.windUsed = true; P.hp = 30; banner('SECOND WIND!', null, 1.2); sfx.unlock(); }
+  if (P.hp <= 0 && M.secondWind && !P.windUsed) { P.windUsed = true; P.hp = 30; banner('SECOND WIND!', null, 1.2); sfx.unlock(); stat('saves'); }
+  if (P.hp <= 0 && P.revives > 0) { P.revives--; P.hp = Math.round(M.maxHp / 2); banner('INSURANCE CLAIM!', `${P.revives} REVIVE${P.revives === 1 ? '' : 'S'} LEFT`, 1.6); sfx.unlock(); stat('saves'); for (const pr of G.projectiles) pr.kill(); }
   stats.dmg += dmg;
   sfx.hurt();
   shake = Math.min(1, shake + 0.5);
@@ -339,6 +348,14 @@ G.onEnemyKilled = (e, head, noScore) => {
   combo = now - lastKill < M.comboWindow ? Math.min(M.comboMax, combo + 1) : 1;
   lastKill = now;
   const pts = Math.round((e.st.score + (head ? 50 : 0)) * combo * M.score);
+  runMaxCombo = Math.max(runMaxCombo, combo);
+  const f = G.floorNum;
+  const cash = addCash((e.def.boss ? (e.def.mini ? 60 + f * 6 : 150 + f * 12) : Math.max(1, Math.round(e.st.score / 40))) * M.cash);
+  runCash += cash;
+  popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, -0.35, 0)), `$${cash}`, '#ffd040');
+  stat('kills'); if (head) stat('heads'); if (cur().melee) stat('meleeKills');
+  if (e.def.boss) stat(e.def.mini ? 'miniKills' : 'bossKills');
+  checkAch();
   // perk rewards for the kill
   healP(M.killHeal + (head ? M.headHeal : 0));
   if (M.reloadKill && !cur().melee) curSlot().ammo = Math.min(magOf(cur()), curSlot().ammo + M.reloadKill);
@@ -405,12 +422,14 @@ function collectPickup(p) {
 }
 
 // ------------------------------------------------------------------ inventory
+function foundGun(id) { if (!profile.found[id]) { profile.found[id] = 1; touch(); } }
 function giveGun(id) {
+  foundGun(id); checkAch();
   const def = GUN[id];
   const have = P.inv.findIndex((s) => s.id === id);
   sfx.gunPickup();
   if (have >= 0) { P.inv[have].ammo = magOf(def); toast(`${def.short} AMMO REFILLED`, RARITY[def.rarity].color); return; }
-  if (P.inv.length < MAX_GUNS) {
+  if (P.inv.length < M.maxGuns) {
     P.inv.push({ id, ammo: magOf(def) });
     equip(P.inv.length - 1, true);
     toast(`GOT ${def.name}`, RARITY[def.rarity].color);
@@ -463,7 +482,8 @@ function continueRun(sv, fullHp = false) {
   initAudio();
   hideScreens();
   score = sv.score || 0; floorStartScore = score;
-  perkLv = { ...(sv.perks || {}) }; rerolls = sv.rerolls ?? 1; M = mods(perkLv);
+  perkLv = { ...(sv.perks || {}) }; rerolls = sv.rerolls ?? 1; recalc();
+  P.revives = sv.revives ?? M.revives; runCash = sv.cash || 0; runChar = sv.char || 'temp'; setSleeve(CHAR[runChar]?.sleeve ?? 0xd2d2cc);
   P.hp = fullHp ? M.maxHp : Math.max(1, Math.min(M.maxHp, sv.hp || M.maxHp));
   P.inv = sv.inv.filter((s) => GUN[s.id]).map((s) => ({ ...s }));
   if (!P.inv.length) P.inv = [{ id: 'pistol', ammo: GUN.pistol.mag }];
@@ -477,11 +497,22 @@ function continueRun(sv, fullHp = false) {
 function startGame(floor = 1, keepScore = false) {
   initAudio();
   hideScreens();
-  if (!keepScore) { score = 0; perkLv = {}; rerolls = 1; M = mods(perkLv); }
+  if (!keepScore) {
+    // new run: the chosen employee's perks, permanent upgrades, fresh counters
+    const ch = CHAR[profile.char] || CHAR.temp;
+    runChar = ch.id; setSleeve(ch.sleeve);
+    score = 0; perkLv = { ...ch.perks }; recalc(); rerolls = 1 + M.extraRerolls; P.revives = M.revives; runCash = 0;
+    stat('runs');
+  }
   floorStartScore = score;
   P.hp = M.maxHp;
   if (keepScore && P.invAtFloor) P.inv = P.invAtFloor.map((s) => ({ ...s }));
-  else P.inv = [{ id: 'pistol', ammo: GUN.pistol.mag }];
+  else {
+    const ch = CHAR[runChar] || CHAR.temp;
+    P.inv = [{ id: ch.weapon, ammo: magOf(GUN[ch.weapon]) }];
+    if (M.luckyStart) { const id = rollGun(Math.max(4, floor), Math.random, [ch.weapon], 'uncommon'); if (id) P.inv.push({ id, ammo: magOf(GUN[id]) }); }
+    for (const s2 of P.inv) foundGun(s2.id);
+  }
   P.slot = 0;
   autoReload();
   pendingGuns = []; choiceOpen = false; ui.gunChoice.classList.add('hidden'); pendingIntro = [];
@@ -502,7 +533,8 @@ function startFloor(n, sameVariant = false) {
   gunsThisFloor = 0;
   equip(P.slot, true);
   // autosave: a run can always be continued from the start of this floor
-  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls });
+  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls, revives: P.revives, cash: runCash, char: runChar });
+  statMax('maxFloor', n); checkAch();
   P.windUsed = false;
   tutorialPending = n === 1 && !tutorialDone();
   const room0 = G.floor.rooms[0];
@@ -645,17 +677,22 @@ function floorComplete() {
   if (n > best.floor || score > best.score) { best.floor = Math.max(best.floor, n); best.score = Math.max(best.score, score); storeSet('overtime.best', best); }
   if (n >= TOP_FLOOR) { showWin(); return; }
   const acc = stats.shots ? Math.round((stats.hits / stats.shots) * 100) : 0;
+  const bonus = addCash((20 + n * 4) * M.cash); runCash += bonus;
+  stat('orbs', stats.orbs); statMax('maxFloor', n + 1);
+  checkAch({ floorCleared: true, floorDmg: stats.dmg, shots: stats.shots, hits: stats.hits, floorTime: stats.t });
+  flushProfile(true);
   $('fcTitle').textContent = `FLOOR ${String(n).padStart(2, '0')} CLEARED`;
   $('fcStats').textContent = [
     `KILLS       ${stats.kills}`, `HEADSHOTS   ${stats.heads}`, `ORBS POPPED ${stats.orbs}`,
     `ACCURACY    ${acc}%`, `TIME        ${fmtTime(stats.t)}`, `SCORE       ${score}`,
+    `CASH        +${money(bonus)} BONUS`, `WALLET      ${money(profile.cash)}`,
   ].join('\n');
   const heal = Math.max(0, Math.min(M.maxHp - P.hp, 30 + M.coffee));
   P.hp += heal;
   let unlock = heal > 0 ? `+${heal} HP COFFEE BREAK` : '';
   unlock += (unlock ? '\n' : '') + 'LOADOUT: ' + P.inv.map((s) => GUN[s.id].short).join(' / ');
   $('fcUnlock').textContent = unlock;
-  perkOffer = rollPerks(perkLv, 3, Math.random, n % 5 === 0 || n % 5 === 3);
+  perkOffer = rollPerks(perkLv, M.perkChoices, Math.random, n % 5 === 0 || n % 5 === 3);
   $('nextBtn').textContent = perkOffer.length ? 'CHOOSE A PERK' : 'GOING UP';
   showScreen(ui.floorClear);
 }
@@ -664,6 +701,7 @@ function fmtTime(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); retu
 
 function nextFloor() {
   hideScreens();
+  healP(M.floorHeal); // First Aid Kit upgrade
   const n = G.floorNum + 1;
   G.floorNum = n;
   startFloor(n);
@@ -675,17 +713,18 @@ function playerDied() {
   for (const p of G.projectiles) p.kill();
   G.projectiles = [];
   if (score > best.score) { best.score = score; storeSet('overtime.best', best); }
+  stat('orbs', stats.orbs); flushProfile(true);
   run(function* () {
     const y0 = G.camPos.y;
     yield* tween(1.0, (k) => { G.camPos.y = lerp(y0, 0.35, ease(k)); roll = ease(k) * 1.1; pitch = BASE_PITCH + k * 0.3; });
     fade(0.7, 0.5); yield 0.6;
-    $('goStats').textContent = `FLOOR ${G.floorNum}\nSCORE ${score}\nBEST FLOOR ${Math.max(best.floor, G.floorNum)}`;
+    $('goStats').textContent = `FLOOR ${G.floorNum}\nSCORE ${score}\nCASH EARNED ${money(runCash)}\nWALLET ${money(profile.cash)}\nBEST FLOOR ${Math.max(best.floor, G.floorNum)}`;
     showScreen(ui.gameOver);
   });
 }
 
 function showWin() {
-  clearRun();
+  clearRun(); stat('wins'); statMax('maxFloor', TOP_FLOOR); checkAch(); flushProfile(true);
   $('winStats').textContent = `FINAL SCORE ${score}\nBEST ${best.score}`;
   showScreen(ui.win);
   setMusic('calm');
@@ -706,12 +745,14 @@ function toTitle() {
   ui.continueBtn.classList.toggle('hidden', !sv);
   if (sv) ui.continueBtn.textContent = `CONTINUE · FLOOR ${String(sv.floor).padStart(2, '0')}`;
   $('startBtn').textContent = sv ? 'NEW RUN' : 'CLOCK IN';
+  $('titleCash').textContent = profile.cash || profile.stats.runs ? `WALLET ${money(profile.cash)}` : '';
+  flushProfile(true); checkAch();
   endTutorial(true);
   showScreen(ui.title);
 }
 
 function showScreen(el) { el.classList.remove('hidden'); }
-function hideScreens() { for (const k of ['title', 'pause', 'floorClear', 'gameOver', 'win', 'settings', 'confirm', 'perks']) ui[k].classList.add('hidden'); }
+function hideScreens() { $('hq').classList.add('hidden'); $('charSelect').classList.add('hidden'); for (const k of ['title', 'pause', 'floorClear', 'gameOver', 'win', 'settings', 'confirm', 'perks']) ui[k].classList.add('hidden'); }
 
 let bannerTimer = null;
 function banner(text, sub, dur) {
@@ -750,7 +791,7 @@ function swapWeapon() {
 function startReload() {
   const w = cur();
   if (w.melee || P.reloadT > 0 || curSlot().ammo >= magOf(w)) return;
-  P.reloadT = P.reloadDur = w.reload * M.reload; P.burstLeft = 0;
+  P.reloadT = P.reloadDur = w.reload * M.reload * wlv(w.id).reload; P.burstLeft = 0;
   sfx.reload();
 }
 
@@ -895,7 +936,7 @@ function resolveShot(x, y, w, rect, primary) {
 function applyHit(e, part, point, w, sound, dir) {
   const head = part === 'head' && e.type !== 'bot';
   let amt = head ? (w.dmg * w.headMult * M.head) / 3 : w.dmg;
-  amt *= M.dmg * (w.melee ? M.meleeDmg : 1);
+  amt *= M.dmg * wlv(w.id).dmg * (w.melee ? M.meleeDmg : 1);
   if (e.hp >= e.maxHp) amt *= M.firstStrike;
   else if (e.hp < e.maxHp * 0.3) amt *= M.exec;
   if (e.def.boss) amt *= M.boss;
@@ -923,7 +964,7 @@ function chainFrom(e, point, w) {
     .sort((a, b) => a.c.distanceTo(from) - b.c.distanceTo(from))
     .slice(0, w.chain);
   let prev = from;
-  for (const { o, c } of others) { effects.lightning(prev, c, w.tracer || 0x80e0ff); o.damage(w.dmg * 0.8 * M.dmg, 'body', c); prev = c; }
+  for (const { o, c } of others) { effects.lightning(prev, c, w.tracer || 0x80e0ff); o.damage(w.dmg * 0.8 * M.dmg * wlv(w.id).dmg, 'body', c); prev = c; }
 }
 
 // Explosive Rounds perk: a small blast at the hit point
@@ -953,7 +994,7 @@ function explode(at, w) {
     if (!e.alive || e.state === 'dormant') continue;
     const c = e.centerWorld(V3());
     const d = c.distanceTo(at);
-    if (d < w.explode + 0.3) { e.damage(w.dmg * M.dmg * (e.def.boss ? M.boss : 1) * (1 - Math.min(1, d / w.explode) * 0.6), 'body', c); hit = 'body'; }
+    if (d < w.explode + 0.3) { e.damage(w.dmg * M.dmg * wlv(w.id).dmg * (e.def.boss ? M.boss : 1) * (1 - Math.min(1, d / w.explode) * 0.6), 'body', c); hit = 'body'; }
   }
   for (const p of G.projectiles) if (p.alive && p.mesh.position.distanceTo(at) < w.explode) { effects.pop(p.mesh.position.clone()); p.kill(); stats.orbs++; }
   return hit;
@@ -1026,7 +1067,12 @@ window.addEventListener('keydown', (e) => {
 });
 
 const onBtn = (id, fn) => $(id).addEventListener('click', (e) => { e.stopPropagation(); initAudio(); fn(); });
-const newRun = () => { sfx.tap(); fade(1, 0.3); setTimeout(() => startGame(1), 320); };
+const launchRun = () => { sfx.tap(); fade(1, 0.3); setTimeout(() => startGame(1), 320); };
+// with more than one employee unlocked, pick who starts the run
+const newRun = () => { if (unlockedCount() > 1) { ui.title.classList.add('hidden'); openCharSelect(() => launchRun()); } else launchRun(); };
+onBtn('hqBtn', () => { sfx.tap(); ui.title.classList.add('hidden'); openHQ(); });
+onBtn('hqBack', () => { sfx.tap(); closeHQ(); toTitle(); });
+onBtn('charBack', () => { sfx.tap(); $('charSelect').classList.add('hidden'); showScreen(ui.title); });
 onBtn('startBtn', () => {
   const sv = loadRun();
   if (sv) askConfirm(`START A NEW RUN?\nYOUR FLOOR ${sv.floor} SAVE WILL BE LOST.`, () => { clearRun(); newRun(); }, ui.title);
@@ -1046,7 +1092,7 @@ onBtn('pauseBtn', togglePause);
 onBtn('resumeBtn', togglePause);
 onBtn('quitBtn', () => { paused = false; toTitle(); }); // the run stays saved at the start of this floor
 onBtn('nextBtn', () => { sfx.tap(); if (perkOffer && perkOffer.length) openPerks(); else nextFloor(); });
-onBtn('perkReroll', () => { if (rerolls <= 0) return; rerolls--; sfx.reload(); perkOffer = rollPerks(perkLv, 3); openPerks(); });
+onBtn('perkReroll', () => { if (rerolls <= 0) return; rerolls--; sfx.reload(); perkOffer = rollPerks(perkLv, M.perkChoices); openPerks(); });
 onBtn('retryBtn', () => restartFloor());
 onBtn('menuBtn', toTitle);
 onBtn('gcLeave', () => { sfx.tap(); openChoice(); });
@@ -1060,6 +1106,26 @@ function togglePause() {
   ui.pause.classList.toggle('hidden', !paused);
   if (paused) $('pausePerks').innerHTML = perkSummary();
   setMusic(paused ? 'off' : mode === 'combat' ? 'combat' : 'calm');
+}
+
+// ------------------------------------------------------------------ achievements
+let flushT = 2, achT = 0;
+const achQueue = [];
+function checkAch(extra = {}) {
+  const run = { maxCombo: runMaxCombo, perkCount: Object.values(perkLv).reduce((a, b) => a + b, 0), ...extra };
+  for (const a of ACHIEVEMENTS) {
+    if (profile.ach[a.id]) continue;
+    let ok = false;
+    try { ok = a.test(profile, run, allUnlocked); } catch { ok = false; }
+    if (ok) { profile.ach[a.id] = Date.now(); addCash(a.reward); touch(); achQueue.push(a); }
+  }
+}
+function showAch(a) {
+  achT = 3.2;
+  const el = $('achPop');
+  el.innerHTML = `<small>ACHIEVEMENT UNLOCKED</small><b>${a.name}</b><span>${a.desc} · +${money(a.reward)}</span>`;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  sfx.pickup();
 }
 
 // ------------------------------------------------------------------ perks
@@ -1088,7 +1154,7 @@ function openPerks() {
 function takePerk(id) {
   const before = M.maxHp;
   perkLv[id] = (perkLv[id] || 0) + 1;
-  M = mods(perkLv);
+  recalc(); stat('perksTaken'); checkAch();
   if (M.maxHp > before) P.hp += M.maxHp - before; // new max health arrives filled
   P.hp = Math.min(P.hp, M.maxHp);
   for (const s2 of P.inv) s2.ammo = magOf(GUN[s2.id]);
@@ -1208,6 +1274,7 @@ function updateHud(force) {
   setText(ui.floor, 'f', `FLOOR ${String(G.floorNum).padStart(2, '0')}`);
   if (G.floor) setText(ui.area, 'a', `AREA ${Math.min(G.roomIdx + 1, G.floor.rooms.length)}/${G.floor.rooms.length}`);
   setText(ui.score, 's', String(score).padStart(6, '0'));
+  setText(ui.cash, 'cash', money(profile.cash));
   setText(ui.combo, 'c', combo > 1 && now - lastKill < M.comboWindow ? `x${combo} COMBO` : '');
   setText(ui.hp, 'h', String(Math.ceil(P.hp)));
   setText(ui.ammo, 'am', cur().melee ? '∞' : String(curSlot().ammo));
@@ -1309,6 +1376,8 @@ function update(dt) {
   }
   effects.update(dt);
   bossMsgT -= dt; immuneT -= dt;
+  flushT -= dt; if (flushT <= 0) { flushT = 2; flushProfile(); }
+  achT -= dt; if (achT <= 0 && achQueue.length) showAch(achQueue.shift());
   if (tutorial && !tutorial.done && mode === 'combat') tutorial.update(dt);
   if (PC && mouse && G.floor) {
     let hot = false;
@@ -1378,11 +1447,13 @@ function frame(t) {
   requestAnimationFrame(frame);
 }
 
+initHQ({ sfx, changed: () => { recalc(); checkAch(); } });
+bindHQ();
 toTitle();
 requestAnimationFrame(frame);
 
 // expose for debugging / automated checks
-window.__game = { setPerks(lv) { perkLv = lv; M = mods(lv); }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
+window.__game = { profile, checkAch, setPerks(lv) { perkLv = lv; M = mods(lv); }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);
