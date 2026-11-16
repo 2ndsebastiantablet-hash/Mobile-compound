@@ -138,3 +138,6 @@ body.pc #toast { bottom: 110px; font-size: 32px; }
 body.pc .card, body.pc .slotBtn { max-width: 460px; }
 body.pc .slotBtn:hover { background: #2c2924; }
 body.pc button.go:hover { filter: brightness(1.1); }
+
+#bossState { font-size: 20px; text-shadow: 2px 2px 0 #000; min-height: 20px; }
+body.pc #bossState { font-size: 24px; }

@@ -2,6 +2,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { DEFS, isFlyer, rosterFor } from './enemydefs.js';
 import { BUILDERS } from './enemymodels.js';
+import { BossBrain } from './bosses.js';
 import { rand, clamp, pick } from './util.js';
 
 const FLASH = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -18,7 +19,9 @@ export class Enemy {
     this.game = game; this.type = type; this.def = def; this.st = def; this.spot = spot;
     const f = game.diff || game.floorNum; // difficulty curve flattens above floor 20
     this.traits = def.traits || {};
-    this.maxHp = this.hp = def.boss ? def.hp + f * 4 : Math.round(def.hp * (1 + f * 0.03) * 10) / 10;
+    this.maxHp = this.hp = def.brain ? def.hp : def.boss ? def.hp + f * 4 : Math.round(def.hp * (1 + f * 0.03) * 10) / 10;
+    if (opts.decoy) this.maxHp = this.hp = 1;
+    this.decoy = !!opts.decoy; this.yawExtra = 0;
     this.dmg = def.dmg * (1 + f * 0.03);
     this.pspeed = 4.6 * (1 + f * 0.015);
     this.fireMul = Math.max(0.6, 1 - f * 0.02);
@@ -52,6 +55,7 @@ export class Enemy {
     this.orbitA = Math.random() * 6.28;
     this.lastHit = -10; this.dive = null;
     if (def.move === 'stand' && spot.cover && !def.nocover) this.crouch = this.crouchTarget = 1;
+    if (def.brain && !opts.decoy) this.brain = new BossBrain(this);
     this.place();
     game.scene.add(this.root);
   }
@@ -102,7 +106,7 @@ export class Enemy {
     }
     if (this.slowT > 0) { this.slowT -= dt; if (Math.random() < dt * 8) g.fx.ice(this.centerWorld(new THREE.Vector3()), 1); dt *= 0.35; }
     if (T.regen && this.lastHit > 2 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + T.regen * dt);
-    if (this.cloak && this.state === 'active') {
+    if (this.cloak && this.state === 'active' && !this.brain) {
       this.cloak.t -= dt;
       const near = this.pos.distanceTo(g.camPos) < 2.8;
       if (this.cloak.t <= 0 || (this.cloak.on && near)) {
@@ -117,9 +121,9 @@ export class Enemy {
     if (this.state === 'enter') {
       if (this.moveTo(this.goal, def.speed * 1.4, dt)) { this.state = 'active'; this.atkT = rand(Math.random, 0.3, 1.0); }
     } else if (this.state === 'active') {
-      this.updateMove(dt);
-      if (this.state === 'dead') return;
-      this.updateAttack(dt);
+      if (this.brain) this.brain.update(dt);
+      else { this.updateMove(dt); if (this.state === 'dead') return; this.updateAttack(dt); }
+      if (this.decoy && Math.random() < dt * 1.5) { this.flashT = 0.06; for (const m of this.meshes) m.material = CLOAK; }
     }
     this.crouch += (this.crouchTarget - this.crouch) * Math.min(1, dt * 10);
     this.place();
@@ -131,7 +135,7 @@ export class Enemy {
     if (this.flyer || this.hover) this.root.position.set(this.pos.x, this.pos.y + this.yOff + Math.sin(this.bob) * 0.08, this.pos.z);
     else this.root.position.copy(this.pos);
     this.body.position.y = -this.crouch * 0.75 + this.burrowY / this.scale + (this.leap ? this.leap.y / this.scale : 0);
-    this.root.rotation.y = Math.atan2(cam.x - this.pos.x, cam.z - this.pos.z);
+    this.root.rotation.y = Math.atan2(cam.x - this.pos.x, cam.z - this.pos.z) + (this.yawExtra || 0);
   }
 
   moveTo(goal, speed, dt) {
@@ -251,7 +255,7 @@ export class Enemy {
   }
 
   // ------------------------------------------------------------------ attacks
-  curAtk() { const a = this.def.atk; return Array.isArray(a) ? a[this.atkIdx % a.length] : a; }
+  curAtk() { if (this.atkOverride) return this.atkOverride; const a = this.def.atk; return Array.isArray(a) ? a[this.atkIdx % a.length] : a; }
 
   canAttack() {
     if (!this.game.combatActive) return false;
@@ -268,7 +272,7 @@ export class Enemy {
       else if (this.atkState === 'wind') { this.timer -= dt; if (this.glow) this.glow.visible = Math.floor(this.timer * 18) % 2 === 0; if (this.timer <= 0) this.dive = true; }
       return;
     }
-    if (!def.atk) return;
+    if (!def.atk && !this.atkOverride) return;
     const atk = this.curAtk();
     switch (this.atkState) {
       case 'cool':
@@ -415,6 +419,18 @@ export class Enemy {
     if (this.state === 'enter' && this.def.boss) return false;
     if (this.burrow && this.burrow.phase === 'under') return false;
     const g = this.game;
+    if (this.brain) {
+      const r = this.brain.gate(part);
+      if (r === 'immune') { g.fx.sparks(point, 4); g.sfx.metalHit(); g.bossImmune(this); return 'immune'; }
+      if (r === 'reflect') { g.fx.sparks(point, 6); g.sfx.zap(); g.hurtPlayer(3 + amount * 0.6, this); return 'immune'; }
+      if (r === 'shield') {
+        this.brain.shield -= amount; this.brain.shieldRegen = 0; g.fx.sparks(point, 5); g.sfx.metalHit();
+        if (this.brain.shield <= 0) { g.bossMsg('SHIELD BROKEN!'); g.sfx.botDeath(); g.fx.explosion(this.centerWorld(new THREE.Vector3()), 1.2); }
+        return 'shield';
+      }
+      this.brain.onHit(amount);
+      if (part === 'core') { part = 'body'; amount *= 1.5; }
+    }
     if (part === 'shield' && this.shieldHp > 0) {
       this.shieldHp -= amount;
       g.fx.sparks(point, 5); g.sfx.metalHit();
@@ -448,6 +464,7 @@ export class Enemy {
 
   die(headshot, point, noScore = false) {
     if (this.state === 'dead') return;
+    if (this.decoy) noScore = true;
     this.state = 'dead';
     const g = this.game;
     for (const m of this.meshes) m.material = m.userData.mat;
@@ -500,6 +517,8 @@ const PKINDS = {
   missile: { geo: G_MISSILE, mat: B(0xd03020), aligned: true },
   pitch: { geo: G_ORB, mat: B(0xff60c0), core: true },
   sonic: { geo: G_SONIC, mat: B(0xc080ff), aligned: true },
+  bomb: { geo: new THREE.IcosahedronGeometry(0.16, 0), mat: B(0x202020), blink: true },
+  mine: { geo: new THREE.OctahedronGeometry(0.14, 0), mat: B(0xff3060), core: true },
 };
 
 export class Projectile {
@@ -521,11 +540,28 @@ export class Projectile {
       if (opts.homing) this.vel.add(new THREE.Vector3(rand(Math.random, -2, 2), rand(Math.random, 1, 2.5), 0));
     }
     if (k.aligned) this.mesh.lookAt(target);
+    this.bomb = !!opts.bomb;
+    this.delay = opts.delay || 0;
+    if (this.delay) this.mesh.visible = false;
+    if (opts.mine) { this.mineT = opts.mine; this.park = target.clone(); this.vel = target.clone().sub(from).multiplyScalar(1.6); }
     game.scene.add(this.mesh);
   }
   update(dt) {
+    if (this.delay > 0) { this.delay -= dt; if (this.delay <= 0) this.mesh.visible = true; return; }
     this.life += dt;
     const cam = this.game.camPos;
+    if (this.mineT != null) {
+      // mines drift to a parking spot, hover and blink, then dart straight at the player
+      this.mineT -= dt;
+      if (this.mineT > 0) {
+        this.mesh.position.lerp(this.park, Math.min(1, dt * 3));
+        this.mesh.rotation.y += dt * 4;
+        this.mesh.material = this.mineT < 0.6 && Math.floor(this.life * 14) % 2 ? PKINDS.orb.mat : this.k.mat;
+        return;
+      }
+      this.mineT = null; this.vel = cam.clone().sub(this.mesh.position).normalize().multiplyScalar(6.5);
+      this.game.sfx.telegraph();
+    }
     if (this.homing) {
       const want = cam.clone().sub(this.mesh.position).normalize().multiplyScalar(this.speed);
       this.vel.lerp(want, Math.min(1, this.homing * dt));
@@ -536,6 +572,15 @@ export class Projectile {
     if (this.k.aligned) this.mesh.lookAt(this.mesh.position.clone().add(this.vel));
     else { this.mesh.rotation.x += dt * 9; this.mesh.rotation.y += dt * 7; this.mesh.scale.setScalar(1 + Math.sin(this.life * 30) * 0.12); }
     if (this.k.blink) this.mesh.material = Math.floor(this.life * 10) % 2 ? PKINDS.orb.mat : this.k.mat;
+    if (this.bomb) {
+      // bombs blow up on impact with the floor (or you) and hurt you if they land close
+      const p = this.mesh.position;
+      if (p.y < 0.15 || p.distanceTo(cam) < 0.7) {
+        this.game.fx.explosion(p.clone().setY(Math.max(0.3, p.y)), 1.4); this.game.sfx.explode(); this.game.shakeCam(0.5);
+        if (Math.hypot(p.x - cam.x, p.z - cam.z) < 2.3) this.game.hurtPlayer(this.dmg, null);
+        this.kill(); return;
+      }
+    }
     if (this.mesh.position.distanceTo(cam) < 0.45) { this.game.hurtPlayer(this.dmg, null); this.kill(); return; }
     if (this.mesh.position.z > cam.z + 0.5 || this.life > 8 || this.mesh.position.y < -0.5) this.kill();
   }

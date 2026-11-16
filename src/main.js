@@ -2,6 +2,7 @@ import * as THREE from '../vendor/three.module.min.js';
 import { buildFloor, floorPlan, MOODS, box, EYE, RD, TOP_FLOOR } from './level.js';
 import { Enemy, Projectile } from './enemies.js';
 import { DEFS, rosterFor, isFlyer, isMelee } from './enemydefs.js';
+import { bossFor, bossKindFor } from './bosses.js';
 import { Effects } from './effects.js';
 import * as TX from './textures.js';
 import { initAudio, sfx, setMusic, setMuted, isMuted } from './audio.js';
@@ -15,7 +16,7 @@ const ui = {
   hud: $('hud'), floor: $('floorLbl'), area: $('areaLbl'), score: $('scoreLbl'), combo: $('comboLbl'),
   hp: $('hpLbl'), ammo: $('ammoLbl'), reload: $('reloadLbl'), weapon: $('weaponLbl'),
   banner: $('banner'), sub: $('subBanner'), markers: $('markers'), hurt: $('hurt'), fade: $('fade'),
-  bossbar: $('bossbar'), bossName: $('bossName'), bossFill: $('bossFill'), gunChoice: $('gunChoice'), toast: $('toast'), slotLbl: $('slotLbl'),
+  bossbar: $('bossbar'), bossName: $('bossName'), bossFill: $('bossFill'), gunChoice: $('gunChoice'), bossState: $('bossState'), toast: $('toast'), slotLbl: $('slotLbl'),
   title: $('title'), pause: $('pause'), floorClear: $('floorClear'), gameOver: $('gameOver'), win: $('win'),
 };
 
@@ -169,12 +170,15 @@ function prepareArea(i) {
     types.push(t);
   }
   area = { idx: i, room, queue: [], waveT: 2.5, maxAlive: Math.min(7, 3 + Math.floor((G.diff || f) / 4)), clearing: false, boss: null };
-  if (last && G.floor.isBoss) {
-    const bossSpot = { x: 0, z: room.z0 - 9.8, cover: false };
-    const b = new Enemy(G, 'boss', bossSpot);
+  const bk = bossKindFor(f);
+  if (last && bk) {
+    const id = bossFor(f, G.variant || 0);
+    const bossSpot = { x: 0, y: 1.9, z: room.z0 - 8.2, cover: false };
+    const b = new Enemy(G, id, bossSpot);
     G.enemies.push(b); area.boss = b;
-    ui.bossName.textContent = bossName(f);
-    spawnAt(weightedType()); spawnAt(weightedType());
+    ui.bossName.textContent = (bk === 'mini' ? 'MINI BOSS: ' : '') + DEFS[id].name;
+    // mini bosses bring a couple of regulars; Bosses bring their own help
+    if (bk === 'mini') { spawnAt(weightedType()); if (f > 10) spawnAt(weightedType()); }
     return;
   }
   const initial = types.slice(0, initialN), rest = types.slice(initialN);
@@ -182,7 +186,6 @@ function prepareArea(i) {
   area.queue = rest;
 }
 
-function bossName(f) { return ['', 'REGIONAL MANAGER', 'VP OF OPERATIONS', 'CHIEF FINANCIAL OFFICER', 'CHIEF OPERATING OFFICER', 'HEAD OF R&D', 'DIRECTOR OF ROBOTICS', 'CHIEF ARCHIVIST', 'CHIEF EXECUTIVE OFFICER', 'THE PRESIDENT', 'THE CHAIRMAN'][f / 5] || 'THE MANAGER'; }
 
 function visibleSpots(room) {
   const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
@@ -243,7 +246,8 @@ G.spawnReinforcement = (t) => { if (area) spawnReinforcement(t); };
 
 // minions (summons, splits) appear right where their parent is
 G.spawnMinion = (type, pos, n) => {
-  if (!area) return;
+  const made = [];
+  if (!area) return made;
   for (let k = 0; k < n; k++) {
     if (G.enemies.filter((e) => e.alive).length >= 14) break;
     const at = pos.clone().add(new THREE.Vector3(rand(Math.random, -0.6, 0.6), 0, rand(Math.random, -0.3, 0.6)));
@@ -251,14 +255,45 @@ G.spawnMinion = (type, pos, n) => {
     const spot = isFlyer(type) ? airSpot(area.room) : isMelee(type) ? { x: at.x, z: at.z, cover: false } : freeSpot(type);
     const e = new Enemy(G, type, spot, { at, active: true });
     if (!isMelee(type) && !isFlyer(type)) e.goal.set(spot.x, 0, spot.z);
-    G.enemies.push(e); introduce(type);
+    G.enemies.push(e); introduce(type); made.push(e);
   }
+  return made;
 };
 G.randomSpot = (e) => {
   const room = area ? area.room : G.room;
   const list = visibleSpots(room).filter((s) => !s.cover && s !== e.spot);
   return list.length ? pick(Math.random, list) : laneSpot(room);
 };
+// ---- boss support
+G.spawnBomb = (from, k, n, kind, dmg) => {
+  // lob toward the floor just in front of the player: it explodes on impact unless shot down
+  const target = G.camPos.clone().add(new THREE.Vector3((k - (n - 1) / 2) * 0.8 + rand(Math.random, -0.3, 0.3), -1.55, -rand(Math.random, 0.2, 0.9)));
+  G.projectiles.push(new Projectile(G, from, target, 3.6, dmg, kind, { lob: true, bomb: true }));
+};
+G.spawnFixed = (type, pos) => {
+  if (!area) return null;
+  const e = new Enemy(G, type, { x: pos.x, z: pos.z, cover: false }, { at: pos, active: true });
+  effects.sparks(pos.clone().setY(1), 12);
+  G.enemies.push(e); return e;
+};
+G.spawnDecoys = (boss, n) => {
+  const made = [];
+  for (let k = 0; k < n; k++) {
+    const at = new THREE.Vector3(clamp(rand(Math.random, -2, 2), -2.2, 2.2), boss.pos.y, boss.pos.z + rand(Math.random, -1, 1.2));
+    const e = new Enemy(G, boss.type, { x: at.x, y: at.y, z: at.z, cover: false }, { at, active: true, decoy: true });
+    e.atkOverride = { type: 'spread', n: 3, angle: 0.12, kind: 'big' };
+    e.atkT = rand(Math.random, 0.8, 1.8);
+    effects.sparks(e.centerWorld(new THREE.Vector3()), 12);
+    G.enemies.push(e); made.push(e);
+  }
+  return made;
+};
+let bossMsgT = 0, bossMsgText = '', immuneT = 0;
+G.bossMsg = (t) => { bossMsgText = t; bossMsgT = 1.6; };
+G.bossImmune = (e) => { if (immuneT <= 0) { immuneT = 0.5; popText(e.centerWorld(new THREE.Vector3()), 'IMMUNE', '#9aa4b0'); } };
+G.bossEnraged = (e) => { banner('ENRAGED!', e.def.name, 1.4); sfx.explode(); shake = 1; };
+G.shakeCam = (a) => { shake = Math.min(1, shake + a); };
+
 G.blast = (center, r, dmg) => {
   effects.explosion(center, r); sfx.explode(); shake = Math.min(1, shake + 0.4);
   for (const o of G.enemies) {
@@ -297,9 +332,9 @@ G.onEnemyKilled = (e, head, noScore) => {
     shake = 1;
   }
   // weapon drops: bosses always drop something good; floor 1 guarantees an early find
-  const gunChance = e.type === 'boss' ? 1 : (G.floorNum === 1 && gunsThisFloor === 0 && area && area.idx >= 1) ? 0.35 : 0.075;
+  const gunChance = e.def.boss ? 1 : (G.floorNum === 1 && gunsThisFloor === 0 && area && area.idx >= 1) ? 0.35 : 0.075;
   if (Math.random() < gunChance) {
-    const id = rollGun(G.floorNum, Math.random, P.inv.map((s) => s.id), e.type === 'boss' ? 'rare' : null);
+    const id = rollGun(G.floorNum, Math.random, P.inv.map((s) => s.id), e.def.boss ? (e.def.mini ? 'uncommon' : 'rare') : null);
     if (id) { dropGun(e.pos, id); return; }
   }
   if (P.hp < 100 && Math.random() < (P.hp < 40 ? 0.3 : 0.12)) dropMedkit(e.pos);
@@ -433,7 +468,8 @@ function startFloor(n, sameVariant = false) {
     if (el) { G.camPos.copy(el.inside); } else G.camPos.copy(room0.stand).add(new THREE.Vector3(0, 0, 1.2));
     applyCamera();
     fade(0, 0.8);
-    banner(`FLOOR ${String(n).padStart(2, '0')}`, (G.floor.isBoss ? 'EXECUTIVE PRESENT · ' : '') + G.floor.plan.name, 2.4);
+    const bk = bossKindFor(n);
+    banner(`FLOOR ${String(n).padStart(2, '0')}`, (bk === 'boss' ? 'BOSS FLOOR · ' : bk === 'mini' ? 'MINI BOSS · ' : '') + G.floor.plan.name, 2.4);
     yield 0.6;
     if (el) { sfx.ding(); yield 0.4; el.target = 1; sfx.door(); yield 0.9; }
     const from = G.camPos.clone();
@@ -464,7 +500,7 @@ function beginCombat() {
   setMusic('combat');
   let k = 0;
   for (const e of G.enemies) if (e.state === 'dormant') { const en = e; setTimeout(() => en.activate(), 150 + k++ * 220); }
-  if (area.boss) { ui.bossbar.classList.remove('hidden'); banner(bossName(G.floorNum), 'PERFORMANCE REVIEW', 2); }
+  if (area.boss) { ui.bossbar.classList.remove('hidden'); banner(area.boss.def.name, area.boss.def.brain ? area.boss.def.brain.hint : 'PERFORMANCE REVIEW', 2.6); }
   updateHud(true);
 }
 
@@ -937,7 +973,18 @@ function updateHud(force) {
   ui.reload.classList.toggle('reloading', P.reloadT > 0);
   if (setText(ui.weapon, 'w', cur().short)) ui.weapon.style.color = RARITY[cur().rarity].color;
   setText(ui.slotLbl, 'sl', `SWAP ${P.slot + 1}/${P.inv.length}`);
-  if (area?.boss && area.boss.alive) ui.bossFill.style.width = `${Math.max(0, (area.boss.hp / area.boss.maxHp) * 100)}%`;
+  if (area?.boss && area.boss.alive) {
+    const b = area.boss;
+    ui.bossFill.style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+    let st, col;
+    if (bossMsgT > 0) { st = bossMsgText; col = '#ffd060'; }
+    else if (b.brain) {
+      const v = b.brain.vulnerableNow();
+      st = b.brain.shield > 0 ? `SHIELD ${Math.ceil(b.brain.shield)}` : v ? 'VULNERABLE' : 'IMMUNE';
+      col = b.brain.shield > 0 ? '#60c0ff' : v ? '#60ff80' : '#9aa4b0';
+    } else { st = ''; col = '#fff'; }
+    setText(ui.bossState, 'bs', st); ui.bossState.style.color = col;
+  }
 }
 
 // ------------------------------------------------------------------ resize
@@ -1010,6 +1057,7 @@ function update(dt) {
     }
   }
   effects.update(dt);
+  bossMsgT -= dt; immuneT -= dt;
   if (PC && mouse && G.floor) {
     let hot = false;
     if (G.combatActive && !paused) {
@@ -1082,7 +1130,7 @@ toTitle();
 requestAnimationFrame(frame);
 
 // expose for debugging / automated checks
-window.__game = { get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
+window.__game = { spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);

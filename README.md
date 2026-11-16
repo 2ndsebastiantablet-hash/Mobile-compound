@@ -116,6 +116,95 @@ Things to know:
 | **SHADOW BOARD MEMBER** | 18–20 | takes cover, pops up; spread shot + homing missiles + summons bodyguards |
 
 
+### Bosses: 60 in total
+Floors run in a 5-floor cycle: normal, normal, **mini boss**, normal, **Boss**. Mini bosses are on floors 3, 8, 13 … 48 and Bosses on 5, 10 … 50. Each of those floors has **3 possible bosses**, so there are 30 mini bosses and 30 Bosses (60 total). The one you face matches the version of the floor you rolled.
+
+Every boss has its own attack script. Below 50% health it becomes **ENRAGED**, gets faster and adds new attacks. The boss bar shows whether it can be hurt right now (VULNERABLE, IMMUNE or SHIELD) and calls out its tells.
+
+Boss attacks:
+- **Bombs** are lobbed at you and explode when they hit the floor. Shoot them in the air.
+- **Lasers, heals and slams** wind up first. Hit the boss enough during the wind-up to stagger it and cancel the move.
+- **Charges:** deal enough damage mid-charge to stun the boss before it reaches you.
+- **Mines** park in the air, blink, then dart at you.
+- **Rain** falls from the ceiling.
+- **Walls** of shots come at you side by side.
+- **Spin** fires a sweeping spiral, and **barrage** is a long stream of shots.
+- **Pylons** make the boss immune until every pylon is destroyed.
+- **Clones:** only the real boss takes damage. The decoys flicker.
+- **Reflect:** while it glows red, your shots bounce back at you.
+- **Cloak:** it vanishes and repositions.
+
+Mini bosses always have a condition for when they can be hurt.
+
+#### Mini bosses (floors 3, 8, 13 ... 48)
+| Floor | Mini boss | When it can be hurt | Attacks |
+|---|---|---|---|
+| 3 | **PAPERWEIGHT** | Only right after it attacks | bombs, fan |
+| 3 | **THE STAPLER** | Only when it turns its back | barrage, turn |
+| 3 | **FRONT DESK FIONA** | Immune while its minions live | summon, fan |
+| 8 | **TEAM LEAD TODD** | Break its regenerating shield first | fan, summon, homing |
+| 8 | **COPIER KING** | Only while winding up / charging | wall, fan |
+| 8 | **HEADSET HARRY** | Headshots only | homing, mines |
+| 13 | **SERVER BEAST** | Only right after it attacks | barrage, wall |
+| 13 | **FIREWALL WARDEN** | Always + pylons | pylons, fan, barrage |
+| 13 | **PACKET SPIDER** | Only its glowing weak point | mines, charge |
+| 18 | **BOARD SECRETARY** | Always | clones, fan, teleport |
+| 18 | **BRASS KNUCKLES** | Only while winding up / charging | charge, slam |
+| 18 | **TROPHY HUNTER** | Only right after it attacks | bombs, homing |
+| 23 | **SPECIMEN 23** | Headshots only | charge, slam, rain |
+| 23 | **THE INCUBATOR** | Immune while its minions live | summon, rain |
+| 23 | **DR. CLEANROOM** | Only while winding up / charging | bombs, heal |
+| 28 | **FOREMAN-9** | Only when it turns its back | slam, barrage, turn |
+| 28 | **ASSEMBLY ARM** | Only its glowing weak point | wall, laser |
+| 28 | **CRASH TEST HOUND** | Only right after it attacks | charge, fan |
+| 33 | **HEAD ARCHIVIST** | Only while visible | cloak, homing, fan |
+| 33 | **BOOKWORM** | Headshots only | rain, charge |
+| 33 | **FREEZER UNIT** | Break its regenerating shield first | wall, barrage |
+| 38 | **GROUNDSKEEPER** | Always + pylons | pylons, bombs, charge |
+| 38 | **ROSE QUEEN** | Only while winding up / charging | laser, rain |
+| 38 | **MOLD MOTHER** | Only its glowing weak point | summon, bombs |
+| 43 | **THE DEALER** | Shots reflect while it glows red | fan, reflect, teleport |
+| 43 | **HIGH ROLLER** | Only right after it attacks | spin, homing |
+| 43 | **MARBLE GOLEM** | Only its glowing weak point | slam, bombs |
+| 48 | **CORE TECH** | Always + pylons | pylons, laser, mines |
+| 48 | **BLACK OPS** | Only while visible | cloak, charge, fan |
+| 48 | **GATEKEEPER** | Break its regenerating shield first | laser, wall |
+
+#### Bosses (floors 5, 10 ... 50)
+| Floor | Boss | When it can be hurt | Attacks |
+|---|---|---|---|
+| 5 | **REGIONAL MANAGER** | Always | bombs, fan, summon |
+| 5 | **MAILROOM MONARCH** | Always | bombs, wall, summon |
+| 5 | **RECEPTIONIST FROM HELL** | Always | homing, clones, fan |
+| 10 | **VP OF OPERATIONS** | Always + pylons | pylons, barrage, homing |
+| 10 | **CALL CENTER OVERLORD** | Always | spin, mines, summon |
+| 10 | **OPEN PLAN ARCHITECT** | Always | teleport, rain, wall |
+| 15 | **CHIEF FINANCIAL OFFICER** | Break its regenerating shield first | bombs, summon, fan |
+| 15 | **THE DATA LORD** | Always + pylons | laser, mines, pylons |
+| 15 | **MAINFRAME** | Only its glowing weak point | barrage, wall, summon |
+| 20 | **CHIEF OPERATING OFFICER** | Always | teleport, homing, clones, fan |
+| 20 | **GOLDEN EXECUTIVE** | Always | fan, reflect, bombs |
+| 20 | **TROPHY WYRM** | Always | charge, rain, summon |
+| 25 | **HEAD OF R&D** | Always | bombs, summon, heal |
+| 25 | **PATIENT ZERO** | Always | charge, slam, sonic |
+| 25 | **THE STERILIZER** | Always + pylons | pylons, wall, laser |
+| 30 | **DIRECTOR OF ROBOTICS** | Always | homing, slam, summon |
+| 30 | **ASSEMBLY TITAN** | Always | charge, mines, barrage |
+| 30 | **TEST SUBJECT OMEGA** | Always | laser, rain, clones |
+| 35 | **CHIEF ARCHIVIST** | Always | cloak, homing, summon |
+| 35 | **THE LIBRARIAN** | Only when it turns its back | sonic, rain, turn |
+| 35 | **ICE QUEEN UNIT** | Always | spin, wall, mines |
+| 40 | **THE GARDENER** | Always | bombs, summon, heal |
+| 40 | **ATRIUM ANGEL** | Always | spin, rain, teleport |
+| 40 | **VENUS MANTRAP** | Immune while its minions live | summon, rain, laser |
+| 45 | **CHIEF EXECUTIVE OFFICER** | Always | bombs, homing, clones, fan |
+| 45 | **THE HOUSE** | Shots reflect while it glows red | spin, wall, reflect |
+| 45 | **MARBLE COLOSSUS** | Only its glowing weak point | slam, bombs, homing |
+| 50 | **THE CHAIRMAN** | Always + pylons | bombs, pylons, homing, clones, laser |
+| 50 | **REACTOR HEART** | Always + pylons | pylons, rain, mines, laser |
+| 50 | **BLACK SITE ABOMINATION** | Always | charge, sonic, summon, bombs |
+
+
 ### Weapons
 You start with a pistol. Enemies randomly drop guns, shown as a spinning model with a light beam in the gun's rarity color. Bosses always drop a rare or better gun. Tap a drop to grab it; anything left on the floor is collected automatically when the area is clear. You can carry **3 guns**, and **SWAP** cycles through them. If your hands are full when you pick one up, you choose which gun to drop, or leave the new one behind. Picking up a gun you already carry refills its ammo.
 
@@ -172,6 +261,7 @@ src/weapons.js             the 20 guns, rarity rolls, procedural gun models
 src/enemydefs.js           the enemy roster (data: floors, movement, attacks, traits)
 src/enemymodels.js         procedural bodies: humans, drones, mechs, spiders, quads, blobs, turrets...
 src/enemies.js             generic enemy AI + projectiles
+src/bosses.js              the 60 bosses: data + BossBrain (attack scripts, vulnerability rules)
 src/effects.js             gibs, particles, bullet holes
 src/textures.js            procedural pixel-art textures + 3x5 pixel font
 src/audio.js               WebAudio synth SFX and music

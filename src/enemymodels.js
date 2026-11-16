@@ -280,6 +280,15 @@ export function blob(e, m) {
 // ------------------------------------------------------------------ turrets
 export function turret(e, m) {
   const T = e.torso = pivot(e.body, 0, 0, 0);
+  if (m.style === 'pylon') {
+    e.part(T, box(0.6, 0.25, 0.6), lm(TX.panel([60, 64, 72], [230, 180, 40], 'py')), 0, 0.12, 0);
+    e.part(T, box(0.22, 1.5, 0.22), GUN, 0, 0.95, 0);
+    e.head = e.part(T, box(0.42, 0.42, 0.42), cm(0x60d0ff, true), 0, 1.85, 0, 'head');
+    for (const y of [0.6, 1.1]) e.part(T, box(0.36, 0.06, 0.36), cm(0x60d0ff, true), 0, y, 0);
+    e.centerY = 1.4;
+    e.anim = () => { e.head.rotation.y += 0.05; e.head.scale.setScalar(1 + Math.sin(e.phase * 6) * 0.1); };
+    return;
+  }
   if (m.style === 'copier') {
     const beige = lm(TX.vents()), front = lm(TX.eyes('copier', [255, 60, 40], [196, 188, 164]));
     e.part(T, box(1.0, 0.9, 0.72), arr6(beige, front, beige), 0, 0.45, 0);
