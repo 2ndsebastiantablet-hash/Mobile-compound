@@ -22,7 +22,8 @@ shared/                    everything the versions have in common
     enemies/               roster.js (85 enemy definitions), models.js (procedural bodies), ai.js (behaviour + projectiles)
     bosses/                bosses.js (60 bosses: attack scripts + vulnerability rules)
     weapons/               weapons.js (40 weapons + procedural gun/melee models)
-  game/                    game.js (game loop, input, shooting, floor/area flow, HUD, viewmodel)
+  game/                    game.js (game loop, input, shooting, floor/area flow, HUD, viewmodel),
+                           settings.js, save.js (autosave), tutorial.js
   ui/                      base.css (HUD, menus, overlays shared by all versions)
 versions/
   mobile/                  index.html + mobile.css (portrait, touch)
@@ -54,6 +55,9 @@ Every version runs the same `shared/` code. Each version folder owns its own pag
 The PC version shows the whole room in widescreen, the gun follows your cursor, and aim assist is reduced because a mouse is more precise than a finger. During development, add `?pc` to the URL to get the PC mode.
 
 ## How it plays
+- **Saving:** your run is autosaved at the start of every floor. **Continue** on the title screen picks it up again, even after closing the game. Retrying after death, or choosing *Restart floor* from the pause menu, replays that floor's save with full health.
+- **Settings** (title screen or pause menu): music and sound volume, aim assist (off/low/normal/high), graphics quality (render resolution and particles), screen shake, left-handed HUD (mobile), and replaying the tutorial.
+- **Tutorial:** a new player's first area on floor 1 walks through shooting, headshots, shooting fireballs, reloading, picking up and switching weapons. It can be skipped.
 
 - **Tap enemies** to shoot. Headshots do triple damage.
 - **Tap incoming fireballs** to destroy them before they hit you.

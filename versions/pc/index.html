@@ -32,6 +32,9 @@
     <div id="markers"></div>
     <div id="crosshair"></div>
     <div id="toast"></div>
+    <div id="tutHint" class="hidden"></div>
+    <div id="tutRing" class="hidden"></div>
+    <button id="tutSkip" class="hidden">SKIP TUTORIAL</button>
     <div id="statusbar">
       <div class="cell"><div class="big" id="hpLbl">100</div><div class="lbl">HEALTH</div></div>
       <div class="cell"><div class="big" id="ammoLbl">12</div><div class="lbl" id="reloadLbl">AMMO</div></div>
@@ -53,15 +56,31 @@
       <p class="pc-only">ESC pause &nbsp; F fullscreen &nbsp; M mute</p>
       <p>Clear each area to advance. Reach the top floor.</p>
     </div>
+    <button class="go hidden" id="continueBtn">CONTINUE</button>
     <button class="go" id="startBtn">CLOCK IN</button>
+    <button class="go small" id="settingsBtn">SETTINGS</button>
     <div class="best" id="bestLbl"></div>
   </div>
 
   <div id="pause" class="screen hidden">
     <div class="h">PAUSED</div>
     <button class="go" id="resumeBtn">RESUME</button>
-    <button class="go small" id="muteBtn">SOUND: ON</button>
-    <button class="go small" id="quitBtn">QUIT</button>
+    <button class="go small" id="pSettingsBtn">SETTINGS</button>
+    <button class="go small" id="restartBtn">RESTART FLOOR</button>
+    <button class="go small" id="quitBtn">QUIT TO TITLE</button>
+    <div class="best">YOUR RUN IS SAVED AT THE START OF EVERY FLOOR</div>
+  </div>
+
+  <div id="settings" class="screen hidden">
+    <div class="h mid">SETTINGS</div>
+    <div id="settingsRows"></div>
+    <button class="go" id="settingsBack">BACK</button>
+  </div>
+
+  <div id="confirm" class="screen hidden">
+    <div class="stats" id="confirmText"></div>
+    <button class="go" id="confirmYes">YES</button>
+    <button class="go small" id="confirmNo">CANCEL</button>
   </div>
 
   <div id="gunChoice" class="screen hidden">

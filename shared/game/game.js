@@ -5,7 +5,10 @@ import { DEFS, rosterFor, isFlyer, isMelee } from '../content/enemies/roster.js'
 import { bossFor, bossKindFor } from '../content/bosses/bosses.js';
 import { Effects } from '../engine/effects.js';
 import * as TX from '../engine/textures.js';
-import { initAudio, sfx, setMuted, isMuted } from '../audio/sfx.js';
+import { initAudio, sfx, setMuted, isMuted, setVolumes } from '../audio/sfx.js';
+import { SCHEMA, settings, setSetting, onSettingsChange, AIM_MULT, RES_MOBILE, RES_PC, FX_MULT, tutorialDone, setTutorialDone } from './settings.js';
+import { saveRun, loadRun, clearRun } from './save.js';
+import { Tutorial } from './tutorial.js';
 import { setMusic } from '../audio/music.js';
 import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine } from '../content/weapons/weapons.js';
 import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet } from '../engine/util.js';
@@ -17,7 +20,8 @@ const ui = {
   hud: $('hud'), floor: $('floorLbl'), area: $('areaLbl'), score: $('scoreLbl'), combo: $('comboLbl'),
   hp: $('hpLbl'), ammo: $('ammoLbl'), reload: $('reloadLbl'), weapon: $('weaponLbl'),
   banner: $('banner'), sub: $('subBanner'), markers: $('markers'), hurt: $('hurt'), fade: $('fade'),
-  bossbar: $('bossbar'), bossName: $('bossName'), bossFill: $('bossFill'), gunChoice: $('gunChoice'), bossState: $('bossState'), toast: $('toast'), slotLbl: $('slotLbl'),
+  bossbar: $('bossbar'), bossName: $('bossName'), bossFill: $('bossFill'), gunChoice: $('gunChoice'), bossState: $('bossState'), settings: $('settings'), confirm: $('confirm'), continueBtn: $('continueBtn'),
+  tutHint: $('tutHint'), tutRing: $('tutRing'), tutSkip: $('tutSkip'), toast: $('toast'), slotLbl: $('slotLbl'),
   title: $('title'), pause: $('pause'), floorClear: $('floorClear'), gameOver: $('gameOver'), win: $('win'),
 };
 
@@ -170,6 +174,7 @@ function prepareArea(i) {
     if (DEFS[t].hp >= 12) heavy++;
     types.push(t);
   }
+  if (i === 0 && tutorialPending) { area = { idx: 0, room, queue: [], waveT: 99, maxAlive: 0, clearing: false, boss: null, tutorial: true }; return; }
   area = { idx: i, room, queue: [], waveT: 2.5, maxAlive: Math.min(7, 3 + Math.floor((G.diff || f) / 4)), clearing: false, boss: null };
   const bk = bossKindFor(f);
   if (last && bk) {
@@ -210,7 +215,7 @@ function freeSpot(type) {
 }
 
 function introduce(type) {
-  if (seenTypes.has(type) || DEFS[type].boss) return;
+  if (mode === 'title' || seenTypes.has(type) || DEFS[type].boss) return;
   seenTypes.add(type); storeSet('overtime.seen', [...seenTypes]);
   pendingIntro.push(DEFS[type].name);
 }
@@ -309,6 +314,7 @@ G.spawnProjectile = (from, target, speed, dmg, kind, opts) => { G.projectiles.pu
 
 G.hurtPlayer = (dmg, src) => {
   if (!G.combatActive || mode !== 'combat') return;
+  if (tutorial && !tutorial.done) dmg *= 0.5;
   P.hp = Math.max(0, P.hp - dmg);
   stats.dmg += dmg;
   sfx.hurt();
@@ -368,6 +374,7 @@ function dropGun(pos, id) {
   const beam = new THREE.Mesh(box(0.08, 2.4, 0.08), beamCache[def.rarity]); beam.position.y = 1.2; p.mesh.add(beam);
   popText(new THREE.Vector3(pos.x, 1.2, pos.z), def.short, r.color);
   sfx.gunPickup();
+  return p;
 }
 
 function collectPickup(p) {
@@ -434,6 +441,20 @@ function toast(text, color) {
 }
 
 // ------------------------------------------------------------------ flow
+function continueRun(sv, fullHp = false) {
+  initAudio();
+  hideScreens();
+  score = sv.score || 0; floorStartScore = score;
+  P.hp = fullHp ? 100 : Math.max(1, sv.hp || 100);
+  P.inv = sv.inv.filter((s) => GUN[s.id]).map((s) => ({ ...s }));
+  if (!P.inv.length) P.inv = [{ id: 'pistol', ammo: GUN.pistol.mag }];
+  P.slot = Math.min(sv.slot || 0, P.inv.length - 1);
+  autoReload();
+  pendingGuns = []; choiceOpen = false; ui.gunChoice.classList.add('hidden');
+  G.floorNum = sv.floor; G.variant = sv.variant;
+  startFloor(sv.floor, true);
+}
+
 function startGame(floor = 1, keepScore = false) {
   initAudio();
   hideScreens();
@@ -444,12 +465,13 @@ function startGame(floor = 1, keepScore = false) {
   else P.inv = [{ id: 'pistol', ammo: GUN.pistol.mag }];
   P.slot = 0;
   autoReload();
-  pendingGuns = []; choiceOpen = false; ui.gunChoice.classList.add('hidden');
+  pendingGuns = []; choiceOpen = false; ui.gunChoice.classList.add('hidden'); pendingIntro = [];
   G.floorNum = floor;
   startFloor(floor, keepScore);
 }
 
 function startFloor(n, sameVariant = false) {
+  endTutorial(true);
   mode = 'intro'; G.combatActive = false;
   stats = newStats(); combo = 0;
   // each floor has 3 versions; roll one (a retry replays the same version)
@@ -460,6 +482,9 @@ function startFloor(n, sameVariant = false) {
   P.invAtFloor = P.inv.map((s) => ({ ...s }));
   gunsThisFloor = 0;
   equip(P.slot, true);
+  // autosave: a run can always be continued from the start of this floor
+  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot });
+  tutorialPending = n === 1 && !tutorialDone();
   const room0 = G.floor.rooms[0];
   prepareArea(0);
   setMusic('calm');
@@ -501,6 +526,7 @@ function beginCombat() {
   setMusic('combat');
   let k = 0;
   for (const e of G.enemies) if (e.state === 'dormant') { const en = e; setTimeout(() => en.activate(), 150 + k++ * 220); }
+  if (area.tutorial && !tutorial) { tutorial = new Tutorial(tutCtx); tutorial.start(); ui.tutSkip.classList.remove('hidden'); }
   if (area.boss) { ui.bossbar.classList.remove('hidden'); banner(area.boss.def.name, area.boss.def.brain ? area.boss.def.brain.hint : 'PERFORMANCE REVIEW', 2.6); }
   updateHud(true);
 }
@@ -637,6 +663,7 @@ function playerDied() {
 }
 
 function showWin() {
+  clearRun();
   $('winStats').textContent = `FINAL SCORE ${score}\nBEST ${best.score}`;
   showScreen(ui.win);
   setMusic('calm');
@@ -653,11 +680,16 @@ function toTitle() {
   fade(0, 0.8);
   setMusic('calm');
   $('bestLbl').textContent = best.floor ? `BEST: FLOOR ${best.floor} / ${best.score} PTS` : '';
+  const sv = loadRun();
+  ui.continueBtn.classList.toggle('hidden', !sv);
+  if (sv) ui.continueBtn.textContent = `CONTINUE · FLOOR ${String(sv.floor).padStart(2, '0')}`;
+  $('startBtn').textContent = sv ? 'NEW RUN' : 'CLOCK IN';
+  endTutorial(true);
   showScreen(ui.title);
 }
 
 function showScreen(el) { el.classList.remove('hidden'); }
-function hideScreens() { for (const k of ['title', 'pause', 'floorClear', 'gameOver', 'win']) ui[k].classList.add('hidden'); }
+function hideScreens() { for (const k of ['title', 'pause', 'floorClear', 'gameOver', 'win', 'settings', 'confirm']) ui[k].classList.add('hidden'); }
 
 let bannerTimer = null;
 function banner(text, sub, dur) {
@@ -751,7 +783,7 @@ function resolveShot(x, y, w, rect, primary) {
     const s = toScreen(p.mesh.position, rect);
     if (s.behind) continue;
     const dist = Math.hypot(s.x - x, s.y - y);
-    const r = (PC ? 20 : 30) + (PC ? 20 : 30) / Math.max(0.6, p.mesh.position.distanceTo(G.camPos));
+    const r = ((PC ? 20 : 30) + (PC ? 20 : 30) / Math.max(0.6, p.mesh.position.distanceTo(G.camPos))) * (0.8 + 0.15 * settings.aim);
     if (dist < r && dist < bd) { bd = dist; bp = p; }
   }
   if (bp) {
@@ -785,7 +817,7 @@ function resolveShot(x, y, w, rect, primary) {
   }
   // 3. aim assist (screen space, small radius, not through walls, not on hidden enemies)
   if (!hits.length) {
-    let ae = null, ad = w.seek || (w.melee ? (PC ? 45 : 70) : PC ? 12 : 30); // mice are precise, fingers are not; melee & seekers are forgiving
+    let ae = null, ad = (w.seek || (w.melee ? (PC ? 45 : 70) : PC ? 12 : 30)) * AIM_MULT[settings.aim]; // mice are precise, fingers are not; melee & seekers are forgiving
     for (const e of G.enemies) {
       if (!e.targetable || e.crouch > 0.5) continue;
       const c = e.centerWorld(V3());
@@ -948,31 +980,144 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'e' || e.key === 'E') swapWeapon();
   if (['1', '2', '3'].includes(e.key) && !choiceOpen && mode !== 'title') { const i = +e.key - 1; if (i < P.inv.length && i !== P.slot) { equip(i); toast(cur().name, RARITY[cur().rarity].color); } }
   if (e.key === 'f' || e.key === 'F') { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch { /* ignore */ } }
-  if (e.key === 'm' || e.key === 'M') { setMuted(!isMuted()); $('muteBtn').textContent = `SOUND: ${isMuted() ? 'OFF' : 'ON'}`; toast(isMuted() ? 'SOUND OFF' : 'SOUND ON'); }
+  if (e.key === 'm' || e.key === 'M') { setMuted(!isMuted()); toast(isMuted() ? 'SOUND OFF' : 'SOUND ON'); }
   if (e.key === 'Enter' && mode === 'title') $('startBtn').click();
 });
 
 const onBtn = (id, fn) => $(id).addEventListener('click', (e) => { e.stopPropagation(); initAudio(); fn(); });
-onBtn('startBtn', () => { sfx.tap(); fade(1, 0.3); setTimeout(() => startGame(1), 320); });
+const newRun = () => { sfx.tap(); fade(1, 0.3); setTimeout(() => startGame(1), 320); };
+onBtn('startBtn', () => {
+  const sv = loadRun();
+  if (sv) askConfirm(`START A NEW RUN?\nYOUR FLOOR ${sv.floor} SAVE WILL BE LOST.`, () => { clearRun(); newRun(); }, ui.title);
+  else newRun();
+});
+onBtn('continueBtn', () => { const sv = loadRun(); if (!sv) return; sfx.tap(); fade(1, 0.3); setTimeout(() => continueRun(sv), 320); });
+onBtn('settingsBtn', () => openSettings(ui.title));
+onBtn('pSettingsBtn', () => openSettings(ui.pause));
+onBtn('restartBtn', () => askConfirm('RESTART THIS FLOOR?', () => { paused = false; restartFloor(); }, ui.pause));
+onBtn('settingsBack', closeSettings);
+onBtn('confirmYes', () => { const fn = confirmFn; closeConfirm(false); fn && fn(); });
+onBtn('confirmNo', () => closeConfirm(true));
+onBtn('tutSkip', () => { sfx.tap(); if (tutorial) tutorial.finish(); });
 onBtn('reloadBtn', startReload);
 onBtn('weaponBtn', swapWeapon);
 onBtn('pauseBtn', togglePause);
 onBtn('resumeBtn', togglePause);
-onBtn('muteBtn', () => { setMuted(!isMuted()); $('muteBtn').textContent = `SOUND: ${isMuted() ? 'OFF' : 'ON'}`; });
-onBtn('quitBtn', () => { paused = false; toTitle(); });
+onBtn('quitBtn', () => { paused = false; toTitle(); }); // the run stays saved at the start of this floor
 onBtn('nextBtn', () => { sfx.tap(); nextFloor(); });
-onBtn('retryBtn', () => { score = floorStartScore; startGame(G.floorNum, true); });
+onBtn('retryBtn', () => restartFloor());
 onBtn('menuBtn', toTitle);
 onBtn('gcLeave', () => { sfx.tap(); openChoice(); });
 onBtn('winBtn', toTitle);
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'combat' && !paused) togglePause(); });
 
 function togglePause() {
-  if (choiceOpen) return;
+  if (choiceOpen || settingsOpen || confirmOpen) return;
   if (mode === 'title' || mode === 'floorclear' || mode === 'dead') return;
   paused = !paused;
   ui.pause.classList.toggle('hidden', !paused);
   setMusic(paused ? 'off' : mode === 'combat' ? 'combat' : 'calm');
+}
+
+// ------------------------------------------------------------------ settings, confirm, restart, tutorial
+let settingsOpen = false, settingsFrom = null, confirmOpen = false, confirmFn = null, confirmFrom = null;
+let tutorial = null, tutorialPending = false;
+
+function buildSettings() {
+  const rows = $('settingsRows'); rows.innerHTML = '';
+  for (const it of SCHEMA) {
+    if (it.mobileOnly && PC) continue;
+    const row = document.createElement('div'); row.className = 'setRow';
+    row.innerHTML = `<div class="setLbl">${it.label}${it.hint ? `<small>${it.hint}</small>` : ''}</div>`;
+    const ctl = document.createElement('div'); ctl.className = 'setCtl';
+    if (it.type === 'range') {
+      const r = document.createElement('input'); r.type = 'range'; r.min = 0; r.max = 100; r.step = 5; r.value = settings[it.key];
+      const v = document.createElement('span'); v.className = 'setVal'; v.textContent = settings[it.key];
+      r.addEventListener('input', () => { v.textContent = r.value; setSetting(it.key, +r.value); });
+      r.addEventListener('change', () => sfx.tap());
+      ctl.append(r, v);
+    } else if (it.type === 'choice') {
+      it.options.forEach((o, i) => {
+        const b = document.createElement('button'); b.className = 'seg' + (settings[it.key] === i ? ' on' : ''); b.textContent = o;
+        b.addEventListener('click', (e) => { e.stopPropagation(); sfx.tap(); setSetting(it.key, i); buildSettings(); });
+        ctl.append(b);
+      });
+    } else if (it.type === 'action') {
+      const b = document.createElement('button'); b.className = 'seg'; b.textContent = tutorialDone() ? it.text : 'WILL PLAY';
+      b.addEventListener('click', (e) => { e.stopPropagation(); sfx.tap(); setTutorialDone(false); buildSettings(); });
+      ctl.append(b);
+    }
+    row.append(ctl); rows.append(row);
+  }
+}
+function openSettings(from) {
+  sfx.tap(); settingsOpen = true; settingsFrom = from;
+  from.classList.add('hidden'); buildSettings(); showScreen(ui.settings);
+}
+function closeSettings() {
+  sfx.tap(); settingsOpen = false; ui.settings.classList.add('hidden');
+  if (settingsFrom) showScreen(settingsFrom);
+}
+function askConfirm(text, fn, from) {
+  confirmOpen = true; confirmFn = fn; confirmFrom = from;
+  $('confirmText').textContent = text; from.classList.add('hidden'); showScreen(ui.confirm);
+}
+function closeConfirm(back) {
+  confirmOpen = false; ui.confirm.classList.add('hidden');
+  if (back && confirmFrom) showScreen(confirmFrom);
+}
+function restartFloor() {
+  // replay the current floor from its autosave (same version of the floor, full health)
+  const sv = loadRun();
+  if (sv && sv.floor === G.floorNum) continueRun(sv, true);
+  else { score = floorStartScore; startGame(G.floorNum, true); }
+}
+
+onSettingsChange((s, key) => {
+  setVolumes(s.music / 100, s.sfx / 100);
+  effects.mult = FX_MULT[s.gfx];
+  document.body.classList.toggle('lefty', !PC && s.lefty === 1);
+  if (!key || key === 'gfx' || key === 'lefty') resize();
+});
+
+const tutCtx = {
+  PC, G, P, sfx,
+  stats: () => stats,
+  spawn(type, x, d, passive) {
+    const room = area.room, spot = { x, z: room.z0 - d, cover: false };
+    const e = new Enemy(G, type, spot, { active: true });
+    if (passive) e.atkT = 9999;
+    effects.dust(e.pos.clone().setY(0.1), 10);
+    G.enemies.push(e);
+    return e;
+  },
+  dropGun(x, d, id) { return dropGun(new THREE.Vector3(x, 0, area.room.z0 - d), id); },
+  hint(text, i, n) {
+    ui.tutHint.classList.toggle('hidden', !text);
+    if (text) ui.tutHint.innerHTML = `<small>TUTORIAL ${i}/${n}</small>${text}`;
+  },
+  ring(pos) {
+    if (!pos) { ui.tutRing.classList.add('hidden'); return; }
+    const sp = toScreen(pos, canvasRect());
+    ui.tutRing.classList.toggle('hidden', sp.behind);
+    ui.tutRing.style.left = `${sp.x - 26}px`; ui.tutRing.style.top = `${sp.y - 26}px`;
+  },
+  toast: (t, c) => toast(t, c),
+  finish() {
+    setTutorialDone(true);
+    ui.tutSkip.classList.add('hidden');
+    if (area && area.tutorial) {
+      area.tutorial = false;
+      for (const e of G.enemies) if (e.alive && e.atkT > 100) e.atkT = 1; // passive dummies wake up
+    }
+    P.hp = 100;
+    toast('TUTORIAL COMPLETE', '#f0c860');
+  },
+};
+function endTutorial(silent) {
+  if (tutorial && !tutorial.done) { tutorial.done = true; }
+  tutorial = null; tutorialPending = false;
+  ui.tutHint.classList.add('hidden'); ui.tutRing.classList.add('hidden'); ui.tutSkip.classList.add('hidden');
 }
 
 // ------------------------------------------------------------------ HUD
@@ -1007,20 +1152,22 @@ function updateHud(force) {
 // ------------------------------------------------------------------ resize
 function resize() {
   const r = gameEl.getBoundingClientRect();
-  const H = Math.min(PC ? 400 : 340, Math.round(r.height));
+  const H = Math.min((PC ? RES_PC : RES_MOBILE)[settings.gfx] ?? 340, Math.round(r.height));
   const W = Math.max(1, Math.round(r.width * (H / r.height)));
   renderer.setSize(W, H, false);
   camera.aspect = W / H; camera.updateProjectionMatrix();
   gunCam.aspect = W / H; gunCam.updateProjectionMatrix();
   const d = 0.55, hh = d * Math.tan(THREE.MathUtils.degToRad(gunCam.fov / 2)), hw = hh * gunCam.aspect;
-  gunBase.set(PC ? hw * 0.3 : hw * 0.55, -hh * (PC ? 0.7 : 0.74), -d);
+  const lefty = !PC && settings.lefty === 1;
+  gunBase.set((PC ? hw * 0.3 : hw * 0.55) * (lefty ? -1 : 1), -hh * (PC ? 0.7 : 0.74), -d);
+  gunRoot.scale.set(lefty ? -0.62 : 0.62, 0.62, 0.62);
 }
 window.addEventListener('resize', resize);
 resize();
 
 // ------------------------------------------------------------------ loop
 function applyCamera() {
-  const s = shake * shake * 0.08;
+  const s = shake * shake * 0.08 * (settings.shake ? 1 : 0);
   camera.position.set(G.camPos.x + (Math.random() - 0.5) * s, G.camPos.y + (Math.random() - 0.5) * s, G.camPos.z);
   const breathe = mode === 'combat' ? Math.sin(now * 1.3) * 0.006 : 0;
   camera.rotation.set(pitch + breathe + (Math.random() - 0.5) * s * 0.5, yaw, roll, 'YXZ');
@@ -1033,7 +1180,7 @@ function updateGun(dt) {
   P.aimYaw += (P.aimTY - P.aimYaw) * Math.min(1, dt * 25);
   P.aimPitch += (P.aimTP - P.aimPitch) * Math.min(1, dt * 25);
   P.swapT = Math.max(0, P.swapT - dt * 3);
-  let ry = 0.16 + P.aimYaw, rx = P.aimPitch + P.recoil * 0.22, rz = 0;
+  let ry = (!PC && settings.lefty === 1 ? -0.16 : 0.16) + P.aimYaw, rx = P.aimPitch + P.recoil * 0.22, rz = 0;
   if (P.swing > 0) {
     // melee swing arc
     P.swing = Math.max(0, P.swing - dt * (cur().auto ? 3 : 5));
@@ -1082,6 +1229,7 @@ function update(dt) {
   }
   effects.update(dt);
   bossMsgT -= dt; immuneT -= dt;
+  if (tutorial && !tutorial.done && mode === 'combat') tutorial.update(dt);
   if (PC && mouse && G.floor) {
     let hot = false;
     if (G.combatActive && !paused) {
@@ -1114,7 +1262,7 @@ function update(dt) {
         spawnReinforcement(area.queue.shift()); area.waveT = rand(Math.random, 0.9, 2.0);
         alive++; // count it now, or the area could "clear" the same frame the last wave spawns
       }
-      if (!area.queue.length && alive === 0 && (!area.boss || !area.boss.alive)) areaCleared();
+      if (!area.queue.length && alive === 0 && !area.tutorial && (!area.boss || !area.boss.alive)) areaCleared();
     }
   }
 

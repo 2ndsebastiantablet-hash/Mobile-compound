@@ -7,17 +7,17 @@ Balance comes *after* the new mechanics because cover, perks and upgrades all ch
 
 ---
 
-## Where we are now: v0.6, content complete
+## Where we are now: v0.7, Phase 1 done
 - 50 floors × 3 versions, 85 enemies, 60 bosses, 40 weapons, ambushes
 - Mobile and PC on-rails versions, organized project, standalone builds
 
 ---
 
-## Phase 1: Foundations (1–2 sessions · week 1)
-- [ ] **Save & Continue:** autosave at every floor, "Continue run" on the title screen
-- [ ] **Settings menu:** music and SFX volume, aim assist and sensitivity, graphics quality, screen shake, left-handed mobile HUD
-- [ ] **Tutorial on floor 1:** shooting, headshots, shooting projectiles, swapping, pickups
-- [ ] **Better pause menu:** settings, restart floor, quit to title
+## Phase 1: Foundations (1–2 sessions · week 1) ✅ DONE (v0.7)
+- [x] **Save & Continue:** autosave at every floor, "Continue run" on the title screen
+- [x] **Settings menu:** music and SFX volume, aim assist and sensitivity, graphics quality, screen shake, left-handed mobile HUD
+- [x] **Tutorial on floor 1:** shooting, headshots, shooting projectiles, swapping, pickups
+- [x] **Better pause menu:** settings, restart floor, quit to title
 
 ## Phase 2: Combat depth (1–2 sessions · week 1–2)
 - [ ] **Cover / duck button:** hold to duck (safe, can't shoot), release to pop up

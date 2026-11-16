@@ -35,6 +35,7 @@ export class Effects {
   }
 
   emit(point, n, kind, speed = 2.5, grav = 9.8, life = 0.8) {
+    n = Math.max(1, Math.round(n * (this.mult ?? 1))); // graphics setting scales particle counts
     const mats = MATS[kind];
     for (let i = 0; i < n; i++) {
       const m = this.pool[this.pi = (this.pi + 1) % this.pool.length];

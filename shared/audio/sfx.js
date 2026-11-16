@@ -1,6 +1,12 @@
 // Sound effects: a tiny synthesized kit. No audio files needed. Music lives in music.js.
 let ctx = null, master, sfxBus, musicBus, noiseBuf;
 let muted = false;
+let volMusic = 0.7, volSfx = 0.85;
+// 0..1 each, from the settings screen
+export function setVolumes(music, fx) {
+  volMusic = music; volSfx = fx;
+  if (ctx) { musicBus.gain.setTargetAtTime(0.32 * volMusic, ctx.currentTime, 0.05); sfxBus.gain.setTargetAtTime(0.9 * volSfx, ctx.currentTime, 0.05); }
+}
 let onReady = [];
 export function onAudioReady(fn) { if (ctx) fn(); else onReady.push(fn); }
 
@@ -9,8 +15,8 @@ export function initAudio() {
   try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }
   master = ctx.createGain(); master.gain.value = muted ? 0 : 0.8; master.connect(ctx.destination);
   const comp = ctx.createDynamicsCompressor(); comp.connect(master);
-  sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(comp);
-  musicBus = ctx.createGain(); musicBus.gain.value = 0.32; musicBus.connect(comp);
+  sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9 * volSfx; sfxBus.connect(comp);
+  musicBus = ctx.createGain(); musicBus.gain.value = 0.32 * volMusic; musicBus.connect(comp);
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
