@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Overtime</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game">
+  <canvas id="view"></canvas>
+  <div id="vignette"></div>
+  <div id="hurt"></div>
+  <div id="fade"></div>
+
+  <div id="hud" class="hidden">
+    <div id="topbar">
+      <div><div id="floorLbl">FLOOR 01</div><div id="areaLbl">AREA 1/4</div></div>
+      <div class="right"><div id="scoreLbl">0</div><div id="comboLbl"></div></div>
+      <button id="pauseBtn" aria-label="Pause">II</button>
+    </div>
+    <div id="bossbar" class="hidden"><div id="bossName">THE CHAIRMAN</div><div class="bar"><div id="bossFill"></div></div></div>
+    <div id="banner"></div>
+    <div id="subBanner"></div>
+    <div id="markers"></div>
+    <div id="statusbar">
+      <div class="cell"><div class="big" id="hpLbl">100</div><div class="lbl">HEALTH</div></div>
+      <div class="cell"><div class="big" id="ammoLbl">12</div><div class="lbl" id="reloadLbl">AMMO</div></div>
+      <button class="cell btn" id="weaponBtn"><div class="wname" id="weaponLbl">PISTOL</div><div class="lbl">SWAP</div></button>
+      <button class="cell btn" id="reloadBtn"><div class="wname">R</div><div class="lbl">RELOAD</div></button>
+    </div>
+  </div>
+
+  <div id="title" class="screen">
+    <div class="logo">OVER<span>TIME</span></div>
+    <div class="tag">20 FLOORS. NO WAY DOWN.</div>
+    <div class="howto">
+      <p>TAP enemies to shoot. Heads take triple damage.</p>
+      <p>TAP incoming fireballs to destroy them.</p>
+      <p>Clear each area to advance. Reach the top floor.</p>
+    </div>
+    <button class="go" id="startBtn">CLOCK IN</button>
+    <div class="best" id="bestLbl"></div>
+  </div>
+
+  <div id="pause" class="screen hidden">
+    <div class="h">PAUSED</div>
+    <button class="go" id="resumeBtn">RESUME</button>
+    <button class="go small" id="muteBtn">SOUND: ON</button>
+    <button class="go small" id="quitBtn">QUIT</button>
+  </div>
+
+  <div id="floorClear" class="screen hidden">
+    <div class="h" id="fcTitle">FLOOR 01 CLEARED</div>
+    <div class="stats" id="fcStats"></div>
+    <div class="unlock" id="fcUnlock"></div>
+    <button class="go" id="nextBtn">GOING UP</button>
+  </div>
+
+  <div id="gameOver" class="screen hidden">
+    <div class="h red">YOU'RE FIRED</div>
+    <div class="stats" id="goStats"></div>
+    <button class="go" id="retryBtn">RETRY FLOOR</button>
+    <button class="go small" id="menuBtn">MAIN MENU</button>
+  </div>
+
+  <div id="win" class="screen hidden">
+    <div class="h">HOSTILE TAKEOVER</div>
+    <div class="tag">YOU REACHED THE TOP.</div>
+    <div class="stats" id="winStats"></div>
+    <button class="go" id="winBtn">MAIN MENU</button>
+  </div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

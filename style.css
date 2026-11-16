@@ -1,0 +1,90 @@
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; height: 100%; background: #000; overflow: hidden;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  font-family: 'VT323', 'Courier New', monospace; color: #e8e0c8;
+}
+#game {
+  position: relative; height: 100vh; height: 100dvh;
+  width: min(100vw, calc(100dvh * 0.62)); margin: 0 auto; overflow: hidden; background: #000;
+}
+#view { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+#vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%); }
+#hurt { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(160,0,0,0) 30%, rgba(200,0,0,.75) 100%); opacity: 0; }
+#fade { position: absolute; inset: 0; pointer-events: none; background: #000; opacity: 1; }
+.hidden { display: none !important; }
+
+#hud { position: absolute; inset: 0; pointer-events: none; }
+#topbar {
+  position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-start;
+  padding: calc(env(safe-area-inset-top) + 8px) 16px 0; font-size: 22px; line-height: 0.95; text-shadow: 2px 2px 0 #000;
+}
+#topbar .right { text-align: right; margin-left: auto; margin-right: 12px; }
+#floorLbl { color: #f0c860; font-size: 26px; }
+#areaLbl { color: #b8b0a0; }
+#scoreLbl { font-size: 26px; }
+#comboLbl { color: #ff8040; }
+#pauseBtn {
+  pointer-events: auto; font-family: inherit; font-size: 20px; width: 40px; height: 36px; color: #e8e0c8;
+  background: rgba(0,0,0,.45); border: 2px solid #6a6050; border-radius: 0;
+}
+#bossbar { position: absolute; top: calc(env(safe-area-inset-top) + 64px); left: 16px; right: 16px; text-align: center; text-shadow: 2px 2px 0 #000; }
+#bossName { color: #ff6060; font-size: 22px; }
+#bossbar .bar { height: 10px; border: 2px solid #000; background: #300; box-shadow: 0 0 0 2px #844; }
+#bossFill { height: 100%; width: 100%; background: linear-gradient(#f44, #a00); }
+#banner, #subBanner { position: absolute; left: 0; right: 0; text-align: center; text-shadow: 3px 3px 0 #000; opacity: 0; transition: opacity .25s; }
+#banner { top: 30%; font-size: 52px; color: #f0c860; letter-spacing: 2px; line-height: .9; }
+#subBanner { top: calc(30% + 52px); font-size: 26px; color: #e8e0c8; }
+#banner.show, #subBanner.show { opacity: 1; }
+#markers { position: absolute; inset: 0; }
+.mark { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; pointer-events: none; animation: mk .22s forwards; }
+.mark::before, .mark::after { content: ''; position: absolute; left: 11px; top: 0; width: 4px; height: 26px; background: #fff; box-shadow: 0 0 0 1px #000; }
+.mark::before { transform: rotate(45deg); } .mark::after { transform: rotate(-45deg); }
+.mark.head::before, .mark.head::after { background: #ff4030; }
+.mark.miss { width: 10px; height: 10px; margin: -5px 0 0 -5px; border: 2px solid rgba(255,255,255,.7); border-radius: 50%; }
+.mark.miss::before, .mark.miss::after { display: none; }
+.pts { position: absolute; font-size: 22px; color: #ffe070; text-shadow: 2px 2px 0 #000; pointer-events: none; animation: pts .7s forwards; transform: translate(-50%, -50%); }
+@keyframes mk { from { transform: scale(1.4); opacity: 1; } to { transform: scale(.8); opacity: 0; } }
+@keyframes pts { from { opacity: 1; margin-top: 0; } to { opacity: 0; margin-top: -40px; } }
+
+#statusbar {
+  position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 4px;
+  padding: 6px 6px calc(env(safe-area-inset-bottom) + 6px);
+  background:
+    repeating-linear-gradient(90deg, rgba(0,0,0,.08) 0 2px, transparent 2px 5px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.04) 0 1px, transparent 1px 3px),
+    linear-gradient(#5a554c, #3c3832);
+  border-top: 3px solid #847c6c; box-shadow: inset 0 3px 0 #2a2620;
+}
+#statusbar .cell {
+  flex: 1; min-width: 0; text-align: center; background: #1c1a17; border: 3px solid; border-color: #26231e #8a8270 #8a8270 #26231e;
+  padding: 2px 0 0; font-family: inherit; color: inherit;
+}
+#statusbar .big { font-size: 40px; line-height: .85; color: #d42c1c; text-shadow: 2px 2px 0 #000; }
+#statusbar .lbl { font-size: 17px; color: #b8b0a0; }
+#statusbar .wname { font-size: 24px; line-height: 1.35; color: #f0c860; }
+#statusbar .btn { pointer-events: auto; border-color: #8a8270 #26231e #26231e #8a8270; background: #2c2924; cursor: pointer; }
+#statusbar .btn:active { border-color: #26231e #8a8270 #8a8270 #26231e; background: #1c1a17; }
+#reloadLbl.reloading { color: #ff8040; }
+
+.screen {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px 16px; text-align: center; background: rgba(0,0,0,.55); gap: 10px;
+}
+#title { background: linear-gradient(rgba(0,0,0,.2), rgba(0,0,0,.75)); }
+.logo { font-size: 92px; line-height: .8; color: #e8e0c8; text-shadow: 4px 4px 0 #6a1010, 8px 8px 0 #000; letter-spacing: 2px; }
+.logo span { color: #d42c1c; text-shadow: 4px 4px 0 #3a0808, 8px 8px 0 #000; }
+.tag { font-size: 24px; color: #f0c860; text-shadow: 2px 2px 0 #000; }
+.howto { font-size: 21px; max-width: 330px; color: #c8c0b0; text-shadow: 2px 2px 0 #000; margin: 10px 0; }
+.howto p { margin: 4px 0; }
+.h { font-size: 52px; line-height: .9; color: #f0c860; text-shadow: 4px 4px 0 #000; }
+.h.red { color: #d42c1c; }
+.stats { font-size: 24px; line-height: 1.15; text-shadow: 2px 2px 0 #000; white-space: pre; }
+.unlock { font-size: 26px; color: #60ff80; text-shadow: 2px 2px 0 #000; min-height: 4px; }
+.best { font-size: 20px; color: #a8a090; }
+button.go {
+  font-family: inherit; font-size: 34px; color: #1c1a17; background: #f0c860; padding: 6px 26px; min-width: 220px;
+  border: 4px solid; border-color: #fff0b0 #8a6a20 #8a6a20 #fff0b0; border-radius: 0; cursor: pointer; box-shadow: 4px 4px 0 #000;
+}
+button.go:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
+button.go.small { font-size: 24px; background: #8a8270; border-color: #c8c0b0 #3a3630 #3a3630 #c8c0b0; }
