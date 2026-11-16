@@ -27,3 +27,7 @@ body.pc .slotBtn:hover { background: #2c2924; }
 body.pc button.go:hover { filter: brightness(1.1); }
 
 body.pc #bossState { font-size: 24px; }
+
+body.pc #perkCards { flex-direction: row; max-width: 980px; }
+body.pc .perkCard { flex: 1; min-height: 170px; }
+body.pc .perkCard:hover { filter: brightness(1.15); transform: translateY(-3px); }

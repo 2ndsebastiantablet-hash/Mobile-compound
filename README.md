@@ -22,6 +22,7 @@ shared/                    everything the versions have in common
     enemies/               roster.js (85 enemy definitions), models.js (procedural bodies), ai.js (behaviour + projectiles)
     bosses/                bosses.js (60 bosses: attack scripts + vulnerability rules)
     weapons/               weapons.js (40 weapons + procedural gun/melee models)
+    perks/                 perks.js (31 run perks, offer rolls, stat modifiers)
   game/                    game.js (game loop, input, shooting, floor/area flow, HUD, viewmodel),
                            settings.js, save.js (autosave), tutorial.js
   ui/                      base.css (HUD, menus, overlays shared by all versions)
@@ -57,6 +58,7 @@ The PC version shows the whole room in widescreen, the gun follows your cursor, 
 ## How it plays
 - **Saving:** your run is autosaved at the start of every floor. **Continue** on the title screen picks it up again, even after closing the game. Retrying after death, or choosing *Restart floor* from the pause menu, replays that floor's save with full health.
 - **Settings** (title screen or pause menu): music and sound volume, aim assist (off/low/normal/high), graphics quality (render resolution and particles), screen shake, left-handed HUD (mobile), and replaying the tutorial.
+- **Perks:** after every floor you choose **1 of 3 random perks**, and they last for the rest of the run. There are 31 across offense, defense and utility, for example Hollow Points, Marksman, Explosive Rounds, Second Wind, Bloodsucker, Deflector Field, Auto-Loader and Lucky Charm. Many stack (shown as 1/3, 2/3…). After a boss or mini-boss floor at least one rare-or-better perk is offered. You get one free reroll per run. Your perks are listed in the pause menu and saved with the run.
 - **Tutorial:** a new player's first area on floor 1 walks through shooting, headshots, shooting fireballs, reloading, picking up and switching weapons. It can be skipped.
 
 - **Tap enemies** to shoot. Headshots do triple damage.

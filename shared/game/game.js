@@ -9,6 +9,7 @@ import { initAudio, sfx, setMuted, isMuted, setVolumes } from '../audio/sfx.js';
 import { SCHEMA, settings, setSetting, onSettingsChange, AIM_MULT, RES_MOBILE, RES_PC, FX_MULT, tutorialDone, setTutorialDone } from './settings.js';
 import { saveRun, loadRun, clearRun } from './save.js';
 import { Tutorial } from './tutorial.js';
+import { PERKS, PERK, PERK_RARITY, rollPerks, mods } from '../content/perks/perks.js';
 import { setMusic } from '../audio/music.js';
 import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine } from '../content/weapons/weapons.js';
 import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet } from '../engine/util.js';
@@ -20,7 +21,7 @@ const ui = {
   hud: $('hud'), floor: $('floorLbl'), area: $('areaLbl'), score: $('scoreLbl'), combo: $('comboLbl'),
   hp: $('hpLbl'), ammo: $('ammoLbl'), reload: $('reloadLbl'), weapon: $('weaponLbl'),
   banner: $('banner'), sub: $('subBanner'), markers: $('markers'), hurt: $('hurt'), fade: $('fade'),
-  bossbar: $('bossbar'), bossName: $('bossName'), bossFill: $('bossFill'), gunChoice: $('gunChoice'), bossState: $('bossState'), settings: $('settings'), confirm: $('confirm'), continueBtn: $('continueBtn'),
+  bossbar: $('bossbar'), bossName: $('bossName'), bossFill: $('bossFill'), gunChoice: $('gunChoice'), bossState: $('bossState'), perks: $('perks'), settings: $('settings'), confirm: $('confirm'), continueBtn: $('continueBtn'),
   tutHint: $('tutHint'), tutRing: $('tutRing'), tutSkip: $('tutSkip'), toast: $('toast'), slotLbl: $('slotLbl'),
   title: $('title'), pause: $('pause'), floorClear: $('floorClear'), gameOver: $('gameOver'), win: $('win'),
 };
@@ -93,6 +94,10 @@ function newStats() { return { shots: 0, hits: 0, kills: 0, heads: 0, orbs: 0, d
 const cur = () => GUN[P.inv[P.slot].id];
 const curSlot = () => P.inv[P.slot];
 let pendingGuns = [], choiceOpen = false, gunsThisFloor = 0;
+// run perks: level per perk id, derived modifiers M, free rerolls left
+let perkLv = {}, M = mods(perkLv), rerolls = 1, perkOffer = null;
+const magOf = (def) => (def.melee ? 0 : Math.max(1, Math.round(def.mag * M.mag)));
+const healP = (n) => { if (n > 0) P.hp = Math.min(M.maxHp, P.hp + n); };
 const seenTypes = new Set(storeGet('overtime.seen', []));
 let pendingIntro = [], introT = 0;
 
@@ -274,7 +279,7 @@ G.randomSpot = (e) => {
 G.spawnBomb = (from, k, n, kind, dmg) => {
   // lob toward the floor just in front of the player: it explodes on impact unless shot down
   const target = G.camPos.clone().add(new THREE.Vector3((k - (n - 1) / 2) * 0.8 + rand(Math.random, -0.3, 0.3), -1.55, -rand(Math.random, 0.2, 0.9)));
-  G.projectiles.push(new Projectile(G, from, target, 3.6, dmg, kind, { lob: true, bomb: true }));
+  G.projectiles.push(new Projectile(G, from, target, 3.6 * M.projSpeed, dmg, kind, { lob: true, bomb: true }));
 };
 G.spawnFixed = (type, pos) => {
   if (!area) return null;
@@ -310,12 +315,15 @@ G.blast = (center, r, dmg) => {
 };
 
 // ------------------------------------------------------------------ game callbacks
-G.spawnProjectile = (from, target, speed, dmg, kind, opts) => { G.projectiles.push(new Projectile(G, from, target, speed, dmg, kind, opts)); };
+G.spawnProjectile = (from, target, speed, dmg, kind, opts) => { G.projectiles.push(new Projectile(G, from, target, speed * M.projSpeed, dmg, kind, opts)); };
 
 G.hurtPlayer = (dmg, src) => {
   if (!G.combatActive || mode !== 'combat') return;
   if (tutorial && !tutorial.done) dmg *= 0.5;
+  if (!src && M.deflect && Math.random() < M.deflect) { popText(G.camPos.clone().add(new THREE.Vector3(0, -0.2, -1.2)), 'DEFLECTED', '#80e0ff'); sfx.zap(); return; }
+  dmg *= M.armor;
   P.hp = Math.max(0, P.hp - dmg);
+  if (P.hp <= 0 && M.secondWind && !P.windUsed) { P.windUsed = true; P.hp = 30; banner('SECOND WIND!', null, 1.2); sfx.unlock(); }
   stats.dmg += dmg;
   sfx.hurt();
   shake = Math.min(1, shake + 0.5);
@@ -328,9 +336,13 @@ G.hurtPlayer = (dmg, src) => {
 G.onEnemyKilled = (e, head, noScore) => {
   if (noScore) return;
   stats.kills++; if (head) stats.heads++;
-  combo = now - lastKill < 2.5 ? Math.min(8, combo + 1) : 1;
+  combo = now - lastKill < M.comboWindow ? Math.min(M.comboMax, combo + 1) : 1;
   lastKill = now;
-  const pts = (e.st.score + (head ? 50 : 0)) * combo;
+  const pts = Math.round((e.st.score + (head ? 50 : 0)) * combo * M.score);
+  // perk rewards for the kill
+  healP(M.killHeal + (head ? M.headHeal : 0));
+  if (M.reloadKill && !cur().melee) curSlot().ammo = Math.min(magOf(cur()), curSlot().ammo + M.reloadKill);
+  if (M.chainKill && Math.random() < M.chainKill) G.blast(e.centerWorld(new THREE.Vector3()), 2.2, 3 * M.dmg);
   score += pts;
   popText(e.centerWorld(new THREE.Vector3()), `+${pts}`);
   if (e === area?.boss) {
@@ -339,12 +351,17 @@ G.onEnemyKilled = (e, head, noScore) => {
     shake = 1;
   }
   // weapon drops: bosses always drop something good; floor 1 guarantees an early find
-  const gunChance = e.def.boss ? 1 : (G.floorNum === 1 && gunsThisFloor === 0 && area && area.idx >= 1) ? 0.35 : 0.075;
+  const gunChance = e.def.boss ? 1 : ((G.floorNum === 1 && gunsThisFloor === 0 && area && area.idx >= 1) ? 0.35 : 0.075) * M.scavenge;
   if (Math.random() < gunChance) {
-    const id = rollGun(G.floorNum, Math.random, P.inv.map((s) => s.id), e.def.boss ? (e.def.mini ? 'uncommon' : 'rare') : null);
+    const minR = e.def.boss ? (e.def.mini ? 'uncommon' : 'rare') : null, have = P.inv.map((s) => s.id);
+    let id = rollGun(G.floorNum, Math.random, have, minR);
+    if (id && Math.random() < M.luck) { // Lucky Charm: roll again, keep the rarer one
+      const order = Object.keys(RARITY), id2 = rollGun(G.floorNum, Math.random, have, minR);
+      if (id2 && order.indexOf(GUN[id2].rarity) > order.indexOf(GUN[id].rarity)) id = id2;
+    }
     if (id) { dropGun(e.pos, id); return; }
   }
-  if (P.hp < 100 && Math.random() < (P.hp < 40 ? 0.3 : 0.12)) dropMedkit(e.pos);
+  if (P.hp < M.maxHp && Math.random() < (P.hp < 40 ? 0.3 : 0.12) * M.medkit) dropMedkit(e.pos);
 };
 
 const MED_M = new THREE.MeshLambertMaterial({ map: TX.medkit() });
@@ -382,8 +399,9 @@ function collectPickup(p) {
   p.collect = true; p.ct = 0;
   if (p.kind === 'gun') { giveGun(p.id); return; }
   sfx.pickup();
-  P.hp = Math.min(100, P.hp + 25);
-  popText(p.mesh.position, '+25 HP', '#60ff80');
+  const amt = Math.round(25 * M.medkit);
+  healP(amt);
+  popText(p.mesh.position, `+${amt} HP`, '#60ff80');
 }
 
 // ------------------------------------------------------------------ inventory
@@ -391,9 +409,9 @@ function giveGun(id) {
   const def = GUN[id];
   const have = P.inv.findIndex((s) => s.id === id);
   sfx.gunPickup();
-  if (have >= 0) { P.inv[have].ammo = def.mag; toast(`${def.short} AMMO REFILLED`, RARITY[def.rarity].color); return; }
+  if (have >= 0) { P.inv[have].ammo = magOf(def); toast(`${def.short} AMMO REFILLED`, RARITY[def.rarity].color); return; }
   if (P.inv.length < MAX_GUNS) {
-    P.inv.push({ id, ammo: def.mag });
+    P.inv.push({ id, ammo: magOf(def) });
     equip(P.inv.length - 1, true);
     toast(`GOT ${def.name}`, RARITY[def.rarity].color);
     return;
@@ -423,7 +441,7 @@ function openChoice() {
     b.innerHTML = `<span class="drop">DROP</span>${gunCardHTML(d)}`;
     b.addEventListener('click', (e) => {
       e.stopPropagation(); sfx.tap();
-      P.inv[i] = { id, ammo: def.mag };
+      P.inv[i] = { id, ammo: magOf(def) };
       equip(i, true);
       toast(`GOT ${def.name}`, RARITY[def.rarity].color);
       openChoice();
@@ -445,7 +463,8 @@ function continueRun(sv, fullHp = false) {
   initAudio();
   hideScreens();
   score = sv.score || 0; floorStartScore = score;
-  P.hp = fullHp ? 100 : Math.max(1, sv.hp || 100);
+  perkLv = { ...(sv.perks || {}) }; rerolls = sv.rerolls ?? 1; M = mods(perkLv);
+  P.hp = fullHp ? M.maxHp : Math.max(1, Math.min(M.maxHp, sv.hp || M.maxHp));
   P.inv = sv.inv.filter((s) => GUN[s.id]).map((s) => ({ ...s }));
   if (!P.inv.length) P.inv = [{ id: 'pistol', ammo: GUN.pistol.mag }];
   P.slot = Math.min(sv.slot || 0, P.inv.length - 1);
@@ -458,9 +477,9 @@ function continueRun(sv, fullHp = false) {
 function startGame(floor = 1, keepScore = false) {
   initAudio();
   hideScreens();
-  if (!keepScore) { score = 0; }
+  if (!keepScore) { score = 0; perkLv = {}; rerolls = 1; M = mods(perkLv); }
   floorStartScore = score;
-  P.hp = 100;
+  P.hp = M.maxHp;
   if (keepScore && P.invAtFloor) P.inv = P.invAtFloor.map((s) => ({ ...s }));
   else P.inv = [{ id: 'pistol', ammo: GUN.pistol.mag }];
   P.slot = 0;
@@ -483,7 +502,8 @@ function startFloor(n, sameVariant = false) {
   gunsThisFloor = 0;
   equip(P.slot, true);
   // autosave: a run can always be continued from the start of this floor
-  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot });
+  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls });
+  P.windUsed = false;
   tutorialPending = n === 1 && !tutorialDone();
   const room0 = G.floor.rooms[0];
   prepareArea(0);
@@ -617,7 +637,7 @@ function areaCleared() {
   }
 }
 
-function autoReload() { for (const s of P.inv) s.ammo = GUN[s.id].mag; P.reloadT = 0; P.burstLeft = 0; }
+function autoReload() { for (const s of P.inv) s.ammo = magOf(GUN[s.id]); P.reloadT = 0; P.burstLeft = 0; }
 
 function floorComplete() {
   mode = 'floorclear';
@@ -630,11 +650,13 @@ function floorComplete() {
     `KILLS       ${stats.kills}`, `HEADSHOTS   ${stats.heads}`, `ORBS POPPED ${stats.orbs}`,
     `ACCURACY    ${acc}%`, `TIME        ${fmtTime(stats.t)}`, `SCORE       ${score}`,
   ].join('\n');
-  const heal = Math.min(100 - P.hp, 30);
+  const heal = Math.max(0, Math.min(M.maxHp - P.hp, 30 + M.coffee));
   P.hp += heal;
   let unlock = heal > 0 ? `+${heal} HP COFFEE BREAK` : '';
   unlock += (unlock ? '\n' : '') + 'LOADOUT: ' + P.inv.map((s) => GUN[s.id].short).join(' / ');
   $('fcUnlock').textContent = unlock;
+  perkOffer = rollPerks(perkLv, 3, Math.random, n % 5 === 0 || n % 5 === 3);
+  $('nextBtn').textContent = perkOffer.length ? 'CHOOSE A PERK' : 'GOING UP';
   showScreen(ui.floorClear);
 }
 
@@ -689,7 +711,7 @@ function toTitle() {
 }
 
 function showScreen(el) { el.classList.remove('hidden'); }
-function hideScreens() { for (const k of ['title', 'pause', 'floorClear', 'gameOver', 'win', 'settings', 'confirm']) ui[k].classList.add('hidden'); }
+function hideScreens() { for (const k of ['title', 'pause', 'floorClear', 'gameOver', 'win', 'settings', 'confirm', 'perks']) ui[k].classList.add('hidden'); }
 
 let bannerTimer = null;
 function banner(text, sub, dur) {
@@ -712,7 +734,8 @@ function equip(i, silent) {
   const id = cur().id;
   viewModel(id);
   for (const k in models) models[k].g.visible = k === id;
-  P.swapT = silent ? 0 : 1; P.reloadT = 0; P.burstLeft = 0;
+  P.swapT = silent || M.fastSwap ? 0 : 1; P.reloadT = 0; P.burstLeft = 0;
+  if (M.autoload) for (const s2 of P.inv) if (s2 !== curSlot()) s2.ammo = magOf(GUN[s2.id]);
   if (!silent) sfx.reload();
   updateHud(true);
 }
@@ -726,8 +749,8 @@ function swapWeapon() {
 
 function startReload() {
   const w = cur();
-  if (w.melee || P.reloadT > 0 || curSlot().ammo >= w.mag) return;
-  P.reloadT = w.reload; P.reloadDur = w.reload; P.burstLeft = 0;
+  if (w.melee || P.reloadT > 0 || curSlot().ammo >= magOf(w)) return;
+  P.reloadT = P.reloadDur = w.reload * M.reload; P.burstLeft = 0;
   sfx.reload();
 }
 
@@ -736,7 +759,7 @@ function tryFire(x, y) {
   const w = cur();
   if (P.reloadT > 0 || P.cd > 0 || P.swapT > 0.3 || P.burstLeft > 0) return;
   if (!w.melee && curSlot().ammo <= 0) { sfx.empty(); startReload(); P.cd = 0.25; return; }
-  P.cd = w.cd;
+  P.cd = w.cd * M.cd;
   if (w.burst) { P.burstLeft = w.burst; P.burstT = 0; P.burstX = x; P.burstY = y; return; }
   fireOnce(x, y);
 }
@@ -775,7 +798,7 @@ function fireOnce(x, y) {
 const V3 = () => new THREE.Vector3();
 
 function resolveShot(x, y, w, rect, primary) {
-  const range = w.melee || w.range;
+  const range = w.melee ? w.melee + M.meleeReach : w.range;
   // 1. incoming projectiles: generous screen-space hit
   let bp = null, bd = PC ? 34 : 46;
   for (const p of G.projectiles) {
@@ -788,7 +811,7 @@ function resolveShot(x, y, w, rect, primary) {
   }
   if (bp) {
     effects.pop(bp.mesh.position.clone()); sfx.orbPop();
-    bp.kill(); stats.orbs++; score += 25 * Math.max(1, combo);
+    bp.kill(); stats.orbs++; score += 25 * Math.max(1, combo); healP(M.orbHeal);
     popText(bp.mesh.position, '+25', '#80e0ff');
     return 'orb';
   }
@@ -871,14 +894,22 @@ function resolveShot(x, y, w, rect, primary) {
 
 function applyHit(e, part, point, w, sound, dir) {
   const head = part === 'head' && e.type !== 'bot';
-  e.damage(head ? (w.dmg * w.headMult) / 3 : w.dmg, part, point);
+  let amt = head ? (w.dmg * w.headMult * M.head) / 3 : w.dmg;
+  amt *= M.dmg * (w.melee ? M.meleeDmg : 1);
+  if (e.hp >= e.maxHp) amt *= M.firstStrike;
+  else if (e.hp < e.maxHp * 0.3) amt *= M.exec;
+  if (e.def.boss) amt *= M.boss;
+  e.damage(amt, part, point);
+  if (M.burn && e.alive && !w.burn) { e.burnT = 3; e.burnDps = Math.max(e.burnDps || 0, M.burn); }
+  if (M.freezeChance && e.alive && Math.random() < M.freezeChance) { e.slowT = 2; effects.ice(point, 5); }
+  if (M.explodeChance && !w.explode && Math.random() < M.explodeChance) perkBlast(point);
   if (w.burn) { e.burnT = 3; e.burnDps = w.burn; }
   if (w.freeze) { e.slowT = w.freeze; effects.ice(point, 6); }
   if (w.knock && e.alive && !e.def.boss && area) {
     e.pos.addScaledVector(dir.clone().setY(0).normalize(), w.knock); // negative knock = pull toward you
     e.pos.z = clamp(e.pos.z, area.room.zf + 0.6, G.camPos.z - 1.4); e.pos.x = clamp(e.pos.x, -3, 3);
   }
-  if (w.leech) { P.hp = Math.min(100, P.hp + w.leech); effects.emit(point, 3, 'ice', 1); }
+  if (w.leech) { healP(w.leech); effects.emit(point, 3, 'ice', 1); }
   if (w.chain) chainFrom(e, point, w);
   if (sound) sfx[head ? 'headshot' : e.type === 'bot' ? 'metalHit' : 'hit']();
   return head ? 'head' : 'body';
@@ -892,7 +923,17 @@ function chainFrom(e, point, w) {
     .sort((a, b) => a.c.distanceTo(from) - b.c.distanceTo(from))
     .slice(0, w.chain);
   let prev = from;
-  for (const { o, c } of others) { effects.lightning(prev, c, w.tracer || 0x80e0ff); o.damage(w.dmg * 0.8, 'body', c); prev = c; }
+  for (const { o, c } of others) { effects.lightning(prev, c, w.tracer || 0x80e0ff); o.damage(w.dmg * 0.8 * M.dmg, 'body', c); prev = c; }
+}
+
+// Explosive Rounds perk: a small blast at the hit point
+function perkBlast(at) {
+  effects.explosion(at, 1.1); sfx.explode();
+  for (const e of G.enemies) {
+    if (!e.alive || e.state === 'dormant') continue;
+    const c = e.centerWorld(V3());
+    if (c.distanceTo(at) < 1.4) e.damage(1.5 * M.dmg, 'body', c, true);
+  }
 }
 
 function explode(at, w) {
@@ -912,7 +953,7 @@ function explode(at, w) {
     if (!e.alive || e.state === 'dormant') continue;
     const c = e.centerWorld(V3());
     const d = c.distanceTo(at);
-    if (d < w.explode + 0.3) { e.damage(w.dmg * (1 - Math.min(1, d / w.explode) * 0.6), 'body', c); hit = 'body'; }
+    if (d < w.explode + 0.3) { e.damage(w.dmg * M.dmg * (e.def.boss ? M.boss : 1) * (1 - Math.min(1, d / w.explode) * 0.6), 'body', c); hit = 'body'; }
   }
   for (const p of G.projectiles) if (p.alive && p.mesh.position.distanceTo(at) < w.explode) { effects.pop(p.mesh.position.clone()); p.kill(); stats.orbs++; }
   return hit;
@@ -1004,7 +1045,8 @@ onBtn('weaponBtn', swapWeapon);
 onBtn('pauseBtn', togglePause);
 onBtn('resumeBtn', togglePause);
 onBtn('quitBtn', () => { paused = false; toTitle(); }); // the run stays saved at the start of this floor
-onBtn('nextBtn', () => { sfx.tap(); nextFloor(); });
+onBtn('nextBtn', () => { sfx.tap(); if (perkOffer && perkOffer.length) openPerks(); else nextFloor(); });
+onBtn('perkReroll', () => { if (rerolls <= 0) return; rerolls--; sfx.reload(); perkOffer = rollPerks(perkLv, 3); openPerks(); });
 onBtn('retryBtn', () => restartFloor());
 onBtn('menuBtn', toTitle);
 onBtn('gcLeave', () => { sfx.tap(); openChoice(); });
@@ -1016,7 +1058,45 @@ function togglePause() {
   if (mode === 'title' || mode === 'floorclear' || mode === 'dead') return;
   paused = !paused;
   ui.pause.classList.toggle('hidden', !paused);
+  if (paused) $('pausePerks').innerHTML = perkSummary();
   setMusic(paused ? 'off' : mode === 'combat' ? 'combat' : 'calm');
+}
+
+// ------------------------------------------------------------------ perks
+function perkSummary() {
+  const ids = Object.keys(perkLv).filter((k) => perkLv[k] > 0);
+  if (!ids.length) return '';
+  return 'PERKS: ' + ids.map((k) => `<span style="color:${PERK_RARITY[PERK[k].rarity].color}">${PERK[k].name}${perkLv[k] > 1 ? ' x' + perkLv[k] : ''}</span>`).join(' · ');
+}
+function openPerks() {
+  ui.floorClear.classList.add('hidden');
+  const box = $('perkCards'); box.innerHTML = '';
+  for (const id of perkOffer) {
+    const p = PERK[id], lv = (perkLv[id] || 0) + 1, r = PERK_RARITY[p.rarity];
+    const b = document.createElement('button');
+    b.className = 'perkCard'; b.style.borderColor = r.color;
+    b.innerHTML = `<div class="pk-top"><span class="pk-cat">${p.cat}</span><span class="pk-rar" style="color:${r.color}">${r.name}</span></div>`
+      + `<div class="pk-name" style="color:${r.color}">${p.name}${p.max > 1 ? ` <small>${lv}/${p.max}</small>` : ''}</div><div class="pk-desc">${p.desc(lv)}</div>`;
+    b.addEventListener('click', (e) => { e.stopPropagation(); takePerk(id); });
+    box.append(b);
+  }
+  $('perkReroll').textContent = `REROLL (${rerolls})`;
+  $('perkReroll').classList.toggle('hidden', rerolls <= 0);
+  $('perkOwned').innerHTML = perkSummary();
+  showScreen(ui.perks);
+}
+function takePerk(id) {
+  const before = M.maxHp;
+  perkLv[id] = (perkLv[id] || 0) + 1;
+  M = mods(perkLv);
+  if (M.maxHp > before) P.hp += M.maxHp - before; // new max health arrives filled
+  P.hp = Math.min(P.hp, M.maxHp);
+  for (const s2 of P.inv) s2.ammo = magOf(GUN[s2.id]);
+  sfx.unlock();
+  toast(PERK[id].name, PERK_RARITY[PERK[id].rarity].color);
+  perkOffer = null;
+  ui.perks.classList.add('hidden');
+  nextFloor();
 }
 
 // ------------------------------------------------------------------ settings, confirm, restart, tutorial
@@ -1110,7 +1190,7 @@ const tutCtx = {
       area.tutorial = false;
       for (const e of G.enemies) if (e.alive && e.atkT > 100) e.atkT = 1; // passive dummies wake up
     }
-    P.hp = 100;
+    P.hp = M.maxHp;
     toast('TUTORIAL COMPLETE', '#f0c860');
   },
 };
@@ -1128,7 +1208,7 @@ function updateHud(force) {
   setText(ui.floor, 'f', `FLOOR ${String(G.floorNum).padStart(2, '0')}`);
   if (G.floor) setText(ui.area, 'a', `AREA ${Math.min(G.roomIdx + 1, G.floor.rooms.length)}/${G.floor.rooms.length}`);
   setText(ui.score, 's', String(score).padStart(6, '0'));
-  setText(ui.combo, 'c', combo > 1 && now - lastKill < 2.5 ? `x${combo} COMBO` : '');
+  setText(ui.combo, 'c', combo > 1 && now - lastKill < M.comboWindow ? `x${combo} COMBO` : '');
   setText(ui.hp, 'h', String(Math.ceil(P.hp)));
   setText(ui.ammo, 'am', cur().melee ? '∞' : String(curSlot().ammo));
   setText(ui.reload, 'r', P.reloadT > 0 ? 'RELOADING' : 'AMMO');
@@ -1268,7 +1348,7 @@ function update(dt) {
 
   // weapon timers
   P.cd = Math.max(0, P.cd - dt);
-  if (P.reloadT > 0) { P.reloadT -= dt; if (P.reloadT <= 0) { P.reloadT = 0; if (!cur().melee) curSlot().ammo = cur().mag; sfx.tap(); } }
+  if (P.reloadT > 0) { P.reloadT -= dt; if (P.reloadT <= 0) { P.reloadT = 0; if (!cur().melee) curSlot().ammo = magOf(cur()); sfx.tap(); } }
   if (P.burstLeft > 0) {
     P.burstT -= dt;
     if (P.burstT <= 0) {
@@ -1302,7 +1382,7 @@ toTitle();
 requestAnimationFrame(frame);
 
 // expose for debugging / automated checks
-window.__game = { spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
+window.__game = { setPerks(lv) { perkLv = lv; M = mods(lv); }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);

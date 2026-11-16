@@ -139,3 +139,15 @@ body.pc .m-only { display: none; }
 /* ---- left-handed HUD (mobile) */
 body.lefty #statusbar { flex-direction: row-reverse; }
 body.lefty #tutSkip { right: auto; left: 12px; }
+
+/* ---- perks */
+#perks { background: rgba(0,0,0,.8); gap: 8px; }
+#perkCards { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 380px; }
+.perkCard { font-family: inherit; text-align: left; color: #e8e0c8; background: #1c1a17; border: 3px solid #8a8270; padding: 8px 12px; cursor: pointer; box-shadow: 4px 4px 0 #000; }
+.perkCard:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
+.pk-top { display: flex; justify-content: space-between; font-size: 15px; letter-spacing: 1px; }
+.pk-cat { color: #a8a090; }
+.pk-name { font-size: 30px; line-height: 1; margin-top: 2px; }
+.pk-name small { font-size: 18px; color: #a8a090; }
+.pk-desc { font-size: 21px; color: #d8d0c0; line-height: 1.05; }
+.perkOwned { font-size: 17px; color: #a8a090; max-width: 420px; text-align: center; line-height: 1.15; text-shadow: 1px 1px 0 #000; }

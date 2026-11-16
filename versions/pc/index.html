@@ -68,6 +68,7 @@
     <button class="go small" id="pSettingsBtn">SETTINGS</button>
     <button class="go small" id="restartBtn">RESTART FLOOR</button>
     <button class="go small" id="quitBtn">QUIT TO TITLE</button>
+    <div class="perkOwned" id="pausePerks"></div>
     <div class="best">YOUR RUN IS SAVED AT THE START OF EVERY FLOOR</div>
   </div>
 
@@ -96,6 +97,14 @@
     <div class="stats" id="fcStats"></div>
     <div class="unlock" id="fcUnlock"></div>
     <button class="go" id="nextBtn">GOING UP</button>
+  </div>
+
+  <div id="perks" class="screen hidden">
+    <div class="h mid">CHOOSE A PERK</div>
+    <div class="tag">IT LASTS FOR THE REST OF THE RUN</div>
+    <div id="perkCards"></div>
+    <button class="go small" id="perkReroll">REROLL (1)</button>
+    <div class="perkOwned" id="perkOwned"></div>
   </div>
 
   <div id="gameOver" class="screen hidden">

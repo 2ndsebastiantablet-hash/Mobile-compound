@@ -3,11 +3,11 @@
 **Session** below means one working session with Claude, usually one or two prompts. Calendar estimates assume about 2–3 sessions a week, plus your own playtesting between sessions.
 
 **Order:** core systems → mechanics → economy → balance → audio and visuals → modes → free roam → monetization and packaging → launch.
-Balance comes *after* the new mechanics because cover, perks and upgrades all change difficulty. Free roam comes after the core settles, so shared changes aren't done twice.
+Balance comes *after* the new mechanics because perks and upgrades change difficulty. Free roam comes after the core settles, so shared changes aren't done twice.
 
 ---
 
-## Where we are now: v0.7, Phase 1 done
+## Where we are now: v0.8, Phases 1–2 done
 - 50 floors × 3 versions, 85 enemies, 60 bosses, 40 weapons, ambushes
 - Mobile and PC on-rails versions, organized project, standalone builds
 
@@ -19,10 +19,9 @@ Balance comes *after* the new mechanics because cover, perks and upgrades all ch
 - [x] **Tutorial on floor 1:** shooting, headshots, shooting projectiles, swapping, pickups
 - [x] **Better pause menu:** settings, restart floor, quit to title
 
-## Phase 2: Combat depth (1–2 sessions · week 1–2)
-- [ ] **Cover / duck button:** hold to duck (safe, can't shoot), release to pop up
-- [ ] **Perk choice between floors:** pick 1 of 3 random run perks in the elevator
-- [ ] Rebalance enemy fire so ducking matters
+## Phase 2: Run perks (1 session) ✅ DONE (v0.8)
+- [x] **Perk choice between floors:** pick 1 of 3 random perks after every floor (31 perks, stackable, 1 free reroll per run, rare+ guaranteed after boss floors)
+- ~~Cover / duck button~~ (dropped: not wanted)
 
 ## Phase 3: Progression & economy (1–2 sessions · week 2–3)
 - [ ] **Cash drops** from enemies and bosses
@@ -89,11 +88,11 @@ Balance comes *after* the new mechanics because cover, perks and upgrades all ch
 ## Summary
 | | Sessions | Rough calendar |
 |---|---|---|
-| Alpha (Phases 1–4) | 5–9 | ~5 weeks |
+| Alpha (Phases 1–4) | 4–8 | ~4–5 weeks |
 | Beta (Phases 5–7) | 6–7 | ~3 weeks |
 | Free roam (Phase 8) | 3–5 | ~3 weeks |
 | Packaging + launch (Phases 9–10) | 2–3 + your time | ~2+ weeks |
-| **Total** | **~16–24 sessions** | **~3 months** |
+| **Total** | **~15–23 sessions** | **~3 months** |
 
 **What can slow things down:**
 - How much playtesting time you have (balance can't be finished without it)
