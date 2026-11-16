@@ -24,7 +24,10 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPrefer
 renderer.setPixelRatio(1);
 renderer.autoClear = false;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(80, 0.5, 0.05, 80);
+// PC build: set by the PC page (or ?pc in the URL). Landscape, mouse + keyboard.
+const PC = !!window.OVERTIME_PC || new URLSearchParams(location.search).has('pc');
+if (PC) document.body.classList.add('pc');
+const camera = new THREE.PerspectiveCamera(PC ? 64 : 80, 0.5, 0.05, 80);
 scene.add(camera);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x333333, 1.5);
 scene.add(hemi);
@@ -73,7 +76,7 @@ const P = { hp: 100, inv: [{ id: 'pistol', ammo: 12 }], slot: 0, invAtFloor: nul
 let score = 0, floorStartScore = 0, combo = 0, lastKill = -10, now = 0;
 let stats = newStats();
 let mode = 'title', paused = false;
-const BASE_PITCH = -0.1;
+const BASE_PITCH = PC ? -0.06 : -0.1;
 let yaw = 0, pitch = BASE_PITCH, roll = 0, shake = 0;
 let area = null;
 let hold = null;
@@ -698,13 +701,13 @@ const V3 = () => new THREE.Vector3();
 
 function resolveShot(x, y, w, rect, primary) {
   // 1. incoming projectiles: generous screen-space hit
-  let bp = null, bd = 46;
+  let bp = null, bd = PC ? 34 : 46;
   for (const p of G.projectiles) {
     if (!p.alive) continue;
     const s = toScreen(p.mesh.position, rect);
     if (s.behind) continue;
     const dist = Math.hypot(s.x - x, s.y - y);
-    const r = 30 + 30 / Math.max(0.6, p.mesh.position.distanceTo(G.camPos));
+    const r = (PC ? 20 : 30) + (PC ? 20 : 30) / Math.max(0.6, p.mesh.position.distanceTo(G.camPos));
     if (dist < r && dist < bd) { bd = dist; bp = p; }
   }
   if (bp) {
@@ -738,7 +741,7 @@ function resolveShot(x, y, w, rect, primary) {
   }
   // 3. aim assist (screen space, small radius, not through walls, not on hidden enemies)
   if (!hits.length) {
-    let ae = null, ad = 30;
+    let ae = null, ad = PC ? 12 : 30; // mice are precise, fingers are not
     for (const e of G.enemies) {
       if (!e.targetable || e.crouch > 0.5) continue;
       const c = e.centerWorld(V3());
@@ -857,15 +860,30 @@ function popText(pos, text, color) {
 
 // ------------------------------------------------------------------ input
 function localXY(ev) { const r = canvasRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
+let mouse = null;
+const crosshair = $('crosshair');
 gameEl.addEventListener('pointerdown', (ev) => {
   if (ev.target.closest('button') || ev.target.closest('.screen')) return;
   initAudio();
+  if (ev.pointerType === 'mouse' && ev.button === 2) { startReload(); ev.preventDefault(); return; }
+  if (ev.pointerType === 'mouse' && ev.button !== 0) return;
   const { x, y } = localXY(ev);
   hold = { id: ev.pointerId, x, y };
   tryFire(x, y);
   ev.preventDefault();
 });
-gameEl.addEventListener('pointermove', (ev) => { if (hold && hold.id === ev.pointerId) { const p = localXY(ev); hold.x = p.x; hold.y = p.y; } });
+gameEl.addEventListener('pointermove', (ev) => {
+  const p = localXY(ev);
+  if (ev.pointerType === 'mouse') { mouse = p; crosshair.style.transform = `translate(${p.x}px, ${p.y}px)`; }
+  if (hold && hold.id === ev.pointerId) { hold.x = p.x; hold.y = p.y; }
+});
+gameEl.addEventListener('pointerleave', (ev) => { if (ev.pointerType === 'mouse') { mouse = null; hold = null; } });
+let wheelT = 0;
+gameEl.addEventListener('wheel', (ev) => {
+  if (performance.now() - wheelT < 180 || mode === 'title' || choiceOpen) return;
+  wheelT = performance.now();
+  if (P.inv.length > 1) { equip((P.slot + (ev.deltaY > 0 ? 1 : P.inv.length - 1)) % P.inv.length); toast(cur().name, RARITY[cur().rarity].color); }
+}, { passive: true });
 const release = (ev) => { if (hold && hold.id === ev.pointerId) hold = null; };
 gameEl.addEventListener('pointerup', release);
 gameEl.addEventListener('pointercancel', release);
@@ -873,7 +891,12 @@ gameEl.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') startReload();
   if (e.key === 'q' || e.key === 'Q' || e.key === 'Tab') { e.preventDefault(); swapWeapon(); }
-  if (e.key === 'Escape' || e.key === 'p') togglePause();
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause();
+  if (e.key === 'e' || e.key === 'E') swapWeapon();
+  if (['1', '2', '3'].includes(e.key) && !choiceOpen && mode !== 'title') { const i = +e.key - 1; if (i < P.inv.length && i !== P.slot) { equip(i); toast(cur().name, RARITY[cur().rarity].color); } }
+  if (e.key === 'f' || e.key === 'F') { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch { /* ignore */ } }
+  if (e.key === 'm' || e.key === 'M') { setMuted(!isMuted()); $('muteBtn').textContent = `SOUND: ${isMuted() ? 'OFF' : 'ON'}`; toast(isMuted() ? 'SOUND OFF' : 'SOUND ON'); }
+  if (e.key === 'Enter' && mode === 'title') $('startBtn').click();
 });
 
 const onBtn = (id, fn) => $(id).addEventListener('click', (e) => { e.stopPropagation(); initAudio(); fn(); });
@@ -920,13 +943,13 @@ function updateHud(force) {
 // ------------------------------------------------------------------ resize
 function resize() {
   const r = gameEl.getBoundingClientRect();
-  const H = Math.min(340, Math.round(r.height));
+  const H = Math.min(PC ? 400 : 340, Math.round(r.height));
   const W = Math.max(1, Math.round(r.width * (H / r.height)));
   renderer.setSize(W, H, false);
   camera.aspect = W / H; camera.updateProjectionMatrix();
   gunCam.aspect = W / H; gunCam.updateProjectionMatrix();
   const d = 0.55, hh = d * Math.tan(THREE.MathUtils.degToRad(gunCam.fov / 2)), hw = hh * gunCam.aspect;
-  gunBase.set(hw * 0.55, -hh * 0.74, -d);
+  gunBase.set(PC ? hw * 0.3 : hw * 0.55, -hh * (PC ? 0.7 : 0.74), -d);
 }
 window.addEventListener('resize', resize);
 resize();
@@ -941,7 +964,8 @@ function applyCamera() {
 
 function updateGun(dt) {
   P.recoil = Math.max(0, P.recoil - dt * 7);
-  P.aimTY *= Math.pow(0.02, dt); P.aimTP *= Math.pow(0.02, dt);
+  if (PC && mouse) aimGunAt(mouse.x, mouse.y); // gun tracks the cursor
+  else { P.aimTY *= Math.pow(0.02, dt); P.aimTP *= Math.pow(0.02, dt); }
   P.aimYaw += (P.aimTY - P.aimYaw) * Math.min(1, dt * 25);
   P.aimPitch += (P.aimTP - P.aimPitch) * Math.min(1, dt * 25);
   P.swapT = Math.max(0, P.swapT - dt * 3);
@@ -986,6 +1010,16 @@ function update(dt) {
     }
   }
   effects.update(dt);
+  if (PC && mouse && G.floor) {
+    let hot = false;
+    if (G.combatActive && !paused) {
+      const rect = canvasRect();
+      raycaster.setFromCamera(new THREE.Vector2((mouse.x / rect.width) * 2 - 1, -(mouse.y / rect.height) * 2 + 1), camera);
+      const t = []; for (const e of G.enemies) if (e.targetable) t.push(...e.meshes);
+      hot = raycaster.intersectObjects(t, false).length > 0;
+    }
+    crosshair.classList.toggle('hot', hot);
+  }
   introT -= dt;
   if (pendingIntro.length && introT <= 0 && mode === 'combat' && !choiceOpen) { toast(`NEW HOSTILE: ${pendingIntro.shift()}`, '#ff7050'); introT = 1.8; }
 

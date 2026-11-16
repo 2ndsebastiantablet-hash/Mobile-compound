@@ -4,6 +4,26 @@ A portrait, touch-first on-rails shooter set in a 50-floor office tower. You sta
 
 The look is a low-res, chunky-pixel 3D style in the spirit of mid-90s shooters. Everything is drawn in code at runtime: blocky box models, tiny nearest-filtered textures, flat fluorescent lighting and fog. The game ships no image or audio files. Every texture, model, sound effect and music loop is generated procedurally.
 
+## Downloads
+- **`dist/overtime-pc.html`** is the **PC version**: landscape, mouse and keyboard. Double-click it to play in Chrome, Edge or Firefox.
+- **`dist/overtime.html`** is the **mobile version**: portrait, touch. Open it in your phone's browser.
+
+Both are single self-contained files that work offline. Rebuild them with `node tools/build.mjs`.
+
+### PC controls
+| Input | Action |
+|---|---|
+| Mouse | Aim (crosshair turns red over an enemy) |
+| Left click / hold | Shoot / automatic fire |
+| Right click or `R` | Reload |
+| Mouse wheel, `1` `2` `3`, `Q`/`E`/`Tab` | Switch gun |
+| `Esc` / `P` | Pause |
+| `F` | Fullscreen |
+| `M` | Mute |
+| `Enter` | Start from the title screen |
+
+The PC version shows the whole room in widescreen, the gun follows your cursor, and aim assist is reduced because a mouse is more precise than a finger. During development, add `?pc` to the URL to get the PC mode.
+
 ## Play
 
 It's a static web page with no build step. Serve the folder over HTTP (ES modules don't load from `file://`):
