@@ -1,8 +1,8 @@
 // The armory: 20 guns with distinct behaviours, plus a procedural model builder
 // so each one looks different in your hands and as a floor pickup.
-import * as THREE from '../vendor/three.module.min.js';
-import * as TX from './textures.js';
-import { box } from './level.js';
+import * as THREE from '../../vendor/three.module.min.js';
+import * as TX from '../../engine/textures.js';
+import { box } from '../../engine/geometry.js';
 
 export const RARITY = {
   common: { name: 'COMMON', color: '#d8d0c0', hex: 0xd8d0c0, weight: 50, minFloor: 1 },

@@ -1,14 +1,42 @@
 # OVERTIME
 
-A portrait, touch-first on-rails shooter set in a 50-floor office tower. You stand in place with a fixed camera. Tap enemies to shoot them. When an area is clear you walk to the next one automatically. Clear every area on a floor, ride the elevator up, and keep climbing until you reach the boardroom.
+A retro on-rails shooter set in a 50-floor office tower, with a mobile (portrait, touch) version and a PC (landscape, mouse & keyboard) version. A free-roam PC version is planned. You stand in place with a fixed camera and shoot enemies. When an area is clear you walk to the next one automatically. Clear every area on a floor, ride the elevator up, and keep climbing until you reach the boardroom.
 
 The look is a low-res, chunky-pixel 3D style in the spirit of mid-90s shooters. Everything is drawn in code at runtime: blocky box models, tiny nearest-filtered textures, flat fluorescent lighting and fog. The game ships no image or audio files. Every texture, model, sound effect and music loop is generated procedurally.
 
-## Downloads
-- **`dist/overtime-pc.html`** is the **PC version**: landscape, mouse and keyboard. Double-click it to play in Chrome, Edge or Firefox.
-- **`dist/overtime.html`** is the **mobile version**: portrait, touch. Open it in your phone's browser.
+## Project layout
+```
+index.html                 launcher page: pick a version to test
+play.bat / play.sh         double-click: start the local test server + open the launcher
+package.json               npm scripts (start / build)
+tools/
+  serve.mjs                zero-dependency local test server (node tools/serve.mjs)
+  build.mjs                builds a standalone single-file copy of each version into dist/
+shared/                    everything the versions have in common
+  vendor/                  three.js r170 (MIT)
+  engine/                  util.js, geometry.js, textures.js (procedural pixel art), effects.js (gibs, particles)
+  audio/                   sfx.js (synth sound effects), music.js (soundtrack)
+  content/
+    floors/                zones.js (10 zones x 3 themes, moods, floor plans), builder.js (rooms, furniture, elevators)
+    enemies/               roster.js (85 enemy definitions), models.js (procedural bodies), ai.js (behaviour + projectiles)
+    bosses/                bosses.js (60 bosses: attack scripts + vulnerability rules)
+    weapons/               weapons.js (40 weapons + procedural gun/melee models)
+  game/                    game.js (game loop, input, shooting, floor/area flow, HUD, viewmodel)
+  ui/                      base.css (HUD, menus, overlays shared by all versions)
+versions/
+  mobile/                  index.html + mobile.css (portrait, touch)
+  pc/                      index.html + pc.css (landscape, mouse & keyboard)
+  pc-freeroam/             reserved for the free-roam PC version
+dist/
+  mobile/overtime-mobile.html   standalone builds: open by double-click, work offline
+  pc/overtime-pc.html
+```
+Every version runs the same `shared/` code. Each version folder owns its own page and styles, so a change made for one version does not overwrite another. All models, textures, sounds and music are generated in code at runtime, so there are no separate asset files.
 
-Both are single self-contained files that work offline. Rebuild them with `node tools/build.mjs`.
+## Testing the game
+- **Quickest:** open `dist/pc/overtime-pc.html` on a computer, or `dist/mobile/overtime-mobile.html` on a phone. No install needed.
+- **From the source code** (shows your edits immediately): install [Node.js](https://nodejs.org), then double-click `play.bat` on Windows or run `./play.sh` on Mac/Linux. It opens `http://localhost:8080` with the launcher. To test on a phone, connect it to the same Wi-Fi and open the "Network" address the server prints.
+- **Rebuild the standalone files** after changing code: `node tools/build.mjs` (or `npm run build`).
 
 ### PC controls
 | Input | Action |
@@ -23,19 +51,6 @@ Both are single self-contained files that work offline. Rebuild them with `node 
 | `Enter` | Start from the title screen |
 
 The PC version shows the whole room in widescreen, the gun follows your cursor, and aim assist is reduced because a mouse is more precise than a finger. During development, add `?pc` to the URL to get the PC mode.
-
-## Play
-
-It's a static web page with no build step. Serve the folder over HTTP (ES modules don't load from `file://`):
-
-```sh
-python3 -m http.server 8000
-# then open http://localhost:8000 on your phone (same Wi-Fi: http://<your-computer-ip>:8000)
-```
-
-On a phone, use "Add to Home Screen" to get a full-screen, portrait app. It also works on desktop with the mouse. Keys: `R` reload, `Q` swap weapon, `Esc` pause.
-
-To host it, push the repo to GitHub and enable **Pages** (Settings → Pages → deploy from branch, root). Any static host works.
 
 ## How it plays
 
@@ -304,29 +319,3 @@ The tower has 10 zones. Each zone has **three alternate themes**, and when you r
 | 46–50 | Reactor Core | Black Site | Chairman's Sanctum |
 
 Room types are offices, cubicles, break rooms, conference rooms, mailrooms, server rooms, executive offices, labs (specimen tanks), factories (conveyors and robot arms), archives, roof gardens, lounges (bar, piano, pool table) and reactor rooms. There's a boss every 5 floors, ending with the Chairman on floor 50. The city skyline outside the windows sinks as you climb. Above floor 20 the whole upper-tower roster is in play, and the difficulty curve flattens.
-
-## Code layout
-
-```
-index.html / style.css     HUD, menus, status bar
-src/main.js                game loop, input, shooting, area/floor flow, viewmodel
-src/level.js               floor + room generator, furniture kits, elevators
-src/weapons.js             the 20 guns, rarity rolls, procedural gun models
-src/enemydefs.js           the enemy roster (data: floors, movement, attacks, traits)
-src/enemymodels.js         procedural bodies: humans, drones, mechs, spiders, quads, blobs, turrets...
-src/enemies.js             generic enemy AI + projectiles
-src/bosses.js              the 60 bosses: data + BossBrain (attack scripts, vulnerability rules)
-src/effects.js             gibs, particles, bullet holes
-src/textures.js            procedural pixel-art textures + 3x5 pixel font
-src/audio.js               WebAudio synth SFX and music
-vendor/three.module.min.js three.js r170 (MIT)
-```
-
-## Single-file build
-
-`dist/overtime.html` is the whole game in one self-contained file. It opens directly from disk, so no server is needed. To rebuild it:
-
-```sh
-npx esbuild src/main.js --bundle --format=iife --minify --outfile=bundle.js
-# then inline style.css and bundle.js into index.html (see commit history)
-```

@@ -2,97 +2,33 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="manifest" href="manifest.webmanifest">
-<title>Overtime</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overtime Launcher</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
-<link rel="stylesheet" href="style.css">
+<style>
+  :root { --bg: #14110d; --panel: #1f1b16; --text: #e8e0c8; --dim: #a8a090; --gold: #f0c860; --red: #d42c1c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font-family: 'VT323', 'Courier New', monospace;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; gap: 14px; }
+  h1 { font-size: 80px; line-height: .8; margin: 0; text-shadow: 4px 4px 0 #6a1010, 8px 8px 0 #000; }
+  h1 span { color: var(--red); text-shadow: 4px 4px 0 #3a0808, 8px 8px 0 #000; }
+  p { margin: 0; color: var(--dim); font-size: 22px; text-align: center; }
+  .grid { display: grid; gap: 12px; width: min(720px, 100%); grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-top: 10px; }
+  a.card, div.card { display: block; background: var(--panel); border: 3px solid #8a8270; padding: 14px; text-decoration: none; color: var(--text); }
+  a.card:hover { border-color: var(--gold); }
+  .card b { display: block; font-size: 32px; color: var(--gold); }
+  .card small { font-size: 20px; color: var(--dim); }
+  .soon { opacity: .5; }
+</style>
 </head>
 <body>
-<div id="game">
-  <canvas id="view"></canvas>
-  <div id="vignette"></div>
-  <div id="hurt"></div>
-  <div id="fade"></div>
-
-  <div id="hud" class="hidden">
-    <div id="topbar">
-      <div><div id="floorLbl">FLOOR 01</div><div id="areaLbl">AREA 1/4</div></div>
-      <div class="right"><div id="scoreLbl">0</div><div id="comboLbl"></div></div>
-      <button id="pauseBtn" aria-label="Pause">II</button>
-    </div>
-    <div id="bossbar" class="hidden"><div id="bossName">THE CHAIRMAN</div><div id="bossState"></div><div class="bar"><div id="bossFill"></div></div></div>
-    <div id="banner"></div>
-    <div id="subBanner"></div>
-    <div id="markers"></div>
-    <div id="crosshair"></div>
-    <div id="toast"></div>
-    <div id="statusbar">
-      <div class="cell"><div class="big" id="hpLbl">100</div><div class="lbl">HEALTH</div></div>
-      <div class="cell"><div class="big" id="ammoLbl">12</div><div class="lbl" id="reloadLbl">AMMO</div></div>
-      <button class="cell btn" id="weaponBtn"><div class="wname" id="weaponLbl">PISTOL</div><div class="lbl" id="slotLbl">SWAP 1/1</div></button>
-      <button class="cell btn" id="reloadBtn"><div class="wname">R</div><div class="lbl">RELOAD</div></button>
-    </div>
+  <h1>OVER<span>TIME</span></h1>
+  <p>Pick a version to test. These run the live source code from this folder.</p>
+  <div class="grid">
+    <a class="card" href="versions/mobile/"><b>MOBILE</b><small>Portrait, touch. Open on your phone via the Network address.</small></a>
+    <a class="card" href="versions/pc/"><b>PC</b><small>Landscape, mouse &amp; keyboard, on-rails.</small></a>
+    <div class="card soon"><b>PC FREE ROAM</b><small>Coming next: WASD + mouse-look exploration.</small></div>
   </div>
-
-  <div id="title" class="screen">
-    <div class="logo">OVER<span>TIME</span></div>
-    <div class="tag">50 FLOORS. NO WAY DOWN.</div>
-    <div class="howto">
-      <p class="m-only">TAP enemies to shoot. Heads take triple damage.</p>
-      <p class="m-only">TAP incoming fireballs to destroy them.</p>
-      <p class="m-only">Grab dropped guns. Carry up to 3 and tap SWAP to switch.</p>
-      <p class="pc-only">CLICK enemies to shoot. Hold for auto. Heads take triple damage.</p>
-      <p class="pc-only">Shoot incoming fireballs out of the air.</p>
-      <p class="pc-only">RIGHT CLICK / R reload &nbsp; WHEEL / 1-3 / Q switch gun</p>
-      <p class="pc-only">ESC pause &nbsp; F fullscreen &nbsp; M mute</p>
-      <p>Clear each area to advance. Reach the top floor.</p>
-    </div>
-    <button class="go" id="startBtn">CLOCK IN</button>
-    <div class="best" id="bestLbl"></div>
-  </div>
-
-  <div id="pause" class="screen hidden">
-    <div class="h">PAUSED</div>
-    <button class="go" id="resumeBtn">RESUME</button>
-    <button class="go small" id="muteBtn">SOUND: ON</button>
-    <button class="go small" id="quitBtn">QUIT</button>
-  </div>
-
-  <div id="gunChoice" class="screen hidden">
-    <div class="h mid">NEW WEAPON</div>
-    <div class="card" id="gcNew"></div>
-    <div class="gchint">Your hands are full. Drop one to take it:</div>
-    <div id="gcSlots"></div>
-    <button class="go small" id="gcLeave">LEAVE IT</button>
-  </div>
-
-  <div id="floorClear" class="screen hidden">
-    <div class="h" id="fcTitle">FLOOR 01 CLEARED</div>
-    <div class="stats" id="fcStats"></div>
-    <div class="unlock" id="fcUnlock"></div>
-    <button class="go" id="nextBtn">GOING UP</button>
-  </div>
-
-  <div id="gameOver" class="screen hidden">
-    <div class="h red">YOU'RE FIRED</div>
-    <div class="stats" id="goStats"></div>
-    <button class="go" id="retryBtn">RETRY FLOOR</button>
-    <button class="go small" id="menuBtn">MAIN MENU</button>
-  </div>
-
-  <div id="win" class="screen hidden">
-    <div class="h">HOSTILE TAKEOVER</div>
-    <div class="tag">YOU REACHED THE TOP.</div>
-    <div class="stats" id="winStats"></div>
-    <button class="go" id="winBtn">MAIN MENU</button>
-  </div>
-</div>
-<script type="module" src="src/main.js"></script>
+  <p style="margin-top:12px">Standalone single-file copies are in <code>dist/</code> (no server needed).</p>
 </body>
 </html>

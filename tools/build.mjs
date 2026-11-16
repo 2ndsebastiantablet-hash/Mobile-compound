@@ -1,26 +1,36 @@
-// Builds the two single-file, offline-playable versions of the game:
-//   dist/overtime.html     mobile (portrait, touch)
-//   dist/overtime-pc.html  PC (landscape, mouse + keyboard)
-// Usage: node tools/build.mjs   (needs network once to fetch esbuild via npx)
+// Builds a standalone, offline, single-file copy of every version into dist/:
+//   dist/mobile/overtime-mobile.html
+//   dist/pc/overtime-pc.html
+// A version is any folder in versions/ that has an index.html.
+// Usage: node tools/build.mjs            (needs internet once to fetch esbuild via npx)
+//        node tools/build.mjs pc         (build only one version)
 import { execSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const tmp = join(tmpdir(), `overtime-bundle-${process.pid}.js`);
-execSync(`npx -y esbuild@0.24.0 src/main.js --bundle --format=iife --minify --outfile=${tmp}`, { stdio: 'inherit' });
-const js = readFileSync(tmp, 'utf8').replaceAll('</script', '<\\/script');
-rmSync(tmp);
-const css = readFileSync('style.css', 'utf8');
-const base = readFileSync('index.html', 'utf8')
-  .replace('<link rel="stylesheet" href="style.css">', () => `<style>${css}</style>`)
-  .replace('<link rel="manifest" href="manifest.webmanifest">\n', '');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+process.chdir(ROOT);
+const only = process.argv[2];
+const versions = readdirSync('versions').filter((v) => existsSync(join('versions', v, 'index.html')) && (!only || v === only));
 
-const page = (pc) => base
-  .replace('<title>Overtime</title>', pc ? '<title>Overtime (PC)</title>' : '<title>Overtime</title>')
-  .replace('<script type="module" src="src/main.js"></script>', () => `${pc ? '<script>window.OVERTIME_PC = true;</script>\n' : ''}<script>${js}</script>`);
-
-mkdirSync('dist', { recursive: true });
-writeFileSync('dist/overtime.html', page(false));
-writeFileSync('dist/overtime-pc.html', page(true));
-console.log('built dist/overtime.html and dist/overtime-pc.html');
+for (const v of versions) {
+  const dir = join('versions', v);
+  let html = readFileSync(join(dir, 'index.html'), 'utf8');
+  // inline every local stylesheet
+  html = html.replace(/<link rel="stylesheet" href="(?!https?:)([^"]+)">/g, (_, href) => `<style>${readFileSync(join(dir, href), 'utf8')}</style>`);
+  html = html.replace(/<link rel="manifest"[^>]*>\n?/, '');
+  // bundle the module entry point into one inline script
+  html = html.replace(/<script type="module" src="([^"]+)"><\/script>/, (_, src) => {
+    const tmp = join(tmpdir(), `overtime-${v}-${process.pid}.js`);
+    execSync(`npx -y esbuild@0.24.0 "${join(dir, src)}" --bundle --format=iife --minify --log-level=warning --outfile="${tmp}"`, { stdio: 'inherit' });
+    const js = readFileSync(tmp, 'utf8').replaceAll('</script', '<\\/script');
+    rmSync(tmp);
+    return `<script>${js}</script>`;
+  });
+  mkdirSync(join('dist', v), { recursive: true });
+  const out = join('dist', v, `overtime-${v}.html`);
+  writeFileSync(out, html);
+  console.log(`built ${out} (${Math.round(html.length / 1024)} KB)`);
+}

@@ -1,13 +1,14 @@
 import * as THREE from '../vendor/three.module.min.js';
-import { buildFloor, floorPlan, MOODS, box, EYE, RD, TOP_FLOOR } from './level.js';
-import { Enemy, Projectile } from './enemies.js';
-import { DEFS, rosterFor, isFlyer, isMelee } from './enemydefs.js';
-import { bossFor, bossKindFor } from './bosses.js';
-import { Effects } from './effects.js';
-import * as TX from './textures.js';
-import { initAudio, sfx, setMusic, setMuted, isMuted } from './audio.js';
-import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine } from './weapons.js';
-import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet } from './util.js';
+import { buildFloor, floorPlan, MOODS, box, EYE, RD, TOP_FLOOR } from '../content/floors/builder.js';
+import { Enemy, Projectile } from '../content/enemies/ai.js';
+import { DEFS, rosterFor, isFlyer, isMelee } from '../content/enemies/roster.js';
+import { bossFor, bossKindFor } from '../content/bosses/bosses.js';
+import { Effects } from '../engine/effects.js';
+import * as TX from '../engine/textures.js';
+import { initAudio, sfx, setMuted, isMuted } from '../audio/sfx.js';
+import { setMusic } from '../audio/music.js';
+import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine } from '../content/weapons/weapons.js';
+import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet } from '../engine/util.js';
 
 // ------------------------------------------------------------------ DOM
 const $ = (id) => document.getElementById(id);

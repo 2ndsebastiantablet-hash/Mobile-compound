@@ -1,9 +1,9 @@
-// Generic, data-driven enemy: body from enemymodels.js, behaviour from enemydefs.js.
-import * as THREE from '../vendor/three.module.min.js';
-import { DEFS, isFlyer, rosterFor } from './enemydefs.js';
-import { BUILDERS } from './enemymodels.js';
-import { BossBrain } from './bosses.js';
-import { rand, clamp, pick } from './util.js';
+// Generic, data-driven enemy: body from models.js, behaviour from roster.js.
+import * as THREE from '../../vendor/three.module.min.js';
+import { DEFS, isFlyer, rosterFor } from './roster.js';
+import { BUILDERS } from './models.js';
+import { BossBrain } from '../bosses/bosses.js';
+import { rand, clamp, pick } from '../../engine/util.js';
 
 const FLASH = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const CLOAK = new THREE.MeshBasicMaterial({ color: 0x8090a0, transparent: true, opacity: 0.12, depthWrite: false });

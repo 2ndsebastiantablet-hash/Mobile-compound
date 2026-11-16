@@ -1,9 +1,9 @@
 // Procedural enemy bodies. Each builder attaches meshes to the enemy via e.part(),
 // sets e.head (weak point), e.glow (muzzle / telegraph light) and e.anim(dt, moving).
-import * as THREE from '../vendor/three.module.min.js';
-import * as TX from './textures.js';
-import { box } from './level.js';
-import { randi } from './util.js';
+import * as THREE from '../../vendor/three.module.min.js';
+import * as TX from '../../engine/textures.js';
+import { box } from '../../engine/geometry.js';
+import { randi } from '../../engine/util.js';
 
 const matCache = new Map();
 export const lm = (t) => {

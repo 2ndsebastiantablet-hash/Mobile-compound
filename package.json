@@ -1,0 +1,13 @@
+{
+  "name": "overtime",
+  "version": "0.6.0",
+  "private": true,
+  "description": "OVERTIME: a retro on-rails office-tower shooter (mobile, PC, and PC free-roam versions).",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "build": "node tools/build.mjs",
+    "build:mobile": "node tools/build.mjs mobile",
+    "build:pc": "node tools/build.mjs pc"
+  }
+}

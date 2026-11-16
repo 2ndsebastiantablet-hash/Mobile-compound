@@ -21,10 +21,10 @@
 // boss during the wind-up to cancel), charge (deal enough damage to stun it before it reaches you),
 // slam (shockwaves along the floor), summon, teleport, heal (interrupt it), clones (only the real one
 // takes damage — decoys flicker), pylons, turn, cloak, reflect.
-import * as THREE from '../vendor/three.module.min.js';
-import { DEFS } from './enemydefs.js';
-import { box } from './level.js';
-import { rand, pick, clamp } from './util.js';
+import * as THREE from '../../vendor/three.module.min.js';
+import { DEFS } from '../enemies/roster.js';
+import { box } from '../../engine/geometry.js';
+import { rand, pick, clamp } from '../../engine/util.js';
 
 const H = (outfit, extra = {}) => ({ kind: 'human', outfit, ...extra });
 
