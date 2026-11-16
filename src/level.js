@@ -238,7 +238,9 @@ function buildRoom(c) {
   const piece = (x, z, ry = 0, y = 0) => { const p = new THREE.Group(); p.position.set(x, y, z); p.rotation.y = ry; g.add(p); return p; };
 
   const room = { type, z0, zf, group: g, stand: new THREE.Vector3(0, EYE, z0 - 1.0), spots: [], lightPos: [], doorSpawns: [], elevators: [] };
-  const spot = (x, d, cover = false, extra = {}) => room.spots.push({ x, z: Z(d), cover, ...extra });
+  // tall cover (pillars, shelves) hides the whole body, so those spots get a sideways "peek" offset
+  const spot = (x, d, cover = false, extra = {}) => room.spots.push({ x, z: Z(d), cover, ...extra,
+    ...(cover && (extra.coverH || 0) >= 1.5 ? { peek: (x > 0 ? -1 : 1) * 0.95 } : {}) });
 
   // floor / ceiling
   add(g, box(RW, 0.1, RD, 2), type === 'breakroom' && !th.floorStyle ? M.lino : M.floor, 0, -0.05, zc);
@@ -417,7 +419,7 @@ function buildRoom(c) {
       spot(3.05, 7.6, true, { coverH: 1.1 });
       K.sofa(-2.9, 4.5, Math.PI / 2); K.plant(-3.1, 2.2); K.plant(3.1, 10.5); K.plant(-3.1, 7);
       K.pillar(-1.9, 9); K.pillar(1.9, 4.5);
-      spot(-1.3, 9.7, true, { coverH: 3 }); spot(-2.6, 10.6);
+      spot(-1.9, 9.7, true, { coverH: 3 }); spot(-2.6, 10.6);
       lane(); break;
     }
     case 'office': {
@@ -584,7 +586,7 @@ function buildRoom(c) {
     }
     case 'elevator': {
       K.pillar(-1.9, 7.5); K.pillar(1.9, 7.5);
-      spot(-1.3, 8.2, true, { coverH: 3 }); spot(1.3, 8.2, true, { coverH: 3 });
+      spot(-1.9, 8.2, true, { coverH: 3 }); spot(1.9, 8.2, true, { coverH: 3 });
       K.sofa(-3.0, 3.8, Math.PI / 2); K.plant(3.1, 3); K.plant(-1.1, 11.5); K.plant(1.1, 11.5); K.cooler(3.15, 5);
       lane(); break;
     }

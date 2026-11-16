@@ -56,9 +56,53 @@ export const GUNS = [
     m: { len: 0.28, h: 0.08, col: 'green', blen: 0.08, glow: 'green', coil: 'green' } },
   { id: 'golden', name: 'GOLDEN GUN', short: 'GOLDEN', rarity: 'legendary', desc: 'One shot. Kills anything in its path.', mag: 1, reload: 2.4, cd: 0.3, dmg: 60, pierce: 99, headMult: 3, tracer: 0xffd040, sound: 'sniper', kick: 2.5,
     m: { len: 0.3, h: 0.08, col: 'gold', blen: 0.1, grip: 'gold' } },
+
+  // ---------------------------------------------------------------- 20 new weapons
+  // melee: no ammo, short reach (melee = metres), every swing also swats nearby projectiles out of the air
+  { id: 'chainsaw', name: 'CHAINSAW', rarity: 'epic', desc: 'Hold to shred anything within reach.', melee: 3.6, auto: true, cd: 0.08, dmg: 0.9, sound: 'chainsaw', kick: 0.2,
+    m: { melee: 'chainsaw' } },
+  { id: 'katana', name: 'KATANA', rarity: 'rare', desc: 'Long reach. Slices through 2 enemies.', melee: 4.2, cd: 0.34, dmg: 5, pierce: 1, sound: 'slash', kick: 1,
+    m: { melee: 'katana' } },
+  { id: 'fireaxe', name: 'FIRE AXE', rarity: 'uncommon', desc: 'Heavy chops that knock enemies back.', melee: 3.6, cd: 0.6, dmg: 6, knock: 1, sound: 'chop', kick: 1.4,
+    m: { melee: 'axe' } },
+  { id: 'slugger', name: 'SLUGGER', rarity: 'common', desc: 'Bat. Huge knockback, swats projectiles.', melee: 3.4, cd: 0.42, dmg: 3, knock: 1.6, parry: 2, sound: 'chop', kick: 1.2,
+    m: { melee: 'bat' } },
+  { id: 'sledge', name: 'SLEDGEHAMMER', rarity: 'rare', desc: 'Slow. Smashes everything near the impact.', melee: 3.6, cd: 1.0, dmg: 8, explode: 1.3, sound: 'chop', kick: 2.4,
+    m: { melee: 'hammer' } },
+  { id: 'baton', name: 'STUN BATON', rarity: 'uncommon', desc: 'Fast zaps that freeze enemies in place.', melee: 3.2, cd: 0.28, dmg: 2.2, freeze: 1.5, sound: 'zap', kick: 0.6,
+    m: { melee: 'baton' } },
+  { id: 'plasmablade', name: 'PLASMA BLADE', rarity: 'epic', desc: 'Burning energy blade with long reach.', melee: 4.6, cd: 0.24, dmg: 4, burn: 1.2, pierce: 1, sound: 'slash', kick: 0.8,
+    m: { melee: 'blade' } },
+  // ranged
+  { id: 'crossbow', name: 'CROSSBOW', rarity: 'uncommon', desc: 'Silent bolt that pierces one enemy.', mag: 1, reload: 0.85, cd: 0.2, dmg: 5, pierce: 1, headMult: 4, tracer: 0xc0a070, sound: 'staple', kick: 1,
+    m: { len: 0.36, h: 0.07, col: 'wood', blen: 0.05, bow: true } },
+  { id: 'harpoon', name: 'HARPOON GUN', rarity: 'rare', desc: 'Skewers 3 enemies and drags them closer.', mag: 1, reload: 1.1, cd: 0.3, dmg: 4, pierce: 2, knock: -1.2, tracer: 0x909aa4, sound: 'launcher', kick: 1.6,
+    m: { len: 0.36, h: 0.09, col: 'blue', blen: 0.36, bt: 0.035, tube: true } },
+  { id: 'flaregun', name: 'FLARE GUN', rarity: 'common', desc: 'Sets one target ablaze.', mag: 1, reload: 0.8, cd: 0.2, dmg: 1.5, burn: 2.2, tracer: 0xff5020, sound: 'launcher', kick: 1,
+    m: { len: 0.2, h: 0.1, col: 'orange', blen: 0.08, bt: 0.06 } },
+  { id: 'akimbo', name: 'AKIMBO PISTOLS', short: 'AKIMBO', rarity: 'uncommon', desc: 'Two pistols, one trigger. Hold to fire.', mag: 24, reload: 1.3, cd: 0.09, dmg: 0.8, spread: 8, auto: true, sound: 'pistol', kick: 0.6,
+    m: { len: 0.3, h: 0.075, col: 'metal', blen: 0.04, akimbo: true } },
+  { id: 'laserrifle', name: 'LASER RIFLE', short: 'LASER', rarity: 'rare', desc: 'Pinpoint full-auto beam.', mag: 40, reload: 1.5, cd: 0.07, dmg: 0.55, auto: true, tracer: 0xff3030, sound: 'zap', kick: 0.15,
+    m: { len: 0.42, h: 0.09, col: 'white', blen: 0.2, coil: 'red', glow: 'red', scope: true } },
+  { id: 'plasmacannon', name: 'PLASMA CANNON', short: 'PLASMA', rarity: 'epic', desc: 'Explosive plasma balls.', mag: 4, reload: 1.8, cd: 0.5, dmg: 4, explode: 1.6, tracer: 0x50ff70, sound: 'rail', kick: 1.8,
+    m: { len: 0.36, h: 0.13, col: 'green', blen: 0.22, bt: 0.08, coil: 'green', glow: 'green' } },
+  { id: 'shockgun', name: 'SHOCK SHOTGUN', short: 'SHOCKGUN', rarity: 'rare', desc: 'Pellets arc to a nearby enemy.', mag: 6, reload: 1.5, cd: 0.6, dmg: 0.7, pellets: 6, spread: 32, chain: 1, range: 13, tracer: 0x80e0ff, sound: 'shotgun', kick: 2,
+    m: { len: 0.26, h: 0.09, col: 'blue', blen: 0.42, tube: true, coil: 'cyan' } },
+  { id: 'blunderbuss', name: 'BLUNDERBUSS', rarity: 'common', desc: '14 pellets, one shot, wide spread.', mag: 1, reload: 1.1, cd: 0.3, dmg: 0.55, pellets: 14, spread: 60, range: 10, sound: 'shotgun', kick: 3,
+    m: { len: 0.24, h: 0.08, col: 'wood', blen: 0.4, bt: 0.07, stock: 'wood' } },
+  { id: 'rocketpod', name: 'MINI ROCKET POD', short: 'ROCKETPOD', rarity: 'epic', desc: '4-rocket bursts with splash.', mag: 8, reload: 2.0, cd: 0.7, burst: 4, dmg: 2.5, explode: 1.3, sound: 'launcher', kick: 1.2,
+    m: { len: 0.4, h: 0.16, col: 'green', blen: 0.04, w: 0.16, barrels: 6, glow: 'red' } },
+  { id: 'seeker', name: 'SEEKER PISTOL', short: 'SEEKER', rarity: 'rare', desc: 'Smart rounds curve onto the nearest target.', mag: 10, reload: 1.0, cd: 0.15, dmg: 1.3, seek: 90, tracer: 0xffe060, sound: 'zap', kick: 0.8,
+    m: { len: 0.28, h: 0.08, col: 'white', blen: 0.06, glow: 'orange', scope: true } },
+  { id: 'shredgun', name: 'PAPER SHREDDER', short: 'SHREDDER', rarity: 'uncommon', desc: 'Sprays a cloud of razor paper.', mag: 60, reload: 1.6, cd: 0.08, dmg: 0.35, pellets: 3, spread: 20, auto: true, sound: 'staple', kick: 0.3,
+    m: { len: 0.36, h: 0.16, col: 'white', blen: 0.04, w: 0.14, mag: 'box' } },
+  { id: 'coffeecannon', name: 'COFFEE CANNON', short: 'COFFEE', rarity: 'common', desc: 'Scalding splash that burns.', mag: 6, reload: 1.3, cd: 0.4, dmg: 1.5, explode: 0.9, burn: 0.6, sound: 'launcher', kick: 1,
+    m: { len: 0.3, h: 0.12, col: 'dark', blen: 0.16, bt: 0.08, tank: true } },
+  { id: 'blackhole', name: 'BLACK HOLE GUN', short: 'BLACKHOLE', rarity: 'legendary', desc: 'Collapses a singularity that drags enemies in.', mag: 1, reload: 3, cd: 0.4, dmg: 10, explode: 2.8, pull: true, tracer: 0xa040ff, sound: 'rail', kick: 2.6,
+    m: { len: 0.34, h: 0.14, col: 'dark', blen: 0.12, bt: 0.1, coil: 'purple', glow: 'purple', w: 0.12 } },
 ];
 export const GUN = Object.fromEntries(GUNS.map((g) => [g.id, g]));
-for (const g of GUNS) { g.pellets ||= 1; g.spread ||= 0; g.pierce ||= 0; g.headMult ||= 3; g.short ||= g.name; }
+for (const g of GUNS) { if (g.melee) { g.mag = 0; g.reload = 0; } g.pellets ||= 1; g.spread ||= 0; g.pierce ||= 0; g.headMult ||= 3; g.short ||= g.name; }
 
 export function rollGun(floor, rng = Math.random, exclude = [], minRarity = null) {
   const order = Object.keys(RARITY);
@@ -74,7 +118,7 @@ export function rollGun(floor, rng = Math.random, exclude = [], minRarity = null
 export function statLine(g) {
   const rate = g.burst ? 'BURST' : g.auto ? 'AUTO' : g.cd < 0.2 ? 'FAST' : g.cd < 0.45 ? 'MED' : 'SLOW';
   const dmg = Math.round(g.dmg * g.pellets * 10) / 10;
-  return `DMG ${dmg}  MAG ${g.mag}  ${rate}`;
+  return g.melee ? `MELEE  DMG ${dmg}  REACH ${g.melee}M  ${rate}` : `DMG ${dmg}  MAG ${g.mag}  ${rate}`;
 }
 
 // ---------------------------------------------------------------- models
@@ -91,7 +135,7 @@ function mats() {
     skin: new THREE.MeshLambertMaterial({ map: TX.plastic([214, 168, 130], 'skin') }),
     sleeve: new THREE.MeshLambertMaterial({ map: TX.plastic([210, 210, 204], 'slv') }),
     cuff: new THREE.MeshLambertMaterial({ map: TX.plastic([60, 62, 72], 'cuff') }),
-    gcyan: B(0x60f0ff), gorange: B(0xff9a30), ggreen: B(0x70ff60), gred: B(0xff4030),
+    gcyan: B(0x60f0ff), gorange: B(0xff9a30), ggreen: B(0x70ff60), gred: B(0xff4030), gpurple: B(0xb050ff),
   };
   return MATS;
 }
@@ -101,7 +145,39 @@ function part(g, w, h, d, mat, x, y, z, rx = 0) {
 }
 
 // withArm=false for world pickups.
+function buildMelee(def, withArm) {
+  const M = mats(), k = def.m.melee;
+  const g = new THREE.Group();
+  const P = (w, h, d, mat, x, y, z, rx = 0) => part(g, w, h, d, mat, x, y, z, rx);
+  let tip = new THREE.Vector3(0, 0, -0.5);
+  if (k === 'chainsaw') {
+    P(0.14, 0.16, 0.34, M.orange, 0, 0, 0); P(0.06, 0.06, 0.12, M.dark, 0, 0.12, 0.02);
+    P(0.03, 0.09, 0.62, M.metal, 0, 0, -0.48); P(0.035, 0.11, 0.6, M.dark, 0, 0, -0.48);
+    tip = new THREE.Vector3(0, 0, -0.8);
+  } else if (k === 'katana' || k === 'blade') {
+    P(0.04, 0.05, 0.2, k === 'blade' ? M.metal : M.dark, 0, 0, 0.02); P(0.1, 0.02, 0.04, M.gold, 0, 0, -0.09);
+    P(0.015, 0.05, 0.8, k === 'blade' ? M.gcyan : M.white, 0, 0, -0.5);
+    tip = new THREE.Vector3(0, 0, -0.9);
+  } else if (k === 'axe' || k === 'hammer' || k === 'bat') {
+    P(0.04, 0.04, 0.7, M.wood, 0, 0, -0.25);
+    if (k === 'axe') { P(0.03, 0.2, 0.14, M.red, 0, 0.08, -0.52); P(0.035, 0.22, 0.03, M.metal, 0, 0.08, -0.6); }
+    if (k === 'hammer') P(0.16, 0.16, 0.3, M.dark, 0, 0, -0.6);
+    if (k === 'bat') P(0.07, 0.07, 0.4, M.wood, 0, 0, -0.5);
+    tip = new THREE.Vector3(0, 0, -0.7);
+  } else if (k === 'baton') {
+    P(0.05, 0.05, 0.55, M.dark, 0, 0, -0.2); P(0.06, 0.06, 0.06, M.gcyan, 0, 0, -0.5);
+    tip = new THREE.Vector3(0, 0, -0.5);
+  }
+  if (withArm) {
+    part(g, 0.1, 0.1, 0.12, M.skin, 0, -0.06, 0.08);
+    part(g, 0.13, 0.13, 0.5, M.sleeve, 0.02, -0.14, 0.42, -0.35);
+  }
+  g.rotation.x = withArm ? 0.5 : 0;
+  return { g, tip, melee: true };
+}
+
 export function buildGunModel(def, withArm = true) {
+  if (def.melee) return buildMelee(def, withArm);
   const M = mats(), s = def.m;
   const g = new THREE.Group();
   const col = M[s.col] || M.dark, w = s.w || 0.07, h = s.h, len = s.len;
@@ -125,6 +201,8 @@ export function buildGunModel(def, withArm = true) {
   if (s.tank) { part(g, 0.1, 0.16, 0.18, M.red, 0.075, -0.02, z0 - len * 0.35); part(g, 0.03, 0.03, 0.06, M.metal, 0.075, 0.08, z0 - len * 0.35); }
   if (s.coil) for (let k = 0; k < 3; k++) part(g, bt + 0.05, bt + 0.05, 0.025, M['g' + s.coil], 0, by, bz - s.blen * 0.3 + k * s.blen * 0.3);
   if (s.glow) part(g, bt + 0.012, bt + 0.012, 0.03, M['g' + s.glow], 0, tip.y, tip.z + 0.02);
+  if (s.bow) { const l = part(g, 0.5, 0.03, 0.04, M.dark, 0, by, z0 - len + 0.02); l.rotation.z = 0; part(g, 0.48, 0.01, 0.01, M.white, 0, by, z0 - len + 0.06); }
+  if (s.akimbo) { const g2 = new THREE.Group(); g2.position.x = -0.32; g.add(g2); part(g2, w, h, len, col, 0, 0, z0 - len / 2); part(g2, 0.06, 0.16, 0.08, M.dark, 0, -h / 2 - 0.07, 0, 0.25); if (withArm) part(g2, 0.1, 0.1, 0.12, M.skin, 0, -h / 2 - 0.07, 0); }
   if (withArm) {
     part(g, 0.1, 0.1, 0.12, M.skin, 0, -h / 2 - 0.07, 0.0);
     part(g, 0.13, 0.13, 0.08, M.cuff, 0.01, -h / 2 - 0.1, 0.09, -0.35);

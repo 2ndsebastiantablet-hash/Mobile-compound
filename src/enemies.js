@@ -7,6 +7,8 @@ import { rand, clamp, pick } from './util.js';
 
 const FLASH = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const CLOAK = new THREE.MeshBasicMaterial({ color: 0x8090a0, transparent: true, opacity: 0.12, depthWrite: false });
+const REFL = new THREE.MeshBasicMaterial({ color: 0xff2a20 });
+const PHASE = new THREE.MeshBasicMaterial({ color: 0x80c0ff, transparent: true, opacity: 0.35, depthWrite: false });
 const ROBOT = new Set(['drone', 'mech', 'turret', 'tank', 'swarm']);
 const tmpV = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -54,7 +56,8 @@ export class Enemy {
     this.cloak = this.traits.cloak ? { on: false, t: rand(Math.random, 1.5, 2.5) } : null;
     this.orbitA = Math.random() * 6.28;
     this.lastHit = -10; this.dive = null;
-    if (def.move === 'stand' && spot.cover && !def.nocover) this.crouch = this.crouchTarget = 1;
+    this.peekGoal = new THREE.Vector3();
+    if (def.move === 'stand' && spot.cover && !def.nocover && !spot.peek) this.crouch = this.crouchTarget = 1;
     if (def.brain && !opts.decoy) this.brain = new BossBrain(this);
     this.place();
     game.scene.add(this.root);
@@ -105,6 +108,17 @@ export class Enemy {
       }
     }
     if (this.slowT > 0) { this.slowT -= dt; if (Math.random() < dt * 8) g.fx.ice(this.centerWorld(new THREE.Vector3()), 1); dt *= 0.35; }
+    if ((T.reflect || T.phase) && this.state === 'active') {
+      // periodic stance: reflect (shots bounce back at you) / phase (intangible)
+      this.stanceT = (this.stanceT ?? rand(Math.random, 1.5, 3)) - dt;
+      if (this.stanceT <= 0) {
+        this.stanceOn = !this.stanceOn; this.stanceT = this.stanceOn ? 1.6 : rand(Math.random, 2.4, 3.6);
+        if (this.stanceOn) g.sfx.zap();
+        this.applyMats();
+      }
+    }
+    if (T.enrage && !this.enraged && this.hp < this.maxHp * 0.5) { this.enraged = true; this.fireMul *= 0.55; g.fx.fire(this.centerWorld(new THREE.Vector3()), 10); }
+    if (this.enraged) dt *= 1.4;
     if (T.regen && this.lastHit > 2 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + T.regen * dt);
     if (this.cloak && this.state === 'active' && !this.brain) {
       this.cloak.t -= dt;
@@ -181,6 +195,12 @@ export class Enemy {
     const planted = this.atkState === 'wind' || this.atkState === 'burst';
     switch (def.move) {
       case 'stand':
+        if (this.spot.peek && this.spot.cover && !def.nocover) {
+          // behind a pillar/shelf: hide fully, step out into the open to attack, then step back
+          const out = this.atkState !== 'cool';
+          this.moveTo(this.peekGoal.set(this.spot.x + (out ? this.spot.peek : 0), this.hover, this.spot.z), 4.5, dt);
+          break;
+        }
         if (!planted && (!this.spot.cover || def.nocover)) { if (this.moveTo(this.goal, sp, dt) && Math.random() < dt * 0.6) this.pickGoal(); }
         break;
       case 'strafe': case 'boss': case 'fly':
@@ -279,7 +299,8 @@ export class Enemy {
         this.atkT -= dt;
         if (this.atkT <= 0 && this.canAttack()) {
           this.crouchTarget = 0;
-          if (this.crouch > 0.05) { this.atkState = 'rise'; this.timer = 0.3; } else this.startWind();
+          if (this.spot.peek && this.spot.cover && !def.nocover) { this.atkState = 'rise'; this.timer = 0.38; }
+          else if (this.crouch > 0.05) { this.atkState = 'rise'; this.timer = 0.3; } else this.startWind();
         }
         break;
       case 'rise':
@@ -312,7 +333,7 @@ export class Enemy {
           this.atkState = 'cool';
           const [a, b] = def.fire; this.atkT = rand(Math.random, a, b) * this.fireMul;
           this.atkIdx++;
-          if (def.move === 'stand' && this.spot.cover && !def.nocover && Math.random() < 0.7) this.crouchTarget = 1;
+          if (def.move === 'stand' && this.spot.cover && !def.nocover && !this.spot.peek && Math.random() < 0.7) this.crouchTarget = 1;
           if (!this.flyer && def.move !== 'turret') this.pickGoal();
           if (this.burrow && this.burrow.phase === 'up') this.burrow.t = Math.min(this.burrow.t, 0.4);
         }
@@ -373,6 +394,24 @@ export class Enemy {
         break;
       }
       case 'boss': this.bossAttack(); break;
+      case 'bombs': { const from = this.muzzle(new THREE.Vector3()); const n = atk.n || 1; for (let k = 0; k < n; k++) g.spawnBomb(from, k, n, atk.kind || 'bomb', this.dmg); g.sfx.launcher(); break; }
+      case 'mines': {
+        const from = this.muzzle(new THREE.Vector3());
+        for (let k = 0; k < (atk.n || 2); k++) g.spawnProjectile(from, new THREE.Vector3(rand(Math.random, -2, 2), rand(Math.random, 1.1, 2.4), g.camPos.z - rand(Math.random, 3.5, 6)), 3.5, this.dmg, 'mine', { mine: 1.3 + k * 0.4 });
+        break;
+      }
+      case 'rain': {
+        for (let k = 0; k < (atk.n || 3); k++) {
+          const from = new THREE.Vector3(rand(Math.random, -2.2, 2.2), 2.85, g.camPos.z - rand(Math.random, 3.5, 6.5));
+          g.spawnProjectile(from, g.camPos.clone().add(new THREE.Vector3(rand(Math.random, -0.5, 0.5), -0.2, 0)), this.pspeed * 0.55, this.dmg, kind, { delay: k * 0.2 });
+        }
+        break;
+      }
+      case 'wall': {
+        const from = this.muzzle(new THREE.Vector3()), n = atk.n || 5;
+        for (let k = 0; k < n; k++) { const off = (k - (n - 1) / 2) * 0.55; g.spawnProjectile(from.clone().add(new THREE.Vector3(off, 0, 0)), g.camPos.clone().add(new THREE.Vector3(off, 0, 0)), this.pspeed * 0.75, this.dmg, kind); }
+        g.sfx.enemyShot(); break;
+      }
     }
     if (this.glow) this.glow.visible = false;
   }
@@ -409,7 +448,8 @@ export class Enemy {
 
   applyMats() {
     const cloaked = this.cloak && this.cloak.on;
-    for (const m of this.meshes) m.material = cloaked ? CLOAK : m.userData.mat;
+    const st = this.stanceOn ? (this.traits.reflect ? REFL : PHASE) : null;
+    for (const m of this.meshes) m.material = cloaked ? CLOAK : st || m.userData.mat;
     if (this.glow && cloaked) this.glow.visible = false;
   }
   setFlash() { for (const m of this.meshes) m.material = FLASH; }
@@ -430,6 +470,12 @@ export class Enemy {
       }
       this.brain.onHit(amount);
       if (part === 'core') { part = 'body'; amount *= 1.5; }
+    }
+    if (this.stanceOn) {
+      if (this.traits.reflect) { g.fx.sparks(point, 6); g.sfx.zap(); if (!quiet) g.hurtPlayer(2 + amount * 0.5, this); }
+      else { g.fx.ice(point, 3); }
+      g.bossImmune(this);
+      return 'immune';
     }
     if (part === 'shield' && this.shieldHp > 0) {
       this.shieldHp -= amount;
@@ -458,6 +504,12 @@ export class Enemy {
     if (this.state === 'dormant') this.activate();
     if (quiet) return 'body';
     if (this.def.interrupt) this.interrupt();
+    if (this.traits.teleportOnHit && (this.tpCd || 0) < this.phase) {
+      this.tpCd = this.phase + 2.5;
+      g.fx.sparks(this.centerWorld(new THREE.Vector3()), 10);
+      const s2 = g.randomSpot(this); this.pos.x = s2.x; this.pos.z = s2.z; this.goal.copy(this.pos);
+      g.fx.pop(this.centerWorld(new THREE.Vector3())); g.sfx.zap();
+    }
     if (this.def.move === 'charge') this.pos.z -= 0.2;
     return head ? 'head' : 'body';
   }
@@ -533,8 +585,17 @@ export class Projectile {
     this.gravity = opts.lob ? 7 : 0;
     this.speed = opts.homing ? speed * 0.7 : speed;
     if (opts.lob) {
-      const T = Math.max(0.9, from.distanceTo(target) / (speed * 0.75));
-      this.vel = target.clone().sub(from).divideScalar(T); this.vel.y += 0.5 * this.gravity * T;
+      const g = this.gravity, CEIL = 2.7;
+      from = from.clone(); from.y = Math.min(from.y, CEIL - 0.1); this.mesh.position.copy(from);
+      let T = Math.max(0.9, from.distanceTo(target) / (speed * 0.75));
+      const dy = target.y - from.y;
+      let vy = dy / T + 0.5 * g * T;
+      // keep the whole arc under the ceiling so the player can always see and shoot it
+      if (from.y + (vy > 0 ? (vy * vy) / (2 * g) : 0) > CEIL) {
+        vy = Math.sqrt(2 * g * (CEIL - from.y));
+        T = (vy + Math.sqrt(Math.max(0, vy * vy - 2 * g * dy))) / g;
+      }
+      this.vel = target.clone().sub(from).divideScalar(T); this.vel.y = vy;
     } else {
       this.vel = target.clone().sub(from).normalize().multiplyScalar(this.speed);
       if (opts.homing) this.vel.add(new THREE.Vector3(rand(Math.random, -2, 2), rand(Math.random, 1, 2.5), 0));
@@ -569,6 +630,7 @@ export class Projectile {
     }
     this.vel.y -= this.gravity * dt;
     this.mesh.position.addScaledVector(this.vel, dt);
+    if (this.mesh.position.y > 2.85) { this.mesh.position.y = 2.85; if (this.vel.y > 0) this.vel.y = 0; }
     if (this.k.aligned) this.mesh.lookAt(this.mesh.position.clone().add(this.vel));
     else { this.mesh.rotation.x += dt * 9; this.mesh.rotation.y += dt * 7; this.mesh.scale.setScalar(1 + Math.sin(this.life * 30) * 0.12); }
     if (this.k.blink) this.mesh.material = Math.floor(this.life * 10) % 2 ? PKINDS.orb.mat : this.k.mat;

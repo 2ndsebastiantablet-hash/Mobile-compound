@@ -48,9 +48,11 @@ To host it, push the repo to GitHub and enable **Pages** (Settings → Pages →
 - **Ambushes:** while you walk between areas, enemies sometimes pop out of hiding. You stop, they fire quickly, and you have to react before the walk continues.
 
 ### Enemies
-There are 55 enemy types: the 4 original grunts plus 50 new ones, and the floor bosses. Each one has a floor range, and areas fill up with random picks from the enemies allowed on that floor. Low floors are mostly office staff. Robots, drones and turrets show up in the data center, and mutants, oozes and lab horrors appear higher up. Bosses appear every 5 floors. The first time you meet a new enemy type, a **NEW HOSTILE** callout appears.
+There are 85 regular enemy types (the 4 originals, plus 50, plus 30 more), and the 60 bosses. Each one has a floor range, and areas fill up with random picks from the enemies allowed on that floor. Low floors are mostly office staff. Robots, drones and turrets show up in the data center, and mutants, oozes and lab horrors appear higher up. Bosses appear every 5 floors. The first time you meet a new enemy type, a **NEW HOSTILE** callout appears.
 
 Things to know:
+- Enemies behind tall cover such as pillars and shelves stay hidden, then step out into the open to shoot.
+- Lobbed boxes, coffee and bombs always arc below the ceiling, so you can shoot them down.
 - Shoot charging lasers to cancel them. A red beam means one is warming up.
 - Armored enemies take reduced body damage, so aim for the head, visor or core.
 - Shields absorb hits until they break.
@@ -114,6 +116,36 @@ Things to know:
 | **JETPACK TROOPER** | 13–20 | flies around; burst fire |
 | **ORBITAL DRONE** | 17–20 | circles the room; spread shot |
 | **SHADOW BOARD MEMBER** | 18–20 | takes cover, pops up; spread shot + homing missiles + summons bodyguards |
+| **BOX TOSSER** | 2–9 | takes cover, pops up; throws impact bombs (shoot them) |
+| **PRINTER JAM** | 3–10 | stationary; drops hovering mines; armored (aim for the weak point) |
+| **CUBICLE CREEPER** | 4–11 | zig-zags in (melee); teleports when hit |
+| **OFFICE MANAGER** | 4–12 | takes cover, pops up; fires a wall of shots |
+| **ESPRESSO BOT** | 2–8 | flies around; rains shots from the ceiling |
+| **PARALEGAL** | 6–14 | strafes side to side; shoots; reflects shots while red |
+| **PAPER SWARM** | 3–10 | charges you (melee) |
+| **SECURITY K9** | 5–12 | leaps at you (melee) |
+| **VENDING BOT** | 3–10 | strafes side to side; spread shot |
+| **TELEMARKETER** | 6–13 | takes cover, pops up; homing orbs; teleports when hit |
+| **FIREWALL DRONE** | 10–18 | flies around; burst fire; phases out (immune) at times |
+| **VIRUS** | 11–19 | flies around; spread shot; splits into glitch shards |
+| **TROJAN HORSE** | 12–20 | charges you (melee); armored (aim for the weak point); splits into mouse bots |
+| **CRYPTO MINER** | 12–20 | strafes side to side; rapid fire; enrages when hurt |
+| **SNIPER DRONE** | 13–24 | flies around; charged laser (shoot it to cancel) |
+| **LOGIC BOMB** | 11–22 | kamikaze dive; explodes |
+| **DATA WORM** | 10–18 | zig-zags in (melee); regenerates |
+| **LAB RAT KING** | 21–32 | charges you (melee); splits into larvas |
+| **TOXIC SPRAYER** | 21–34 | takes cover, pops up; rains shots from the ceiling |
+| **GENE SPLICER** | 22–36 | strafes side to side; heals allies + summons larvas |
+| **TWO-HEADED HOUND** | 22–36 | leaps at you (melee); enrages when hurt |
+| **SPORE POD** | 23–38 | stationary; drops hovering mines |
+| **HUSK** | 24–40 | charges you (melee); phases out (immune) at times |
+| **WELDER BOT** | 26–40 | strafes side to side; spread shot |
+| **ASSEMBLY DRONE** | 26–42 | flies around; throws impact bombs (shoot them) |
+| **RIVET TURRET** | 26–44 | stationary; fires a wall of shots; armored (aim for the weak point) |
+| **CRUSHER** | 27–46 | charges you (melee); armored (aim for the weak point) |
+| **GARDEN GOLEM** | 36–46 | zig-zags in (melee); splits into oozelings; regenerates |
+| **DEALER BOT** | 41–50 | strafes side to side; spread shot; reflects shots while red |
+| **REACTOR WRAITH** | 44–50 | flies around; charged laser (shoot it to cancel); cloaks |
 
 
 ### Bosses: 60 in total
@@ -206,7 +238,7 @@ Mini bosses always have a condition for when they can be hurt.
 
 
 ### Weapons
-You start with a pistol. Enemies randomly drop guns, shown as a spinning model with a light beam in the gun's rarity color. Bosses always drop a rare or better gun. Tap a drop to grab it; anything left on the floor is collected automatically when the area is clear. You can carry **3 guns**, and **SWAP** cycles through them. If your hands are full when you pick one up, you choose which gun to drop, or leave the new one behind. Picking up a gun you already carry refills its ammo.
+There are 40 weapons: 33 guns and 7 melee weapons. You start with a pistol. Enemies randomly drop weapons, shown as a spinning model with a light beam in the gun's rarity color. Bosses always drop a rare or better gun. Tap a drop to grab it; anything left on the floor is collected automatically when the area is clear. You can carry **3 guns**, and **SWAP** cycles through them. If your hands are full when you pick one up, you choose which gun to drop, or leave the new one behind. Picking up a gun you already carry refills its ammo.
 
 | Gun | Rarity | What it does |
 |---|---|---|
@@ -230,6 +262,28 @@ You start with a pistol. Enemies randomly drop guns, shown as a spinning model w
 | Rocket Launcher | Epic | One rocket, massive explosion |
 | Leech Pistol | Epic | Each hit heals you |
 | Golden Gun | Legendary | One shot kills anything in its path |
+| **Chainsaw** | Epic | Melee. Hold to shred anything within reach |
+| **Katana** | Rare | Melee. Long reach, slices 2 enemies |
+| **Fire Axe** | Uncommon | Melee. Heavy chops with knockback |
+| **Slugger** | Common | Melee. Bat with huge knockback, swats projectiles |
+| **Sledgehammer** | Rare | Melee. Slow, smashes everything near the impact |
+| **Stun Baton** | Uncommon | Melee. Fast zaps that freeze enemies |
+| **Plasma Blade** | Epic | Melee. Burning blade with long reach |
+| Crossbow | Uncommon | Piercing bolt, 4x headshots |
+| Harpoon Gun | Rare | Skewers 3 enemies and drags them closer |
+| Flare Gun | Common | Sets a target ablaze |
+| Akimbo Pistols | Uncommon | Two pistols, hold to fire |
+| Laser Rifle | Rare | Pinpoint full-auto beam |
+| Plasma Cannon | Epic | Explosive plasma balls |
+| Shock Shotgun | Rare | Pellets arc to a nearby enemy |
+| Blunderbuss | Common | 14 pellets, one shot |
+| Mini Rocket Pod | Epic | 4-rocket bursts with splash |
+| Seeker Pistol | Rare | Rounds curve onto the nearest target |
+| Paper Shredder | Uncommon | Sprays razor paper |
+| Coffee Cannon | Common | Scalding splash that burns |
+| Black Hole Gun | Legendary | Singularity that drags enemies in |
+
+**Melee weapons** need no ammo but only reach a few metres. Every swing also knocks nearby projectiles out of the air, so they double as a shield.
 
 Higher rarities only start dropping on later floors.
 

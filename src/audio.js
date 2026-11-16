@@ -86,7 +86,10 @@ export const sfx = {
   zap() { tone('sawtooth', 1800, 300, 0.1, 0.18); noise(0.08, 0.3, 'highpass', 5000, 3000); },
   flame() { noise(0.1, 0.35, 'bandpass', 900, 500, 0, sfxBus, 0.5); },
   staple() { tone('square', 1100, 500, 0.04, 0.3); noise(0.04, 0.4, 'highpass', 3000, 1500); },
-  gunPickup() { [330, 440, 660].forEach((f, i) => tone('square', f, f, 0.08, 0.15, i * 0.05)); noise(0.1, 0.2, 'bandpass', 2000, 900, 0.15); },
+  chainsaw() { tone('sawtooth', 70 + Math.random() * 20, 60, 0.09, 0.3); noise(0.08, 0.25, 'bandpass', 1200, 800); },
+  slash() { noise(0.16, 0.5, 'highpass', 2000, 6000); tone('triangle', 900, 300, 0.1, 0.12); },
+  chop() { noise(0.18, 0.45, 'bandpass', 500, 1500); tone('sine', 160, 60, 0.12, 0.3); },
+    gunPickup() { [330, 440, 660].forEach((f, i) => tone('square', f, f, 0.08, 0.15, i * 0.05)); noise(0.1, 0.2, 'bandpass', 2000, 900, 0.15); },
 };
 
 // ------------------------------------------------------------------ music
