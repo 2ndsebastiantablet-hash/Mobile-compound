@@ -33,7 +33,7 @@ const MINIS = {
     { id: 'paperweight', name: 'PAPERWEIGHT', model: H('mail', { face: 'cap', capCol: [120, 90, 50], weapon: 'package', bulk: 1.3 }), scale: 1.5, decor: ['pads'],
       vuln: 'afterAttack', moves: [{ t: 'bombs', n: 2, kind: 'package' }, { t: 'fan', n: 3 }], hint: 'ARMORED — HIT IT RIGHT AFTER IT THROWS' },
     { id: 'stapler', name: 'THE STAPLER', model: { kind: 'mech', col: [180, 40, 36], accent: [230, 230, 230], eye: 'visor', eyeCol: [255, 200, 40] }, scale: 1.4,
-      vuln: 'back', moves: [{ t: 'barrage', n: 10, kind: 'shard' }, { t: 'turn' }], hint: 'ONLY ITS BACK IS EXPOSED' },
+      vuln: 'back', moves: [{ t: 'barrage', n: 6, kind: 'shard' }, { t: 'turn' }], hint: 'ONLY ITS BACK IS EXPOSED' },
     { id: 'fiona', name: 'FRONT DESK FIONA', model: H('hr', { face: 'normal', hair: 5, weapon: 'clipboard', bulk: 1.15 }), scale: 1.5, decor: ['crown'],
       vuln: 'adds', moves: [{ t: 'summon', type: 'intern', n: 2 }, { t: 'fan', n: 4 }, { t: 'fan', n: 3 }], hint: 'IMMUNE WHILE HER INTERNS LIVE' },
   ],
@@ -197,7 +197,7 @@ const BOSSES = {
 // Register every boss as an enemy type so the normal Enemy class can build it.
 export const BOSS_LIST = [];
 // per-shot damage for moves that throw many projectiles at once (fan, wall, rain, barrage, spin)
-const MULTI = { dmg: 0.6 };
+const MULTI = { dmg: 0.5 };
 for (const [table, mini] of [[MINIS, true], [BOSSES, false]]) {
   for (const [floor, list] of Object.entries(table)) {
     list.forEach((b, slot) => {
