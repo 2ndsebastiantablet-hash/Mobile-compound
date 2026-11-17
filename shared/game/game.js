@@ -239,6 +239,16 @@ function spotInSight(room, s) {
   return ok;
 }
 
+function enemyInSight(e) {
+  const to = e.centerWorld(new THREE.Vector3()), from = G.camPos.clone(), dir = to.clone().sub(from), dist = dir.length();
+  losRay.set(from, dir.normalize()); losRay.far = Math.max(0.1, dist - 0.4);
+  const hit = losRay.intersectObjects(G.floor.group.children.filter((c) => c.visible), true).find((h) => !h.object.material.transparent && h.object.material.fog !== false);
+  if (!hit) return true;
+  // head visible counts too
+  if (e.head) { const h = e.head.getWorldPosition(new THREE.Vector3()), d2 = h.clone().sub(from); const dl = d2.length(); losRay.set(from, d2.normalize()); losRay.far = Math.max(0.1, dl - 0.3); return !losRay.intersectObjects(G.floor.group.children.filter((c) => c.visible), true).some((x) => !x.object.material.transparent && x.object.material.fog !== false); }
+  return false;
+}
+
 function visibleSpots(room) {
   const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
   return room.spots.filter((s) => (!s.taken || !s.taken.alive) && Math.abs(s.x) < hw * (room.stand.z - s.z) - 0.45 && spotInSight(room, s));
@@ -1538,6 +1548,12 @@ function update(dt) {
       const out = !e.def.boss && (e.pos.z > G.camPos.z + 0.3 || e.pos.z < area.room.zf - 3 || Math.abs(e.pos.x) > 4);
       e.strayT = out ? (e.strayT || 0) + dt : 0;
       if (e.strayT > 2) { e.remove(); e.state = 'dead'; continue; }
+      // and one you haven't been able to see for 10s (hidden behind a prop) steps into the open
+      if (!e.def.boss && e.targetable && mode === 'combat') {
+        e.losT = (e.losT || 0) - dt;
+        if (e.losT <= 0) { e.losT = 0.5; e.hiddenT = enemyInSight(e) ? 0 : (e.hiddenT || 0) + 0.5; }
+        if (e.hiddenT >= 10) { e.hiddenT = 0; const ls = laneSpot(area.room); e.spot = ls; e.pos.set(ls.x, e.pos.y, ls.z); if (e.goal) e.goal.set(ls.x, e.goal.y, ls.z); e.crouchTarget = 0; effects.dust(e.pos.clone().setY(0.1), 10); }
+      }
       alive++;
     }
     if (area.ambush) {
