@@ -119,7 +119,7 @@ export const DEFS = {
   spitter: { name: 'SPITTER', floors: [12, 18], w: 0.3, hp: 5, score: 260, dmg: 9,
     model: { kind: 'quad', style: 'flesh', col: [150, 120, 80], eye: 'mutant', eyeBase: [150, 120, 80] }, move: 'strafe', speed: 1.6,
     atk: { type: 'lob', kind: 'acid' }, fire: [1.8, 2.8], wind: 0.6 },
-  brute: { name: 'BRUTE', floors: [13, 20], w: 0.2, hp: 20, score: 500, dmg: 25, scale: 1.55,
+  brute: { name: 'BRUTE', floors: [13, 20], w: 0.2, hp: 20, score: 500, dmg: 16, scale: 1.55,
     model: H('brute', { head: 'mutant', headCol: [120, 140, 100], weapon: 'claw', hunch: true, bulk: 1.35 }), move: 'charge', speed: 1.6, traits: { armor: 0.4 } },
   watcher: { name: 'WATCHER', floors: [12, 20], w: 0.25, hp: 6, score: 300, dmg: 16,
     model: { kind: 'floater', style: 'eye', eyeCol: [255, 120, 30] }, move: 'fly', speed: 1.2,
