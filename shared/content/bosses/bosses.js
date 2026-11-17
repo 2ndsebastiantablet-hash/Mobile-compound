@@ -420,7 +420,7 @@ export class BossBrain {
         const from = e.muzzle(new THREE.Vector3());
         for (let k = 0; k < (m.n || 4); k++) {
           const park = new THREE.Vector3(rand(Math.random, -2, 2), rand(Math.random, 1.1, 2.4), g.camPos.z - rand(Math.random, 4, 6.5));
-          g.spawnProjectile(from, park, 3.5, e.dmg * 1.5, 'mine', { mine: 1.4 + k * 0.4 });
+          g.spawnProjectile(from, park, 3.5, e.dmg, 'mine', { mine: 1.4 + k * 0.4 });
         }
         break;
       }
