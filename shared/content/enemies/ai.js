@@ -464,7 +464,8 @@ export class Enemy {
     if (this.tutorialShield) { g.fx.sparks(point, 3); g.sfx.metalHit(); return 'immune'; }
     if (this.brain) {
       const r = this.brain.gate(part);
-      if (r === 'immune') { g.fx.sparks(point, 4); g.sfx.metalHit(); g.bossImmune(this); return 'immune'; }
+      // wind-ups and charges can still be broken by hits on armored parts (at half value)
+      if (r === 'immune') { this.brain.onHit(amount * 0.5); g.fx.sparks(point, 4); g.sfx.metalHit(); g.bossImmune(this); return 'immune'; }
       if (r === 'reflect') { g.fx.sparks(point, 6); g.sfx.zap(); g.hurtPlayer(3 + amount * 0.6, this); return 'immune'; }
       if (r === 'shield') {
         this.brain.shield -= amount; this.brain.shieldRegen = 0; g.fx.sparks(point, 5); g.sfx.metalHit();
