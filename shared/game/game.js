@@ -150,7 +150,7 @@ function clearFloor() {
 function loadFloor(n, variant) {
   clearFloor();
   G.floorNum = n;
-  G.diff = n <= 20 ? n : 20 + (n - 20) * 0.5;
+  G.diff = n <= 20 ? n : 20 + (n - 20) * 0.85; // balance: late floors were too easy with a full perk set
   G.variant = variant;
   const plan = floorPlan(n, variant);
   const f = buildFloor(n, plan);
