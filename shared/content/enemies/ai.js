@@ -23,10 +23,11 @@ export class Enemy {
     this.traits = def.traits || {};
     this.maxHp = this.hp = def.brain ? def.hp : def.boss ? def.hp + f * 4 : Math.round(def.hp * (1 + f * 0.025) * 10) / 10;
     const dd = game.dd || {}; // difficulty mode
-    this.maxHp = this.hp = Math.round(this.hp * (dd.hp || 1) * 10) / 10;
+    const late = Math.max(0, f - 20); // past floor 20 a full perk set made enemies trivial
+    this.maxHp = this.hp = Math.round(this.hp * (dd.hp || 1) * (def.brain ? 1 + late * 0.012 : 1 + late * 0.03) * 10) / 10;
     if (opts.decoy) this.maxHp = this.hp = 1;
     this.decoy = !!opts.decoy; this.yawExtra = 0;
-    this.dmg = def.dmg * (1 + f * 0.015); // balance pass: was 3% per floor, far too steep past floor 10
+    this.dmg = def.dmg * (1 + f * 0.015) * (1 + late * 0.015); // balance pass: was 3% per floor, far too steep past floor 10
     this.pspeed = 4.6 * (1 + f * 0.015) * (dd.proj || 1);
     this.fireMul = Math.max(0.72, 1 - f * 0.014) * (dd.fire || 1);
     this.shieldHp = this.traits.shield || 0;
