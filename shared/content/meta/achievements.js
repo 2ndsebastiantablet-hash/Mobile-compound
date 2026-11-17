@@ -14,6 +14,9 @@ export const ACHIEVEMENTS = [
   { id: 'floor30', name: 'UPPER MANAGEMENT', desc: 'Reach floor 30', reward: 700, test: (p) => p.stats.maxFloor >= 30 },
   { id: 'floor40', name: 'BOARD MEMBER', desc: 'Reach floor 40', reward: 1000, test: (p) => p.stats.maxFloor >= 40 },
   { id: 'win', name: 'HOSTILE TAKEOVER', desc: 'Beat floor 50', reward: 3000, test: (p) => p.stats.wins >= 1 },
+  { id: 'hard10', name: 'OVERACHIEVER', desc: 'Reach floor 10 on Hard or harder', reward: 500, test: (p, r) => r && r.diff >= 2 && r.floor >= 10 },
+  { id: 'xhard25', name: 'WORKAHOLIC', desc: 'Reach floor 25 on Extra Hard', reward: 1500, test: (p, r) => r && r.diff >= 3 && r.floor >= 25 },
+  { id: 'hardwin', name: 'CEO MATERIAL', desc: 'Beat floor 50 on Hard or harder', reward: 5000, test: (p, r) => r && r.won && r.diff >= 2 },
   // bosses
   { id: 'mini1', name: 'MINOR SETBACK', desc: 'Defeat a mini boss', reward: 100, test: (p) => p.stats.miniKills >= 1 },
   { id: 'boss1', name: 'PERFORMANCE REVIEW', desc: 'Defeat a boss', reward: 200, test: (p) => p.stats.bossKills >= 1 },

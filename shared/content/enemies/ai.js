@@ -21,12 +21,14 @@ export class Enemy {
     this.game = game; this.type = type; this.def = def; this.st = def; this.spot = spot;
     const f = game.diff || game.floorNum; // difficulty curve flattens above floor 20
     this.traits = def.traits || {};
-    this.maxHp = this.hp = def.brain ? def.hp : def.boss ? def.hp + f * 4 : Math.round(def.hp * (1 + f * 0.03) * 10) / 10;
+    this.maxHp = this.hp = def.brain ? def.hp : def.boss ? def.hp + f * 4 : Math.round(def.hp * (1 + f * 0.025) * 10) / 10;
+    const dd = game.dd || {}; // difficulty mode
+    this.maxHp = this.hp = Math.round(this.hp * (dd.hp || 1) * 10) / 10;
     if (opts.decoy) this.maxHp = this.hp = 1;
     this.decoy = !!opts.decoy; this.yawExtra = 0;
-    this.dmg = def.dmg * (1 + f * 0.03);
-    this.pspeed = 4.6 * (1 + f * 0.015);
-    this.fireMul = Math.max(0.6, 1 - f * 0.02);
+    this.dmg = def.dmg * (1 + f * 0.015); // balance pass: was 3% per floor, far too steep past floor 10
+    this.pspeed = 4.6 * (1 + f * 0.015) * (dd.proj || 1);
+    this.fireMul = Math.max(0.72, 1 - f * 0.014) * (dd.fire || 1);
     this.shieldHp = this.traits.shield || 0;
     this.scale = def.scale || 1;
     const mk = def.model.kind, ms = def.model.style;
@@ -50,7 +52,7 @@ export class Enemy {
     this.goal = new THREE.Vector3(spot.x, this.flyer ? (spot.y || 2.1) : this.hover, spot.z);
     this.state = opts.enter ? 'enter' : opts.active ? 'active' : 'dormant';
     this.atkIdx = 0; this.atkState = 'cool'; this.atkT = rand(Math.random, 1.0, 2.2); this.timer = 0; this.burstLeft = 0; this.burstGap = 0.18;
-    this.meleeT = 0.35; this.blinkT = rand(Math.random, 2, 3.5); this.hopT = 0.3; this.leap = null;
+    this.meleeT = 0.6; this.blinkT = rand(Math.random, 2, 3.5); this.hopT = 0.3; this.leap = null;
     this.burrow = def.move === 'burrow' ? { phase: 'up', t: 2.4 } : null;
     this.burrowY = 0;
     this.cloak = this.traits.cloak ? { on: false, t: rand(Math.random, 1.5, 2.5) } : null;
@@ -177,7 +179,7 @@ export class Enemy {
   }
 
   // low critters stop further away so they stay above the HUD and stay tappable
-  meleeTarget() { const c = this.game.camPos; const low = !this.hover && this.centerY * this.scale < 0.7; return new THREE.Vector3(c.x, this.hover, c.z - (low ? 2.1 : 1.3)); }
+  meleeTarget() { const c = this.game.camPos; const low = !this.hover && this.centerY * this.scale < 0.7; return new THREE.Vector3(c.x, this.hover, c.z - (low ? (this.game.lowReach || 2.1) : 1.3)); }
 
   doMelee(dt) {
     this.meleeT -= dt;
@@ -186,7 +188,7 @@ export class Enemy {
       this.swingT = 0.3; this.game.sfx.swing();
       this.game.hurtPlayer(this.dmg, this);
       if (this.traits.leech) this.hp = Math.min(this.maxHp, this.hp + 2);
-      this.meleeT = 1.0;
+      this.meleeT = 1.35;
     }
   }
 
@@ -577,6 +579,7 @@ const PKINDS = {
 export class Projectile {
   constructor(game, from, target, speed, dmg, kind, opts = {}) {
     this.game = game; this.dmg = dmg; this.kind = kind; this.alive = true; this.life = 0;
+    this.owner = game.actor || null; // who fired it (for the cause of death)
     const k = PKINDS[kind] || PKINDS.orb;
     this.k = k;
     this.mesh = new THREE.Mesh(k.geo, k.mat);
@@ -640,11 +643,11 @@ export class Projectile {
       const p = this.mesh.position;
       if (p.y < 0.15 || p.distanceTo(cam) < 0.7) {
         this.game.fx.explosion(p.clone().setY(Math.max(0.3, p.y)), 1.4); this.game.sfx.explode(); this.game.shakeCam(0.5);
-        if (Math.hypot(p.x - cam.x, p.z - cam.z) < 2.3) this.game.hurtPlayer(this.dmg, null);
+        if (Math.hypot(p.x - cam.x, p.z - cam.z) < 2.3) this.game.hurtPlayer(this.dmg, null, this);
         this.kill(); return;
       }
     }
-    if (this.mesh.position.distanceTo(cam) < 0.45) { this.game.hurtPlayer(this.dmg, null); this.kill(); return; }
+    if (this.mesh.position.distanceTo(cam) < 0.45) { this.game.hurtPlayer(this.dmg, null, this); this.kill(); return; }
     if (this.mesh.position.z > cam.z + 0.5 || this.life > 8 || this.mesh.position.y < -0.5) this.kill();
   }
   kill() { this.alive = false; this.game.scene.remove(this.mesh); }

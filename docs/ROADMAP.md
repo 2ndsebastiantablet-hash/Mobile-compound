@@ -30,14 +30,20 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 - [x] **8 employees** with their own starting weapons and perks, unlocked by milestones or cash
 - [x] **31 achievements** with cash rewards
 
-## Phase 4: Balance & performance (2–3 sessions · weeks 3–5) ★ needs your playtesting
-- [ ] Difficulty curve floors 1–50 (enemy counts, damage, accuracy)
-- [ ] Boss and mini-boss tuning (health, attack timing, fairness of hit rules)
-- [ ] Weapon tuning (rarity vs. power, melee usefulness)
-- [ ] Performance on real phones; low/medium/high graphics presets
-- [ ] Bug-fix pass from your playtest notes
+## Phase 4: Balance & performance ✅ FIRST PASS DONE (v0.10) · keep sending playtest notes
+- [x] Bug-fix pass from your playtest notes: achievement popup over the HUD, crawlers hidden behind the PC status bar, cubicle and pillar cover, flickering skyline in windows, bullet holes left on elevator doors, melee weapons facing the wrong way
+- [x] Melee rework: weapons held upright with blades and axe heads facing forward; overhead chops and diagonal slashes pivoting from the shoulder
+- [x] PC aiming: mouse capture, mouse speed setting, gun weight
+- [x] Difficulty modes: Easy, Medium, Hard, Extra Hard (+3 achievements)
+- [x] Continue a run as a different employee; cause of death on the game-over screen
+- [x] Developer mode (god mode, give weapons/perks, spawn, skip floors, game speed)
+- [x] Difficulty curve floors 1–50, measured with an autoplay bot: flatter enemy damage and health growth, fewer enemies at once, slower melee, minion cap
+- [x] Weapon tuning: rarity now roughly tracks power (weak rares and epics buffed, double barrel trimmed)
+- [x] Performance: static level geometry merged per room and only nearby rooms drawn (~70% fewer meshes, ~1.6x frame rate in software rendering)
+- [ ] Boss and mini-boss fine-tuning from real play (bot can't judge fairness of hit rules)
+- [ ] Test on real phones (old and new) and adjust graphics presets
 
-**🏁 MILESTONE: ALPHA.** Full game loop, saves, progression, balanced. Ready for friends to test.
+**🏁 MILESTONE: ALPHA** (reached once the last two items are confirmed by your playtests). Full game loop, saves, progression, balanced. Ready for friends to test.
 
 ## Phase 5: Audio (2 sessions · week 5–6)
 - [ ] Full soundtrack: a unique 3+ minute song per floor with sections; title and boss themes

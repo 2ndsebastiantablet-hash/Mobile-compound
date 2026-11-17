@@ -73,7 +73,7 @@ function charRow(c, picking, onPick) {
   const req = !open && c.unlock ? `<small class="req">UNLOCK: ${c.unlock.test ? c.unlock.text + (c.unlock.price ? ' — OR BUY IT' : '') : 'BUY IT'}</small>` : '';
   row.append(el('div', 'hq-info', `<b>${c.name}</b><span>${c.blurb}</span><small>${gun.name}${perks}</small>${req}`));
   if (open) {
-    const b = el('button', 'hq-buy' + (sel ? ' on' : ''), picking ? 'START' : sel ? 'SELECTED' : 'SELECT');
+    const b = el('button', 'hq-buy' + (sel ? ' on' : ''), picking ? (sel ? 'GO' : 'START') : sel ? 'SELECTED' : 'SELECT');
     b.addEventListener('click', (e) => { e.stopPropagation(); hooks.sfx.tap(); profile.char = c.id; touch(); flushProfile(true); if (picking) onPick(c); else render(); });
     row.append(b);
   } else if (c.unlock.price) {
@@ -83,10 +83,24 @@ function charRow(c, picking, onPick) {
 }
 
 // shown when starting a new run with more than one employee unlocked
-export function openCharSelect(onPick) {
+export function openCharSelect(onPick, title = "WHO'S CLOCKING IN?") {
+  $('charTitle').textContent = title;
   const box = $('charList'); box.innerHTML = '';
   for (const c of CHARACTERS) if (isUnlocked(c, profile)) box.append(charRow(c, true, (ch) => { $('charSelect').classList.add('hidden'); onPick(ch); }));
   $('charSelect').classList.remove('hidden');
+}
+// difficulty picker shown at the start of a new run
+export function openDiffSelect(diffs, onPick) {
+  const box = $('diffList'); box.innerHTML = '';
+  diffs.forEach((d, i) => {
+    const sel = (profile.diff ?? 1) === i;
+    const row = el('div', 'hq-row' + (sel ? ' sel' : ''));
+    row.append(el('div', 'hq-info', `<b style="color:${d.color}">${d.name}</b><span>${d.desc}</span>`));
+    const b = el('button', 'hq-buy' + (sel ? ' on' : ''), 'PICK');
+    b.addEventListener('click', (e) => { e.stopPropagation(); hooks.sfx.tap(); profile.diff = i; touch(); flushProfile(true); $('diffSelect').classList.add('hidden'); onPick(i); });
+    row.append(b); box.append(row);
+  });
+  $('diffSelect').classList.remove('hidden');
 }
 export const unlockedCount = () => CHARACTERS.filter((c) => isUnlocked(c, profile)).length;
 export const allUnlocked = () => unlockedCount() === CHARACTERS.length;

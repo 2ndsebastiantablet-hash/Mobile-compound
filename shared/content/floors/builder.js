@@ -4,7 +4,7 @@
 import * as THREE from '../../vendor/three.module.min.js';
 import * as TX from '../../engine/textures.js';
 import { mulberry32, rand, pick, shuffle } from '../../engine/util.js';
-import { box, plane } from '../../engine/geometry.js';
+import { box, plane, mergeStatic } from '../../engine/geometry.js';
 import { RD, RW, RH, HALF, EYE, MOODS } from './zones.js';
 export { RD, RW, RH, HALF, EYE, TOP_FLOOR, ZONES, MOODS, zoneFor, floorPlan, themeFor } from './zones.js';
 export { box } from '../../engine/geometry.js';
@@ -88,6 +88,13 @@ export function buildFloor(floor, plan) {
   const elevators = [];
   const rooms = types.map((type, i) => buildRoom({ i, type, floor, th, M, rng, group, sky, sign, flicker, elevators, mood, last: i === types.length - 1, isBoss }));
 
+  // one continuous skyline outside the windows: per-room backdrops overlapped and z-fought (flickering moon)
+  if (rooms.some((r) => r.windows)) {
+    const zA = rooms[0].z0 + 8, zB = rooms[rooms.length - 1].zf - 8, len = zA - zB;
+    const sp = new THREE.Mesh(plane(len, 7, Math.round(len / 14.4), 1), sky);
+    sp.position.set(-(HALF + 6), 1.2, (zA + zB) / 2); sp.rotation.y = Math.PI / 2; sp.renderOrder = -1; group.add(sp);
+  }
+  for (const r of rooms) mergeStatic(r.group); // one draw call per material per room
   group.traverse((o) => { if (!o.userData.dyn) { o.updateMatrix(); o.matrixAutoUpdate = false; } });
 
   let ft = 0;
@@ -126,7 +133,7 @@ function buildRoom(c) {
   const room = { type, z0, zf, group: g, stand: new THREE.Vector3(0, EYE, z0 - 1.0), spots: [], lightPos: [], doorSpawns: [], elevators: [] };
   // tall cover (pillars, shelves) hides the whole body, so those spots get a sideways "peek" offset
   const spot = (x, d, cover = false, extra = {}) => room.spots.push({ x, z: Z(d), cover, ...extra,
-    ...(cover && (extra.coverH || 0) >= 1.5 ? { peek: (x > 0 ? -1 : 1) * 0.95 } : {}) });
+    ...(cover && (extra.coverH || 0) >= 1.2 ? { peek: (x > 0 ? -1 : 1) * 0.95 } : {}) });
 
   // floor / ceiling
   add(g, box(RW, 0.1, RD, 2), type === 'breakroom' && !th.floorStyle ? M.lino : M.floor, 0, -0.05, zc);
@@ -141,8 +148,7 @@ function buildRoom(c) {
       add(g, box(0.2, 0.55, RD, 2), M.wall, x, RH - 0.275, zc);
       for (let k = 0; k <= 6; k++) add(g, box(0.12, 1.55, 0.1), M.metalDark, x + 0.04, 1.675, z0 - k * 2);
       add(g, box(0.3, 0.06, RD), M.metalDark, x + 0.1, 0.92, zc);
-      const sp = add(g, plane(RD * 2.4, 7, 2, 1), c.sky, -(HALF + 6), 1.2, zc, Math.PI / 2);
-      sp.renderOrder = -1;
+      room.windows = true; // the skyline behind the glass is one long backdrop per floor (see buildFloor)
       add(g, plane(RD, 1.55), M.glass, x + 0.02, 1.675, zc, Math.PI / 2);
     } else {
       add(g, box(0.2, RH, RD, 2), M.wall, x, RH / 2, zc);
@@ -190,7 +196,7 @@ function buildRoom(c) {
   for (let k = 0; k < 4; k++) for (const lx of [-1.6, 1.6]) {
     const off = rng() < (c.mood.off || 0.07);
     const m = add(g, box(1.2, 0.04, 0.6), off ? M.lightOff : M.lightOn, lx, RH - 0.01, Z(1.6 + k * 3));
-    if (!off && rng() < (c.mood.flicker || 0.08)) { m.userData.dyn = false; c.flicker.push({ mesh: m, t: rand(rng, 0, 2), on: true }); }
+    if (!off && rng() < (c.mood.flicker || 0.08)) { m.userData.dyn = false; c.flicker.push({ mesh: m, t: rand(rng, 0, 2), on: true }); m.userData.keep = true; }
   }
   room.lightPos.push(new THREE.Vector3(0, RH - 0.3, Z(3)), new THREE.Vector3(0, RH - 0.3, Z(9)));
 
@@ -220,7 +226,7 @@ function buildRoom(c) {
       add(p, box(0.56, 0.04, 0.56), M.metalDark, 0, 0.03, 0);
     },
     cubicle(xc, d, side) {
-      const H = 1.3, CW = 1.9;
+      const H = 1.1, CW = 1.9; // low enough that a standing enemy shows its whole upper body
       const panel = (len, x, z, ry) => {
         add(g, box(len, H, 0.06, 1), M.fabric, x, H / 2, z, ry);
         add(g, box(len, 0.04, 0.09), M.metalDark, x, H + 0.02, z, ry);
@@ -515,5 +521,8 @@ function addElevator(g, M, add, x, z, dir) {
   const doorL = add(g, box(0.7, 2.3, 0.05), M.elevDoor, x - 0.35, 1.15, z);
   const doorR = add(g, box(0.7, 2.3, 0.05), M.elevDoor, x + 0.35, 1.15, z);
   doorL.userData.dyn = doorR.userData.dyn = true;
+  // no bullet holes on the elevator: its doors slide away and leave them hanging in the air
+  shaft.traverse((o) => { o.userData.noHole = true; });
+  for (const o of g.children.slice(-6)) o.userData.noHole = true;
   return { x, z, dir, doorL, doorR, open: 0, target: 0, inside: new THREE.Vector3(x, EYE, z + dir * 1.1) };
 }

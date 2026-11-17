@@ -196,6 +196,8 @@ const BOSSES = {
 
 // Register every boss as an enemy type so the normal Enemy class can build it.
 export const BOSS_LIST = [];
+// per-shot damage for moves that throw many projectiles at once (fan, wall, rain, barrage, spin)
+const MULTI = { dmg: 0.6 };
 for (const [table, mini] of [[MINIS, true], [BOSSES, false]]) {
   for (const [floor, list] of Object.entries(table)) {
     list.forEach((b, slot) => {
@@ -390,7 +392,7 @@ export class BossBrain {
 
   shots(n, spread, kind, extra = {}) {
     const e = this.e;
-    for (let k = 0; k < n; k++) e.shoot(kind || 'orb', (k - (n - 1) / 2) * spread, extra);
+    for (let k = 0; k < n; k++) e.shoot(kind || 'orb', (k - (n - 1) / 2) * spread, { dmg: n > 2 ? MULTI.dmg : 1, ...extra });
   }
 
   execute() {
@@ -402,7 +404,7 @@ export class BossBrain {
       case 'fan': this.shots(m.n || 5, 0.11, kind || 'big'); break;
       case 'wall': {
         const from = e.muzzle(new THREE.Vector3()); const n = m.n || 7;
-        for (let k = 0; k < n; k++) { const off = (k - (n - 1) / 2) * 0.55; g.spawnProjectile(from.clone().add(new THREE.Vector3(off, 0, 0)), g.camPos.clone().add(new THREE.Vector3(off, 0, 0)), e.pspeed * 0.75, e.dmg, kind || 'orb'); }
+        for (let k = 0; k < n; k++) { const off = (k - (n - 1) / 2) * 0.55; g.spawnProjectile(from.clone().add(new THREE.Vector3(off, 0, 0)), g.camPos.clone().add(new THREE.Vector3(off, 0, 0)), e.pspeed * 0.75, e.dmg * MULTI.dmg, kind || 'orb'); }
         g.sfx.enemyShot(); break;
       }
       case 'homing': this.shots(m.n || 3, 0.5, kind || 'missile', { homing: true }); break;
@@ -410,7 +412,7 @@ export class BossBrain {
         const n = m.n || 6;
         for (let k = 0; k < n; k++) {
           const from = new THREE.Vector3(rand(Math.random, -2.4, 2.4), 2.85, g.camPos.z - rand(Math.random, 3.5, 7));
-          g.spawnProjectile(from, g.camPos.clone().add(new THREE.Vector3(rand(Math.random, -0.5, 0.5), rand(Math.random, -0.4, 0.2), 0)), e.pspeed * 0.55, e.dmg, kind || 'orb', { delay: k * 0.18 });
+          g.spawnProjectile(from, g.camPos.clone().add(new THREE.Vector3(rand(Math.random, -0.5, 0.5), rand(Math.random, -0.4, 0.2), 0)), e.pspeed * 0.55, e.dmg * MULTI.dmg, kind || 'orb', { delay: k * 0.18 });
         }
         g.sfx.telegraph(); break;
       }
@@ -449,8 +451,8 @@ export class BossBrain {
     if (m.t === 'barrage' || m.t === 'spin') {
       this.t -= dt;
       if (this.t <= 0) {
-        if (m.t === 'spin') { this.ang += 0.35; e.shoot(m.kind || 'orb', Math.sin(this.ang) * 0.5); e.shoot(m.kind || 'orb', -Math.sin(this.ang) * 0.5); this.t = 0.14; }
-        else { e.shoot(m.kind || 'shard'); this.t = 0.09; }
+        if (m.t === 'spin') { this.ang += 0.35; e.shoot(m.kind || 'orb', Math.sin(this.ang) * 0.5, MULTI); e.shoot(m.kind || 'orb', -Math.sin(this.ang) * 0.5, MULTI); this.t = 0.14; }
+        else { e.shoot(m.kind || 'shard', 0, MULTI); this.t = 0.11; }
         if (--this.left <= 0) this.finish();
       }
       return;

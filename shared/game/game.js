@@ -2,21 +2,23 @@ import * as THREE from '../vendor/three.module.min.js';
 import { buildFloor, floorPlan, MOODS, box, EYE, RD, TOP_FLOOR } from '../content/floors/builder.js';
 import { Enemy, Projectile } from '../content/enemies/ai.js';
 import { DEFS, rosterFor, isFlyer, isMelee } from '../content/enemies/roster.js';
-import { bossFor, bossKindFor } from '../content/bosses/bosses.js';
+import { bossFor, bossKindFor, BOSS_LIST } from '../content/bosses/bosses.js';
+import { initDev, devOn, devTick, devOpen, refreshDevUi } from './dev.js';
 import { Effects } from '../engine/effects.js';
 import * as TX from '../engine/textures.js';
 import { initAudio, sfx, setMuted, isMuted, setVolumes } from '../audio/sfx.js';
-import { SCHEMA, settings, setSetting, onSettingsChange, AIM_MULT, RES_MOBILE, RES_PC, FX_MULT, tutorialDone, setTutorialDone } from './settings.js';
+import { SCHEMA, DEV_BUILD, settings, setSetting, onSettingsChange, AIM_MULT, SENS_MULT, RES_MOBILE, RES_PC, FX_MULT, tutorialDone, setTutorialDone } from './settings.js';
 import { saveRun, loadRun, clearRun } from './save.js';
 import { Tutorial } from './tutorial.js';
 import { PERKS, PERK, PERK_RARITY, rollPerks, mods } from '../content/perks/perks.js';
 import { profile, addCash, stat, statMax, touch, flushProfile } from './profile.js';
 import { applyUpgrades, weaponBonus } from '../content/meta/upgrades.js';
 import { CHAR } from '../content/meta/characters.js';
+import { DIFFS, diffOf } from './difficulty.js';
 import { ACHIEVEMENTS } from '../content/meta/achievements.js';
-import { initHQ, bindHQ, openHQ, closeHQ, openCharSelect, unlockedCount, allUnlocked, money } from './hq.js';
+import { initHQ, bindHQ, openHQ, closeHQ, openCharSelect, openDiffSelect, unlockedCount, allUnlocked, money } from './hq.js';
 import { setMusic } from '../audio/music.js';
-import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine, setSleeve } from '../content/weapons/weapons.js';
+import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine, setSleeve, aimSpeed } from '../content/weapons/weapons.js';
 import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet } from '../engine/util.js';
 
 // ------------------------------------------------------------------ DOM
@@ -55,6 +57,11 @@ const gunCam = new THREE.PerspectiveCamera(55, 0.5, 0.01, 10);
 gunScene.add(new THREE.AmbientLight(0xffffff, 0.9));
 const gunSun = new THREE.DirectionalLight(0xffffff, 1.6); gunSun.position.set(-1, 2, 1.5); gunScene.add(gunSun);
 const gunRoot = new THREE.Group(); gunRoot.scale.setScalar(0.62); gunScene.add(gunRoot);
+// melee swings pivot at the shoulder (behind and below the hand), not at the fist
+const SHOULDER = new THREE.Vector3(0.28, -0.5, 0.55), ELBOW = new THREE.Vector3(0.04, -0.2, 0.3);
+function setPivot(v) { swingPivot.position.copy(v); swingInner.position.copy(v).negate(); }
+const swingPivot = new THREE.Group(); swingPivot.position.copy(SHOULDER); gunRoot.add(swingPivot);
+const swingInner = new THREE.Group(); swingInner.position.copy(SHOULDER).negate(); swingPivot.add(swingInner);
 const gunBase = new THREE.Vector3();
 
 const effects = new Effects(scene, camera);
@@ -69,7 +76,7 @@ function viewModel(id) {
     md.flash = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), FLASH_MAT);
     md.flash.position.copy(md.tip); md.flash.visible = false; md.g.add(md.flash);
     if (md.pump) md.pumpZ = md.pump.position.z;
-    md.g.visible = false; gunRoot.add(md.g);
+    md.g.visible = false; swingInner.add(md.g);
     models[id] = md;
   }
   return models[id];
@@ -79,6 +86,7 @@ function viewModel(id) {
 const G = {
   scene, camera, fx: effects, sfx,
   camPos: new THREE.Vector3(0, EYE, 0),
+  lowReach: PC ? 3.1 : 2.1, // how close floor crawlers get (kept above the status bar)
   floorNum: 1, floor: null, room: null, roomIdx: 0,
   combatActive: false,
   enemies: [], projectiles: [], pickups: [],
@@ -91,7 +99,7 @@ const BASE_PITCH = PC ? -0.06 : -0.1;
 let yaw = 0, pitch = BASE_PITCH, roll = 0, shake = 0;
 let area = null;
 let hold = null;
-let titleT = 0;
+let titleT = 0, drawCalls = 0;
 const best = storeGet('overtime.best', { floor: 0, score: 0 });
 
 function newStats() { return { shots: 0, hits: 0, kills: 0, heads: 0, orbs: 0, dmg: 0, t: 0 }; }
@@ -105,6 +113,10 @@ const wlv = (id) => weaponBonus(profile.weapons[id] || 0); // Armory upgrade lev
 const magOf = (def) => (def.melee ? 0 : Math.max(1, Math.round(def.mag * M.mag * wlv(def.id).mag)));
 // this run: cash earned, revives left, character, best combo (for achievements)
 let runCash = 0, runChar = 'temp', runMaxCombo = 0;
+// difficulty mode for this run (index into DIFFS); G.dd is read by enemies
+let runDiff = 1, D = diffOf(1);
+function setDiff(i) { runDiff = DIFFS[i] ? i : 1; D = diffOf(runDiff); G.dd = D; }
+setDiff(1);
 const healP = (n) => { if (n > 0) P.hp = Math.min(M.maxHp, P.hp + n); };
 const seenTypes = new Set(storeGet('overtime.seen', []));
 let pendingIntro = [], introT = 0;
@@ -157,7 +169,11 @@ function loadFloor(n, variant) {
   setLights(f.rooms[0], f.rooms[0], 0);
 }
 
-function setRoom(i) { G.roomIdx = i; G.room = G.floor.rooms[i]; }
+function setRoom(i) {
+  G.roomIdx = i; G.room = G.floor.rooms[i];
+  // only draw the rooms you can actually see: the one behind (you walk out of it) and two ahead
+  G.floor.rooms.forEach((r, j) => { r.group.visible = j >= i - 1 && j <= i + 2; });
+}
 function setLights(a, b, k) {
   roomLights.forEach((l, j) => l.position.lerpVectors(a.lightPos[j], b.lightPos[j], k));
 }
@@ -175,8 +191,8 @@ function prepareArea(i) {
   const last = i === G.floor.rooms.length - 1;
   room.spots.forEach((s) => (s.taken = null));
   const df = G.diff || f;
-  const n = Math.min(12, 3 + Math.floor(df * 0.55) + Math.floor(i * 0.5));
-  const initialN = Math.min(n, 3 + Math.floor(df / 5));
+  const n = Math.max(2, Math.min(14, Math.round((3 + Math.floor(df * 0.55) + Math.floor(i * 0.5)) * D.count)));
+  const initialN = Math.min(n, 3 + Math.floor(df / 7));
   const types = [];
   // cap the heavy hitters so an area is never a wall of tanks
   let heavy = 0;
@@ -188,7 +204,7 @@ function prepareArea(i) {
     types.push(t);
   }
   if (i === 0 && tutorialPending) { area = { idx: 0, room, queue: [], waveT: 99, maxAlive: 0, clearing: false, boss: null, tutorial: true }; return; }
-  area = { idx: i, room, queue: [], waveT: 2.5, maxAlive: Math.min(7, 3 + Math.floor((G.diff || f) / 4)), clearing: false, boss: null };
+  area = { idx: i, room, queue: [], waveT: 2.5, maxAlive: Math.max(2, Math.min(8, 3 + Math.floor((G.diff || f) / 6) + D.alive)), clearing: false, boss: null };
   const bk = bossKindFor(f);
   if (last && bk) {
     const id = bossFor(f, G.variant || 0);
@@ -268,7 +284,9 @@ G.spawnMinion = (type, pos, n) => {
   const made = [];
   if (!area) return made;
   for (let k = 0; k < n; k++) {
-    if (G.enemies.filter((e) => e.alive).length >= 14) break;
+    // balance: summoners can't flood the room (minions were the #1 killer past floor 20)
+    if (G.enemies.filter((e) => e.alive).length >= 12) break;
+    if (G.enemies.filter((e) => e.alive && e.def.minion).length >= 5) break;
     const at = pos.clone().add(new THREE.Vector3(rand(Math.random, -0.6, 0.6), 0, rand(Math.random, -0.3, 0.6)));
     at.x = clamp(at.x, -2.6, 2.6);
     const spot = isFlyer(type) ? airSpot(area.room) : isMelee(type) ? { x: at.x, z: at.z, cover: false } : freeSpot(type);
@@ -325,8 +343,18 @@ G.blast = (center, r, dmg) => {
 // ------------------------------------------------------------------ game callbacks
 G.spawnProjectile = (from, target, speed, dmg, kind, opts) => { G.projectiles.push(new Projectile(G, from, target, speed * M.projSpeed, dmg, kind, opts)); };
 
-G.hurtPlayer = (dmg, src) => {
+const PNAME = { orb: 'FIREBALL', big: 'PLASMA ORB', bolt: 'ENERGY BOLT', shard: 'SHARDS', plasma: 'PLASMA', fire: 'FIREBALL', coffee: 'HOT COFFEE', acid: 'ACID', grenade: 'GRENADE', package: 'PARCEL BOMB', missile: 'MISSILE', pitch: 'SALES PITCH', sonic: 'SONIC BLAST', bomb: 'BOMB', mine: 'MINE' };
+let deathCause = '';
+function causeOf(src, proj) {
+  const who = src || (proj && proj.owner);
+  const name = who && who.def ? who.def.name : null;
+  if (proj) return `${name ? name + "'S " : 'A '}${PNAME[proj.kind] || 'PROJECTILE'}`;
+  return name || 'THE BUILDING';
+}
+G.hurtPlayer = (dmg, src, proj) => {
   if (!G.combatActive || mode !== 'combat') return;
+  if (devOn('god')) { sfx.hurt(); return; }
+  dmg *= D.dmg;
   if (tutorial && !tutorial.done) dmg *= 0.5;
   if (!src && M.deflect && Math.random() < M.deflect) { popText(G.camPos.clone().add(new THREE.Vector3(0, -0.2, -1.2)), 'DEFLECTED', '#80e0ff'); sfx.zap(); return; }
   dmg *= M.armor;
@@ -339,7 +367,7 @@ G.hurtPlayer = (dmg, src) => {
   ui.hurt.style.transition = 'none'; ui.hurt.style.opacity = 0.9;
   requestAnimationFrame(() => { ui.hurt.style.transition = 'opacity .5s'; ui.hurt.style.opacity = 0; });
   combo = 0;
-  if (P.hp <= 0) playerDied();
+  if (P.hp <= 0) { deathCause = causeOf(src, proj); playerDied(); }
 };
 
 G.onEnemyKilled = (e, head, noScore) => {
@@ -347,10 +375,10 @@ G.onEnemyKilled = (e, head, noScore) => {
   stats.kills++; if (head) stats.heads++;
   combo = now - lastKill < M.comboWindow ? Math.min(M.comboMax, combo + 1) : 1;
   lastKill = now;
-  const pts = Math.round((e.st.score + (head ? 50 : 0)) * combo * M.score);
+  const pts = Math.round((e.st.score + (head ? 50 : 0)) * combo * M.score * D.score);
   runMaxCombo = Math.max(runMaxCombo, combo);
   const f = G.floorNum;
-  const cash = addCash((e.def.boss ? (e.def.mini ? 60 + f * 6 : 150 + f * 12) : Math.max(1, Math.round(e.st.score / 40))) * M.cash);
+  const cash = addCash((e.def.boss ? (e.def.mini ? 60 + f * 6 : 150 + f * 12) : Math.max(1, Math.round(e.st.score / 40))) * M.cash * D.cash);
   runCash += cash;
   popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, -0.35, 0)), `$${cash}`, '#ffd040');
   stat('kills'); if (head) stat('heads'); if (cur().melee) stat('meleeKills');
@@ -478,12 +506,33 @@ function toast(text, color) {
 }
 
 // ------------------------------------------------------------------ flow
+// continuing a run as a different employee: swap the old employee's starting perks and weapon
+// for the new one's (guns you found along the way are kept)
+const RANK = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
+function switchChar(sv, id) {
+  const old = CHAR[sv.char] || CHAR.temp, nw = CHAR[id];
+  if (!nw || nw.id === old.id) return sv;
+  const perks = { ...(sv.perks || {}) };
+  for (const [k, v] of Object.entries(old.perks)) { perks[k] = (perks[k] || 0) - v; if (perks[k] <= 0) delete perks[k]; }
+  for (const [k, v] of Object.entries(nw.perks)) perks[k] = (perks[k] || 0) + v;
+  const inv = sv.inv.filter((x) => GUN[x.id]).map((x) => ({ ...x }));
+  if (!inv.some((x) => x.id === nw.weapon)) {
+    const give = { id: nw.weapon, ammo: 999 };
+    const oi = inv.findIndex((x) => x.id === old.weapon);
+    if (oi >= 0) inv[oi] = give;
+    else if (inv.length < M.maxGuns) inv.push(give);
+    else { let lo = 0; inv.forEach((x, i) => { if (RANK[GUN[x.id].rarity] < RANK[GUN[inv[lo].id].rarity]) lo = i; }); inv[lo] = give; }
+  }
+  foundGun(nw.weapon);
+  return { ...sv, char: nw.id, perks, inv, slot: Math.max(0, inv.findIndex((x) => x.id === nw.weapon)) };
+}
+
 function continueRun(sv, fullHp = false) {
   initAudio();
   hideScreens();
   score = sv.score || 0; floorStartScore = score;
   perkLv = { ...(sv.perks || {}) }; rerolls = sv.rerolls ?? 1; recalc();
-  P.revives = sv.revives ?? M.revives; runCash = sv.cash || 0; runChar = sv.char || 'temp'; setSleeve(CHAR[runChar]?.sleeve ?? 0xd2d2cc);
+  P.revives = sv.revives ?? M.revives; runCash = sv.cash || 0; runChar = sv.char || 'temp'; setDiff(sv.diff ?? 1); setSleeve(CHAR[runChar]?.sleeve ?? 0xd2d2cc);
   P.hp = fullHp ? M.maxHp : Math.max(1, Math.min(M.maxHp, sv.hp || M.maxHp));
   P.inv = sv.inv.filter((s) => GUN[s.id]).map((s) => ({ ...s }));
   if (!P.inv.length) P.inv = [{ id: 'pistol', ammo: GUN.pistol.mag }];
@@ -500,7 +549,7 @@ function startGame(floor = 1, keepScore = false) {
   if (!keepScore) {
     // new run: the chosen employee's perks, permanent upgrades, fresh counters
     const ch = CHAR[profile.char] || CHAR.temp;
-    runChar = ch.id; setSleeve(ch.sleeve);
+    runChar = ch.id; setSleeve(ch.sleeve); setDiff(profile.diff ?? 1);
     score = 0; perkLv = { ...ch.perks }; recalc(); rerolls = 1 + M.extraRerolls; P.revives = M.revives; runCash = 0;
     stat('runs');
   }
@@ -533,7 +582,7 @@ function startFloor(n, sameVariant = false) {
   gunsThisFloor = 0;
   equip(P.slot, true);
   // autosave: a run can always be continued from the start of this floor
-  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls, revives: P.revives, cash: runCash, char: runChar });
+  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls, revives: P.revives, cash: runCash, char: runChar, diff: runDiff });
   statMax('maxFloor', n); checkAch();
   P.windUsed = false;
   tutorialPending = n === 1 && !tutorialDone();
@@ -677,7 +726,7 @@ function floorComplete() {
   if (n > best.floor || score > best.score) { best.floor = Math.max(best.floor, n); best.score = Math.max(best.score, score); storeSet('overtime.best', best); }
   if (n >= TOP_FLOOR) { showWin(); return; }
   const acc = stats.shots ? Math.round((stats.hits / stats.shots) * 100) : 0;
-  const bonus = addCash((20 + n * 4) * M.cash); runCash += bonus;
+  const bonus = addCash((20 + n * 4) * M.cash * D.cash); runCash += bonus;
   stat('orbs', stats.orbs); statMax('maxFloor', n + 1);
   checkAch({ floorCleared: true, floorDmg: stats.dmg, shots: stats.shots, hits: stats.hits, floorTime: stats.t });
   flushProfile(true);
@@ -687,7 +736,7 @@ function floorComplete() {
     `ACCURACY    ${acc}%`, `TIME        ${fmtTime(stats.t)}`, `SCORE       ${score}`,
     `CASH        +${money(bonus)} BONUS`, `WALLET      ${money(profile.cash)}`,
   ].join('\n');
-  const heal = Math.max(0, Math.min(M.maxHp - P.hp, 30 + M.coffee));
+  const heal = Math.max(0, Math.min(M.maxHp - P.hp, Math.round((30 + M.coffee) * D.heal)));
   P.hp += heal;
   let unlock = heal > 0 ? `+${heal} HP COFFEE BREAK` : '';
   unlock += (unlock ? '\n' : '') + 'LOADOUT: ' + P.inv.map((s) => GUN[s.id].short).join(' / ');
@@ -718,13 +767,14 @@ function playerDied() {
     const y0 = G.camPos.y;
     yield* tween(1.0, (k) => { G.camPos.y = lerp(y0, 0.35, ease(k)); roll = ease(k) * 1.1; pitch = BASE_PITCH + k * 0.3; });
     fade(0.7, 0.5); yield 0.6;
+    $('goCause').textContent = deathCause ? `KILLED BY ${deathCause}` : '';
     $('goStats').textContent = `FLOOR ${G.floorNum}\nSCORE ${score}\nCASH EARNED ${money(runCash)}\nWALLET ${money(profile.cash)}\nBEST FLOOR ${Math.max(best.floor, G.floorNum)}`;
     showScreen(ui.gameOver);
   });
 }
 
 function showWin() {
-  clearRun(); stat('wins'); statMax('maxFloor', TOP_FLOOR); checkAch(); flushProfile(true);
+  clearRun(); stat('wins'); statMax('maxFloor', TOP_FLOOR); checkAch({ won: true }); flushProfile(true);
   $('winStats').textContent = `FINAL SCORE ${score}\nBEST ${best.score}`;
   showScreen(ui.win);
   setMusic('calm');
@@ -752,7 +802,7 @@ function toTitle() {
 }
 
 function showScreen(el) { el.classList.remove('hidden'); }
-function hideScreens() { $('hq').classList.add('hidden'); $('charSelect').classList.add('hidden'); for (const k of ['title', 'pause', 'floorClear', 'gameOver', 'win', 'settings', 'confirm', 'perks']) ui[k].classList.add('hidden'); }
+function hideScreens() { $('hq').classList.add('hidden'); $('charSelect').classList.add('hidden'); $('diffSelect').classList.add('hidden'); for (const k of ['title', 'pause', 'floorClear', 'gameOver', 'win', 'settings', 'confirm', 'perks']) ui[k].classList.add('hidden'); }
 
 let bannerTimer = null;
 function banner(text, sub, dur) {
@@ -808,12 +858,14 @@ function tryFire(x, y) {
 function fireOnce(x, y) {
   const w = cur(), slot = curSlot();
   if (!w.melee && slot.ammo <= 0) { P.burstLeft = 0; startReload(); return; }
-  if (!w.melee) slot.ammo--;
+  if (!w.melee && !devOn('ammo')) slot.ammo--;
   stats.shots++;
   sfx[w.sound]();
   if (w.melee) {
     // a swing: also bats away any projectile that has got close
+    const style = viewModel(w.id).style;
     P.swing = 1; P.swingDir = -P.swingDir || 1;
+    P.swingDur = style === 'saw' ? 0.3 : style === 'chop' ? Math.min(0.62, Math.max(0.42, w.cd * 0.8)) : Math.min(0.36, Math.max(0.24, w.cd * 0.9));
     for (const p of G.projectiles) if (p.alive && p.mesh.position.distanceTo(G.camPos) < 2.6 + (w.parry || 0)) { effects.pop(p.mesh.position.clone()); p.kill(); stats.orbs++; score += 25; }
   } else {
     P.recoil = Math.min(1.8, P.recoil + w.kick);
@@ -863,7 +915,7 @@ function resolveShot(x, y, w, rect, primary) {
   const targets = [];
   for (const e of G.enemies) if (e.targetable) targets.push(...e.meshes);
   const hitsT = raycaster.intersectObjects(targets, false);
-  const hitsL = raycaster.intersectObject(G.floor.group, true).filter((h) => !h.object.material.transparent && h.object.material.fog !== false);
+  const hitsL = raycaster.intersectObjects(G.floor.group.children.filter((c) => c.visible), true).filter((h) => !h.object.material.transparent && h.object.material.fog !== false);
   const levelHit = hitsL[0];
   const wallD = levelHit ? levelHit.distance : Infinity;
   const maxD = Math.min(wallD + 0.05, range || Infinity);
@@ -925,7 +977,7 @@ function resolveShot(x, y, w, rect, primary) {
     const n = levelHit.face.normal.clone().transformDirection(levelHit.object.matrixWorld);
     if (w.burn) effects.fire(levelHit.point.clone().addScaledVector(n, 0.05), 3);
     else {
-      effects.hole(levelHit.point, n);
+      if (!levelHit.object.userData.noHole && !levelHit.object.userData.dyn) effects.hole(levelHit.point, n);
       effects.dust(levelHit.point.clone().addScaledVector(n, 0.03), 3);
       if (primary) effects.impact(levelHit.point.clone().addScaledVector(n, 0.05));
     }
@@ -940,6 +992,7 @@ function applyHit(e, part, point, w, sound, dir) {
   if (e.hp >= e.maxHp) amt *= M.firstStrike;
   else if (e.hp < e.maxHp * 0.3) amt *= M.exec;
   if (e.def.boss) amt *= M.boss;
+  if (devOn('onehit')) amt = 1e5;
   e.damage(amt, part, point);
   if (M.burn && e.alive && !w.burn) { e.burnT = 3; e.burnDps = Math.max(e.burnDps || 0, M.burn); }
   if (M.freezeChance && e.alive && Math.random() < M.freezeChance) { e.slowT = 2; effects.ice(point, 5); }
@@ -1029,22 +1082,49 @@ function popText(pos, text, color) {
 function localXY(ev) { const r = canvasRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
 let mouse = null;
 const crosshair = $('crosshair');
+// PC: the mouse is captured (pointer lock) during play and moves a virtual crosshair, so the
+// MOUSE SPEED and GUN WEIGHT settings can scale it. Without capture it follows the system cursor.
+let lockLostT = 0;
+const locked = () => document.pointerLockElement === gameEl;
+const inPlay = () => mode !== 'title' && mode !== 'floorclear' && mode !== 'dead' && !paused && !choiceOpen;
+function wantLock() {
+  if (!PC || !settings.lock || locked() || !inPlay()) return;
+  try { const r = gameEl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch { /* not supported */ }
+}
+document.addEventListener('pointerlockchange', () => {
+  // Esc releases the capture in the browser before our key handler sees it: treat that as pause
+  if (!locked() && inPlay() && mode !== 'win') { lockLostT = performance.now(); togglePause(); }
+});
+function moveAim(dx, dy) {
+  const r = canvasRect();
+  const k = SENS_MULT[settings.sens ?? 2] * (settings.weight ? aimSpeed(cur()) : 1);
+  mouse = mouse || { x: r.width / 2, y: r.height / 2 };
+  mouse.x = clamp(mouse.x + dx * k, 0, r.width); mouse.y = clamp(mouse.y + dy * k, 0, r.height);
+}
 gameEl.addEventListener('pointerdown', (ev) => {
   if (ev.target.closest('button') || ev.target.closest('.screen')) return;
   initAudio();
   if (ev.pointerType === 'mouse' && ev.button === 2) { startReload(); ev.preventDefault(); return; }
   if (ev.pointerType === 'mouse' && ev.button !== 0) return;
-  const { x, y } = localXY(ev);
+  let { x, y } = localXY(ev);
+  if (PC && ev.pointerType === 'mouse') {
+    if (locked() && mouse) { x = mouse.x; y = mouse.y; } else { mouse = { x, y }; wantLock(); }
+  }
   hold = { id: ev.pointerId, x, y };
   tryFire(x, y);
   ev.preventDefault();
 });
 gameEl.addEventListener('pointermove', (ev) => {
+  if (ev.pointerType === 'mouse' && PC && locked()) {
+    // some browsers report a bogus jump on the first events after capture: ignore spikes
+    if (Math.abs(ev.movementX) < 250 && Math.abs(ev.movementY) < 250) moveAim(ev.movementX, ev.movementY);
+    return;
+  }
   const p = localXY(ev);
-  if (ev.pointerType === 'mouse') { mouse = p; crosshair.style.transform = `translate(${p.x}px, ${p.y}px)`; }
+  if (ev.pointerType === 'mouse') mouse = p;
   if (hold && hold.id === ev.pointerId) { hold.x = p.x; hold.y = p.y; }
 });
-gameEl.addEventListener('pointerleave', (ev) => { if (ev.pointerType === 'mouse') { mouse = null; hold = null; } });
+gameEl.addEventListener('pointerleave', (ev) => { if (ev.pointerType === 'mouse' && !locked()) { mouse = null; hold = null; } });
 let wheelT = 0;
 gameEl.addEventListener('wheel', (ev) => {
   if (performance.now() - wheelT < 180 || mode === 'title' || choiceOpen) return;
@@ -1058,7 +1138,7 @@ gameEl.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') startReload();
   if (e.key === 'q' || e.key === 'Q' || e.key === 'Tab') { e.preventDefault(); swapWeapon(); }
-  if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') togglePause();
+  if ((e.key === 'Escape' && performance.now() - lockLostT > 400) || e.key === 'p' || e.key === 'P') togglePause();
   if (e.key === 'e' || e.key === 'E') swapWeapon();
   if (['1', '2', '3'].includes(e.key) && !choiceOpen && mode !== 'title') { const i = +e.key - 1; if (i < P.inv.length && i !== P.slot) { equip(i); toast(cur().name, RARITY[cur().rarity].color); } }
   if (e.key === 'f' || e.key === 'F') { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch { /* ignore */ } }
@@ -1069,7 +1149,13 @@ window.addEventListener('keydown', (e) => {
 const onBtn = (id, fn) => $(id).addEventListener('click', (e) => { e.stopPropagation(); initAudio(); fn(); });
 const launchRun = () => { sfx.tap(); fade(1, 0.3); setTimeout(() => startGame(1), 320); };
 // with more than one employee unlocked, pick who starts the run
-const newRun = () => { if (unlockedCount() > 1) { ui.title.classList.add('hidden'); openCharSelect(() => launchRun()); } else launchRun(); };
+// a new run: pick a difficulty, then (with more than one employee unlocked) who starts it
+const newRun = () => {
+  ui.title.classList.add('hidden');
+  openDiffSelect(DIFFS, () => { if (unlockedCount() > 1) openCharSelect(() => launchRun()); else launchRun(); });
+};
+// continuing: you may swap to a different employee for the rest of the run
+const resumeRun = (sv) => { sfx.tap(); fade(1, 0.3); setTimeout(() => continueRun(sv), 320); };
 onBtn('hqBtn', () => { sfx.tap(); ui.title.classList.add('hidden'); openHQ(); });
 onBtn('hqBack', () => { sfx.tap(); closeHQ(); toTitle(); });
 onBtn('charBack', () => { sfx.tap(); $('charSelect').classList.add('hidden'); showScreen(ui.title); });
@@ -1078,7 +1164,15 @@ onBtn('startBtn', () => {
   if (sv) askConfirm(`START A NEW RUN?\nYOUR FLOOR ${sv.floor} SAVE WILL BE LOST.`, () => { clearRun(); newRun(); }, ui.title);
   else newRun();
 });
-onBtn('continueBtn', () => { const sv = loadRun(); if (!sv) return; sfx.tap(); fade(1, 0.3); setTimeout(() => continueRun(sv), 320); });
+onBtn('continueBtn', () => {
+  const sv = loadRun(); if (!sv) return;
+  if (unlockedCount() > 1) {
+    sfx.tap(); ui.title.classList.add('hidden');
+    profile.char = sv.char || 'temp';
+    openCharSelect((ch) => resumeRun(switchChar(sv, ch.id)), `CONTINUE FLOOR ${sv.floor} AS...`);
+  } else resumeRun(sv);
+});
+onBtn('diffBack', () => { sfx.tap(); $('diffSelect').classList.add('hidden'); showScreen(ui.title); });
 onBtn('settingsBtn', () => openSettings(ui.title));
 onBtn('pSettingsBtn', () => openSettings(ui.pause));
 onBtn('restartBtn', () => askConfirm('RESTART THIS FLOOR?', () => { paused = false; restartFloor(); }, ui.pause));
@@ -1100,11 +1194,11 @@ onBtn('winBtn', toTitle);
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'combat' && !paused) togglePause(); });
 
 function togglePause() {
-  if (choiceOpen || settingsOpen || confirmOpen) return;
+  if (choiceOpen || settingsOpen || confirmOpen || devOpen()) return;
   if (mode === 'title' || mode === 'floorclear' || mode === 'dead') return;
   paused = !paused;
   ui.pause.classList.toggle('hidden', !paused);
-  if (paused) $('pausePerks').innerHTML = perkSummary();
+  if (paused) $('pausePerks').innerHTML = `<div class="diffTag">DIFFICULTY: <span style="color:${D.color}">${D.name}</span></div>` + perkSummary();
   setMusic(paused ? 'off' : mode === 'combat' ? 'combat' : 'calm');
 }
 
@@ -1112,7 +1206,7 @@ function togglePause() {
 let flushT = 2, achT = 0;
 const achQueue = [];
 function checkAch(extra = {}) {
-  const run = { maxCombo: runMaxCombo, perkCount: Object.values(perkLv).reduce((a, b) => a + b, 0), ...extra };
+  const run = { maxCombo: runMaxCombo, perkCount: Object.values(perkLv).reduce((a, b) => a + b, 0), diff: runDiff, floor: G.floorNum, ...extra };
   for (const a of ACHIEVEMENTS) {
     if (profile.ach[a.id]) continue;
     let ok = false;
@@ -1172,7 +1266,7 @@ let tutorial = null, tutorialPending = false;
 function buildSettings() {
   const rows = $('settingsRows'); rows.innerHTML = '';
   for (const it of SCHEMA) {
-    if (it.mobileOnly && PC) continue;
+    if ((it.mobileOnly && PC) || (it.pcOnly && !PC) || (it.dev && !DEV_BUILD)) continue;
     const row = document.createElement('div'); row.className = 'setRow';
     row.innerHTML = `<div class="setLbl">${it.label}${it.hint ? `<small>${it.hint}</small>` : ''}</div>`;
     const ctl = document.createElement('div'); ctl.className = 'setCtl';
@@ -1223,6 +1317,7 @@ onSettingsChange((s, key) => {
   setVolumes(s.music / 100, s.sfx / 100);
   effects.mult = FX_MULT[s.gfx];
   document.body.classList.toggle('lefty', !PC && s.lefty === 1);
+  if (key === 'dev') refreshDevUi();
   if (!key || key === 'gfx' || key === 'lefty') resize();
 });
 
@@ -1328,14 +1423,35 @@ function updateGun(dt) {
   P.aimPitch += (P.aimTP - P.aimPitch) * Math.min(1, dt * 25);
   P.swapT = Math.max(0, P.swapT - dt * 3);
   let ry = (!PC && settings.lefty === 1 ? -0.16 : 0.16) + P.aimYaw, rx = P.aimPitch + P.recoil * 0.22, rz = 0;
+  let sx = 0, sy = 0, sz = 0;
+  swingPivot.rotation.set(0, 0, 0);
   if (P.swing > 0) {
-    // melee swing arc
-    P.swing = Math.max(0, P.swing - dt * (cur().auto ? 3 : 5));
-    const k = Math.sin(P.swing * Math.PI);
-    if (cur().auto) { rx += Math.sin(now * 60) * 0.02; ry += Math.sin(now * 47) * 0.02; }
-    else { rz += k * 1.1 * (P.swingDir || 1); rx -= k * 0.9; ry += k * 0.5 * (P.swingDir || 1); }
+    // melee swing: quick strike (the hit lands on click), then a slower follow-through and recovery
+    P.swing = Math.max(0, P.swing - dt / (P.swingDur || 0.3));
+    const t = 1 - P.swing, style = viewModel(cur().id).style, d = P.swingDir || 1;
+    const out = (a, b, x) => clamp((x - a) / (b - a), 0, 1);
+    const strike = 1 - Math.pow(1 - out(0.04, 0.3, t), 3);             // fast ease-out
+    const back = out(0.5, 1, t), settle = back * back * (3 - 2 * back);  // smooth return
+    const lift = Math.sin(out(0, 0.08, t) * Math.PI / 2);                // tiny wind-up
+    if (style === 'saw') {
+      const k = strike * (1 - settle);
+      rx += Math.sin(now * 60) * 0.02; ry += Math.sin(now * 47) * 0.02; sz -= k * 0.08;
+    } else if (style === 'chop') {
+      // overhead chop: raised, then driven down and in toward the centre of the screen
+      setPivot(ELBOW);
+      const k = strike * (1 - settle);
+      const a = (lift * 0.4) * (1 - strike) - 0.42 * k;
+      swingPivot.rotation.set(a, k * 0.2, k * 0.45, 'YXZ');
+      sx -= k * 0.09; sy += k * 0.03;
+    } else {
+      // diagonal slash from one side to the other, alternating each swing
+      setPivot(SHOULDER);
+      const a = d > 0 ? 1 : -1, w = (1 - settle);
+      const sweep = (-0.55 + 1.3 * strike) * a * w;
+      swingPivot.rotation.set((0.12 - 0.35 * strike) * w, sweep, -sweep * 0.9, 'YXZ');
+    }
   }
-  let px = gunBase.x, py = gunBase.y - P.swapT * 0.3, pz = gunBase.z + P.recoil * 0.05;
+  let px = gunBase.x + sx, py = gunBase.y - P.swapT * 0.3 + sy, pz = gunBase.z + P.recoil * 0.05 + sz;
   if (P.reloadT > 0) {
     const k = 1 - P.reloadT / P.reloadDur, s = Math.sin(k * Math.PI);
     py -= s * 0.14; rz += s * 0.7; rx -= s * 0.5;
@@ -1362,7 +1478,9 @@ function update(dt) {
   }
   if (mode === 'combat') stats.t += dt;
 
-  for (const e of G.enemies) e.update(dt);
+  const peace = devOn('peace');
+  for (const e of G.enemies) { G.actor = e; if (peace && e.atkState === 'cool') e.atkT = Math.max(e.atkT, 1); e.update(dt); }
+  G.actor = null;
   G.enemies = G.enemies.filter((e) => e.alive || e === area?.boss);
   for (const p of G.projectiles) p.update(dt);
   G.projectiles = G.projectiles.filter((p) => p.alive);
@@ -1379,6 +1497,7 @@ function update(dt) {
   flushT -= dt; if (flushT <= 0) { flushT = 2; flushProfile(); }
   achT -= dt; if (achT <= 0 && achQueue.length) showAch(achQueue.shift());
   if (tutorial && !tutorial.done && mode === 'combat') tutorial.update(dt);
+  if (PC && mouse) crosshair.style.transform = `translate(${mouse.x}px, ${mouse.y}px)`;
   if (PC && mouse && G.floor) {
     let hot = false;
     if (G.combatActive && !paused) {
@@ -1389,6 +1508,7 @@ function update(dt) {
     }
     crosshair.classList.toggle('hot', hot);
   }
+  devTick(dt);
   introT -= dt;
   if (pendingIntro.length && introT <= 0 && mode === 'combat' && !choiceOpen) { toast(`NEW HOSTILE: ${pendingIntro.shift()}`, '#ff7050'); introT = 1.8; }
 
@@ -1425,6 +1545,7 @@ function update(dt) {
       if (G.combatActive && mode === 'combat') fireOnce(P.burstX, P.burstY); else P.burstLeft = 0;
     }
   }
+  if (PC && locked() && hold && mouse) { hold.x = mouse.x; hold.y = mouse.y; }
   if (hold && cur().auto) tryFire(hold.x, hold.y);
 
   if (mode === 'title') {
@@ -1440,9 +1561,11 @@ function update(dt) {
 let last = performance.now();
 function frame(t) {
   const dt = Math.min(0.05, (t - last) / 1000); last = t;
-  if (!paused) update(dt);
+  if (PC && locked() && !inPlay()) document.exitPointerLock(); // menus need the real cursor
+  // dev GAME SPEED runs several fixed updates per rendered frame; G.bot is the balance-test autoplayer
+  for (let k = 0; k < (G.timeScale || 1); k++) if (!paused) { if (G.bot) G.bot(dt); update(dt); }
   renderer.clear();
-  renderer.render(scene, camera);
+  renderer.render(scene, camera); drawCalls = renderer.info.render.calls;
   if (mode !== 'title' && mode !== 'floorclear') { renderer.clearDepth(); renderer.render(gunScene, gunCam); }
   requestAnimationFrame(frame);
 }
@@ -1453,7 +1576,34 @@ toTitle();
 requestAnimationFrame(frame);
 
 // expose for debugging / automated checks
-window.__game = { profile, checkAch, setPerks(lv) { perkLv = lv; M = mods(lv); }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
+// ------------------------------------------------------------------ developer tools
+let devWasPaused = false;
+initDev({
+  sfx, enabled: () => DEV_BUILD && settings.dev === 1,
+  inRun: () => mode !== 'title' && mode !== 'dead' && !choiceOpen,
+  pause: () => { devWasPaused = paused; paused = true; ui.pause.classList.add('hidden'); hold = null; },
+  resume: () => { paused = devWasPaused; if (paused) { ui.pause.classList.remove('hidden'); $('pausePerks').innerHTML = perkSummary(); } },
+  info: () => `${G.enemies.filter((e) => e.alive).length} ENEMIES · ${drawCalls} DRAWS`,
+  heal: () => { P.hp = M.maxHp; },
+  timeScale: (k) => (k ? (G.timeScale = k) : G.timeScale || 1),
+  killAll: () => { for (const e of G.enemies) if (e.alive && !e.decoy) e.die(false); },
+  finishFloor: () => { paused = false; ui.pause.classList.add('hidden'); for (const e of G.enemies) if (e.alive) e.die(false, null, true); G.combatActive = false; hideScreens(); floorComplete(); },
+  gotoFloor: (n) => { paused = false; hideScreens(); for (const pr of G.projectiles) pr.kill(); G.projectiles = []; G.floorNum = n; startFloor(n); },
+  cash: (n) => { addCash(n); touch(); flushProfile(true); },
+  unlockAll: () => { for (const c of Object.keys(CHAR)) profile.chars[c] = 1; for (const g of GUNS) profile.found[g.id] = 1; touch(); flushProfile(true); checkAch(); toast('EVERYTHING UNLOCKED'); },
+  floor: () => G.floorNum,
+  guns: () => GUNS.map((g) => ({ id: g.id, short: g.short, color: RARITY[g.rarity].color })),
+  giveGun: (id) => { giveGun(id); },
+  perks: () => PERKS.map((p) => ({ id: p.id, name: p.name, color: PERK_RARITY[p.rarity].color, lv: perkLv[p.id] || 0 })),
+  addPerk: (id) => { const before = M.maxHp; perkLv[id] = (perkLv[id] || 0) + 1; recalc(); if (M.maxHp > before) P.hp += M.maxHp - before; P.hp = Math.min(P.hp, M.maxHp); toast(PERK[id].name, PERK_RARITY[PERK[id].rarity].color); },
+  clearPerks: () => { perkLv = {}; recalc(); P.hp = Math.min(P.hp, M.maxHp); },
+  enemies: () => Object.entries(DEFS).filter(([, d]) => !d.boss && !d.minion && d.floors && d.floors[1] > 0).map(([id, d]) => [id, d.name]),
+  bosses: () => BOSS_LIST.map((b) => [b.id, `F${b.floor} ${b.mini ? 'MINI · ' : ''}${b.name}`]),
+  spawn: (t) => { if (!area) return; const e = spawnAt(t); if (G.combatActive) e.activate(); },
+  spawnBoss: (id) => { if (!area) return; const b = new Enemy(G, id, { x: 0, y: 1.9, z: area.room.z0 - 8.2, cover: false }); b.activate(); G.enemies.push(b); if (!area.boss) area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; },
+});
+
+window.__game = { get draws() { return drawCalls; }, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);
