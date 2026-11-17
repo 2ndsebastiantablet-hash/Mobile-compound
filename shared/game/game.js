@@ -4,6 +4,7 @@ import { Enemy, Projectile } from '../content/enemies/ai.js';
 import { DEFS, rosterFor, isFlyer, isMelee } from '../content/enemies/roster.js';
 import { bossFor, bossKindFor, BOSS_LIST } from '../content/bosses/bosses.js';
 import { initDev, devOn, devTick, devOpen, refreshDevUi } from './dev.js';
+import { Post } from '../engine/post.js';
 import { Effects } from '../engine/effects.js';
 import * as TX from '../engine/textures.js';
 import { initAudio, sfx, setMuted, isMuted, setVolumes } from '../audio/sfx.js';
@@ -37,6 +38,15 @@ const ui = {
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(1);
 renderer.autoClear = false;
+const post = new Post(renderer);
+// colour grade per lighting mood (applied in the post pass)
+const GRADES = {
+  normal: { tint: 0xfff4e6, lift: 0x060504, sat: 1.12, contrast: 1.08 },
+  night: { tint: 0xc4d0ff, lift: 0x03050c, sat: 0.92, contrast: 1.14 },
+  emergency: { tint: 0xffd2c6, lift: 0x0c0202, sat: 1.18, contrast: 1.16 },
+  blackout: { tint: 0xe4e6f0, lift: 0x000000, sat: 0.85, contrast: 1.22 },
+  toxic: { tint: 0xd6ffc4, lift: 0x030a00, sat: 1.06, contrast: 1.12 },
+};
 const scene = new THREE.Scene();
 // PC build: set by the PC page (or ?pc in the URL). Landscape, mouse + keyboard.
 const PC = !!window.OVERTIME_PC || new URLSearchParams(location.search).has('pc');
@@ -50,6 +60,10 @@ scene.add(amb);
 const roomLights = [0, 1].map(() => { const l = new THREE.PointLight(0xffffff, 9, 16, 1.4); scene.add(l); return l; });
 const muzzleLight = new THREE.PointLight(0xffc070, 0, 9, 1.6);
 camera.add(muzzleLight); muzzleLight.position.set(0.2, -0.2, -0.6);
+// flashlight for dark floors (always present so the light count never changes)
+const flashlight = new THREE.SpotLight(0xfff0d8, 0, 15, 0.42, 0.65, 1.6);
+camera.add(flashlight); flashlight.position.set(0.15, -0.15, 0); camera.add(flashlight.target); flashlight.target.position.set(0, -0.3, -5);
+let roomBase = 9, moodNow = 'normal';
 
 // Viewmodel scene
 const gunScene = new THREE.Scene();
@@ -91,7 +105,7 @@ const G = {
   combatActive: false,
   enemies: [], projectiles: [], pickups: [],
 };
-const P = { swing: 0, swingDir: 1, hp: 100, inv: [{ id: 'pistol', ammo: 12 }], slot: 0, invAtFloor: null, burstLeft: 0, burstT: 0, reloadT: 0, cd: 0, recoil: 0, flashT: 0, aimYaw: 0, aimPitch: 0, aimTY: 0, aimTP: 0, swapT: 0 };
+const P = { punch: 0, swing: 0, swingDir: 1, hp: 100, inv: [{ id: 'pistol', ammo: 12 }], slot: 0, invAtFloor: null, burstLeft: 0, burstT: 0, reloadT: 0, cd: 0, recoil: 0, flashT: 0, aimYaw: 0, aimPitch: 0, aimTY: 0, aimTP: 0, swapT: 0 };
 let score = 0, floorStartScore = 0, combo = 0, lastKill = -10, now = 0;
 let stats = newStats();
 let mode = 'title', paused = false;
@@ -134,10 +148,16 @@ function stepSeq(dt) {
   else if (typeof r.value === 'number' && r.value > 0) seqWait = r.value;
   else if (typeof r.value === 'function') seqUntil = r.value;
 }
-function fade(to, dur) { ui.fade.style.transition = `opacity ${dur}s linear`; ui.fade.style.opacity = to; }
+// screen fades: a retro pixel dissolve of the 3D view (CSS fade when post-processing is off)
+let dissolveGoal = 0, dissolveRate = 1;
+function fade(to, dur) {
+  if (post.enabled) { ui.fade.style.transition = 'none'; ui.fade.style.opacity = 0; dissolveGoal = to; dissolveRate = 1 / Math.max(0.05, dur); return; }
+  ui.fade.style.transition = `opacity ${dur}s linear`; ui.fade.style.opacity = to;
+}
 
 // ------------------------------------------------------------------ floor setup
 function clearFloor() {
+  for (const c of corpses) scene.remove(c.e.root); corpses.length = 0;
   for (const e of G.enemies) e.remove();
   for (const p of G.projectiles) p.kill();
   for (const p of G.pickups) scene.remove(p.mesh);
@@ -163,8 +183,11 @@ function loadFloor(n, variant) {
   hemi.color.set(th.hemi[0]); hemi.groundColor.set(th.hemi[1]);
   hemi.intensity = 1.5 * (md.hemi || 1); amb.intensity = 0.35 * (md.hemi || 1);
   const lc = new THREE.Color(md.light || th.light); if (md.tint) lc.lerp(new THREE.Color(md.tint), 0.4);
-  for (const l of roomLights) { l.color.copy(lc); l.intensity = 9 * (md.room || 1); }
+  roomBase = 9 * (md.room || 1); moodNow = plan.mood;
+  for (const l of roomLights) { l.color.copy(lc); l.intensity = roomBase; }
+  flashlight.intensity = plan.mood === 'blackout' ? 11 : plan.mood === 'night' ? 5 : 0;
   gunScene.children[0].color.copy(lc); gunScene.children[0].intensity = 0.9 * Math.max(0.5, md.hemi || 1);
+  post.grade(GRADES[plan.mood] || GRADES.normal);
   setRoom(0);
   setLights(f.rooms[0], f.rooms[0], 0);
 }
@@ -304,6 +327,54 @@ function spawnReinforcement(type) {
   for (const el of room.elevators) if (Math.abs(el.x - entry.x) < 0.5 && el !== room.exitElevator) { el.target = 1; el.closeAt = now + 2.8; sfx.ding(); }
   return e;
 }
+// ------------------------------------------------------------------ death animations
+// Bodies that don't gib stay in the world for a few seconds: humans fall backward, critters flip
+// over, flyers drop and explode, machines spark and blow, bosses go out in a chain of blasts.
+const corpses = [];
+G.addCorpse = (e, style, center) => {
+  if (corpses.length >= 10) { const old = corpses.shift(); scene.remove(old.e.root); }
+  e.root.rotation.order = 'YXZ';
+  const away = center.clone().sub(G.camPos).setY(0).normalize();
+  corpses.push({ e, style, t: 0, y0: e.root.position.y, vy: 0, away, spin: rand(Math.random, -4, 4), side: Math.random() < 0.5 ? -1 : 1, boom: 0, smokeT: 0 });
+};
+function updateCorpses(dt) {
+  for (let i = corpses.length - 1; i >= 0; i--) {
+    const c = corpses[i], e = c.e, R = e.root;
+    c.t += dt;
+    const done = () => { scene.remove(R); corpses.splice(i, 1); };
+    const blowUp = (r) => { const p = e.centerWorld(new THREE.Vector3()); effects.explosion(p, r); sfx.explode(); shake = Math.min(1, shake + r * 0.25); e.gib(p, false); corpses.splice(i, 1); };
+    if (c.style === 'fall' || c.style === 'flip') {
+      const k = Math.min(1, c.t / (c.style === 'flip' ? 0.4 : 0.6));
+      const fall = k < 1 ? k * k * 1.12 : 1 + Math.sin(Math.min(1, (c.t - 0.6) / 0.25) * Math.PI) * 0.06;
+      if (c.style === 'fall') { R.rotation.x = -fall * 1.5; R.rotation.z = c.side * fall * 0.15; }
+      else { R.rotation.z = c.side * fall * Math.PI * 0.95; R.position.y = c.y0 + Math.sin(k * Math.PI) * 0.35; }
+      R.position.addScaledVector(c.away, dt * Math.max(0, 0.8 - c.t) * 0.9);
+      if (e.gore === 'spark') { c.smokeT -= dt; if (c.smokeT <= 0 && c.t < 3) { c.smokeT = 0.25; const p = e.centerWorld(new THREE.Vector3()); p.y = 0.4; effects.smoke(p, 1, 0x2a2826, 0.3, 0.6, 1.2); if (Math.random() < 0.5) effects.sparks(p, 3); } }
+      if (c.t > 3.6) R.position.y -= dt * 0.45;
+      if (c.t > 5.2) done();
+    } else if (c.style === 'crash') {
+      c.vy -= 9.8 * dt; R.position.y += c.vy * dt; R.rotation.x += c.spin * dt; R.rotation.z += c.spin * 0.6 * dt;
+      R.position.addScaledVector(c.away, dt * 0.8);
+      if (Math.random() < dt * 25) effects.smoke(e.centerWorld(new THREE.Vector3()), 1, 0x2a2826, 0.25, 0.3, 0.9);
+      if (R.position.y < 0.15 || c.t > 2) blowUp(0.8);
+    } else if (c.style === 'wreck') {
+      R.position.x += (Math.random() - 0.5) * 0.03;
+      if (Math.random() < dt * 20) effects.sparks(e.centerWorld(new THREE.Vector3()), 2);
+      if (c.t > 0.55) blowUp(0.7);
+    } else if (c.style === 'boss') {
+      // slow chain of blasts, then the big one
+      c.boom -= dt;
+      R.position.x += (Math.random() - 0.5) * 0.05;
+      if (c.boom <= 0) {
+        c.boom = 0.22;
+        const p = e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(rand(Math.random, -0.8, 0.8), rand(Math.random, -0.6, 0.8), rand(Math.random, -0.4, 0.4)).multiplyScalar(e.scale));
+        effects.explosion(p, 0.6); sfx.explode(); shake = Math.min(1, shake + 0.2);
+      }
+      if (c.t > 1.7) { blowUp(2); post.u.flash.value = 0.6; post.u.flashCol.value.set(0xffd8a0); }
+    }
+  }
+}
+
 G.spawnReinforcement = (t) => { if (area) spawnReinforcement(t); };
 
 // minions (summons, splits) appear right where their parent is
@@ -391,7 +462,8 @@ G.hurtPlayer = (dmg, src, proj) => {
   stats.dmg += dmg;
   sfx.hurt();
   shake = Math.min(1, shake + 0.5);
-  ui.hurt.style.transition = 'none'; ui.hurt.style.opacity = 0.9;
+  post.u.hurt.value = Math.min(1, 0.5 + dmg / 25); post.u.chroma.value = Math.min(1, dmg / 20);
+  ui.hurt.style.transition = 'none'; ui.hurt.style.opacity = post.enabled ? 0.35 : 0.9;
   requestAnimationFrame(() => { ui.hurt.style.transition = 'opacity .5s'; ui.hurt.style.opacity = 0; });
   combo = 0;
   if (P.hp <= 0) { deathCause = causeOf(src, proj); playerDied(); }
@@ -898,6 +970,9 @@ function fireOnce(x, y) {
     P.recoil = Math.min(1.8, P.recoil + w.kick);
     P.flashT = 0.05;
     muzzleLight.intensity = w.explode ? 10 : 6;
+    if (w.tracer) muzzleLight.color.set(w.tracer); else muzzleLight.color.set(0xffc070);
+    P.punch = Math.min(0.035, P.punch + 0.003 + w.kick * 0.006); // camera kick
+    gunFx(w);
   }
   aimGunAt(x, y);
   if (viewModel(w.id).pump) P.pump = 1;
@@ -916,6 +991,25 @@ function fireOnce(x, y) {
 }
 
 const V3 = () => new THREE.Vector3();
+
+// weapon feel: brass casings out of the ejection port, smoke at the muzzle, a glow on big guns
+const ENERGY = new Set(['tesla', 'laserrifle', 'plasmacannon', 'railgun', 'flamer', 'cryo', 'blackhole', 'seeker', 'leech', 'golden', 'shockgun']);
+const NO_CASING = new Set([...ENERGY, 'revolver', 'crossbow', 'harpoon', 'grenade', 'rocket', 'rocketpod', 'flaregun', 'coffeecannon', 'stapler', 'nailgun', 'shredgun']);
+function gunFx(w) {
+  const md = viewModel(w.id);
+  md.g.updateMatrixWorld(true);
+  if (!NO_CASING.has(w.id)) {
+    const at = md.g.localToWorld(new THREE.Vector3(0.05, 0.04, -0.12));
+    const n = w.pellets > 4 ? 1 : w.burst ? 1 : 1;
+    for (let k = 0; k < n; k++) effects.casing(gunScene, at, new THREE.Vector3(rand(Math.random, 0.5, 0.9), rand(Math.random, 0.8, 1.3), rand(Math.random, -0.1, 0.25)));
+  }
+  // world-space muzzle point a little in front of the camera, toward the gun side
+  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  const mz = camera.position.clone().addScaledVector(fwd, 0.9).addScaledVector(right, PC ? 0.18 : 0.22).add(new THREE.Vector3(0, -0.22, 0));
+  if (settings.gfx > 0 && (w.kick >= 1 || Math.random() < 0.35)) effects.smoke(mz, w.kick >= 1.4 ? 2 : 1, 0x8a8680, 0.12 + w.kick * 0.05, 0.35, 0.7);
+  if (w.kick >= 1.4 || ENERGY.has(w.id)) effects.glowAt(mz, w.tracer || 0xffb050, 0.35 + w.kick * 0.15, 0.06);
+}
 
 function resolveShot(x, y, w, rect, primary) {
   const range = w.melee ? w.melee + M.meleeReach : w.range;
@@ -989,6 +1083,11 @@ function resolveShot(x, y, w, rect, primary) {
   hits.forEach((h, i) => {
     const r = applyHit(h.e, h.part, h.point, w, primary && i === 0, ray.direction);
     if (!best || r === 'head') best = r;
+    // exit splatter on the wall or floor just behind the target
+    if ((r === 'head' || r === 'body') && primary && !w.melee && levelHit && levelHit.distance - h.dist < 2.2 && Math.random() < 0.6) {
+      const n = levelHit.face.normal.clone().transformDirection(levelHit.object.matrixWorld);
+      effects.decal(levelHit.point, n, h.e.gore, r === 'head' ? 0.55 : 0.4);
+    }
   });
 
   if (w.tracer) {
@@ -1343,6 +1442,11 @@ function restartFloor() {
 onSettingsChange((s, key) => {
   setVolumes(s.music / 100, s.sfx / 100);
   effects.mult = FX_MULT[s.gfx];
+  post.enabled = s.post !== 0;
+  post.u.useBloom.value = s.gfx > 0 ? 1 : 0;
+  post.u.retro.value = [0, 0.35, 1][s.retro ?? 1];
+  post.u.scan.value = [0, 0, 1][s.retro ?? 1];
+  if (!post.enabled) post.u.dissolve.value = 0;
   document.body.classList.toggle('lefty', !PC && s.lefty === 1);
   if (key === 'dev') refreshDevUi();
   if (!key || key === 'gfx' || key === 'lefty') resize();
@@ -1423,7 +1527,7 @@ function resize() {
   const r = gameEl.getBoundingClientRect();
   const H = Math.min((PC ? RES_PC : RES_MOBILE)[settings.gfx] ?? 340, Math.round(r.height));
   const W = Math.max(1, Math.round(r.width * (H / r.height)));
-  renderer.setSize(W, H, false);
+  renderer.setSize(W, H, false); post.setSize(W, H);
   camera.aspect = W / H; camera.updateProjectionMatrix();
   gunCam.aspect = W / H; gunCam.updateProjectionMatrix();
   const d = 0.55, hh = d * Math.tan(THREE.MathUtils.degToRad(gunCam.fov / 2)), hw = hh * gunCam.aspect;
@@ -1439,7 +1543,8 @@ function applyCamera() {
   const s = shake * shake * 0.08 * (settings.shake ? 1 : 0);
   camera.position.set(G.camPos.x + (Math.random() - 0.5) * s, G.camPos.y + (Math.random() - 0.5) * s, G.camPos.z);
   const breathe = mode === 'combat' ? Math.sin(now * 1.3) * 0.006 : 0;
-  camera.rotation.set(pitch + breathe + (Math.random() - 0.5) * s * 0.5, yaw, roll, 'YXZ');
+  P.punch = Math.max(0, (P.punch || 0) - 0.016 * 0.4 - P.punch * 0.12);
+  camera.rotation.set(pitch + breathe + (P.punch || 0) + (Math.random() - 0.5) * s * 0.5, yaw, roll, 'YXZ');
 }
 
 function updateGun(dt) {
@@ -1520,6 +1625,17 @@ function update(dt) {
     }
   }
   effects.update(dt);
+  updateCorpses(dt);
+  // lockdown floors: the room lights pulse like an alarm
+  // the flashlight follows your aim on PC
+  if (flashlight.intensity > 0) {
+    let nx = 0, ny = -0.15;
+    if (PC && mouse) { const r = canvasRect(); nx = (mouse.x / r.width) * 2 - 1; ny = -(mouse.y / r.height) * 2 + 1; }
+    const th = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    flashlight.target.position.lerp(new THREE.Vector3(nx * th * camera.aspect * 5, ny * th * 5, -5), Math.min(1, dt * 12));
+  }
+  if (moodNow === 'emergency') for (const l of roomLights) l.intensity = roomBase * (0.55 + 0.45 * Math.abs(Math.sin(now * 2.4)));
+  effects.updateMotes(G.camPos, dt, settings.gfx > 0);
   bossMsgT -= dt; immuneT -= dt;
   flushT -= dt; if (flushT <= 0) { flushT = 2; flushProfile(); }
   achT -= dt; if (achT <= 0 && achQueue.length) showAch(achQueue.shift());
@@ -1597,9 +1713,14 @@ function frame(t) {
   if (PC && locked() && !inPlay()) document.exitPointerLock(); // menus need the real cursor
   // dev GAME SPEED runs several fixed updates per rendered frame; G.bot is the balance-test autoplayer
   for (let k = 0; k < (G.timeScale || 1); k++) if (!paused) { if (G.bot) G.bot(dt); update(dt); }
+  post.update(dt);
+  { const dv = post.u.dissolve; dv.value += clamp(dissolveGoal - dv.value, -dissolveRate * dt, dissolveRate * dt); }
+  post.u.lowHp.value = mode === 'combat' || mode === 'moving' ? clamp(1 - P.hp / (M.maxHp * 0.3), 0, 1) : 0;
+  post.begin();
   renderer.clear();
   renderer.render(scene, camera); drawCalls = renderer.info.render.calls;
   if (mode !== 'title' && mode !== 'floorclear') { renderer.clearDepth(); renderer.render(gunScene, gunCam); }
+  post.end();
   requestAnimationFrame(frame);
 }
 

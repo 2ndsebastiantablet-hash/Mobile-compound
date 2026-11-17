@@ -10,6 +10,8 @@ export const SCHEMA = [
   { key: 'weight', label: 'GUN WEIGHT', type: 'choice', options: ['OFF', 'ON'], def: 1, pcOnly: true, hint: 'HEAVY GUNS AIM SLOWER' },
   { key: 'lock', label: 'CAPTURE MOUSE', type: 'choice', options: ['OFF', 'ON'], def: 1, pcOnly: true, hint: 'OFF = SYSTEM CURSOR (SPEED + WEIGHT DO NOTHING)' },
   { key: 'gfx', label: 'GRAPHICS', type: 'choice', options: ['LOW', 'MEDIUM', 'HIGH'], def: 1, hint: 'LOWER = FASTER ON OLDER DEVICES' },
+  { key: 'post', label: 'EFFECTS', type: 'choice', options: ['OFF', 'ON'], def: 1, hint: 'GLOW, COLOUR GRADING, DAMAGE EFFECTS' },
+  { key: 'retro', label: 'RETRO FILTER', type: 'choice', options: ['OFF', 'SOFT', 'FULL'], def: 1, hint: 'DITHERING · FULL ADDS SCANLINES' },
   { key: 'shake', label: 'SCREEN SHAKE', type: 'choice', options: ['OFF', 'ON'], def: 1 },
   { key: 'lefty', label: 'LEFT-HANDED HUD', type: 'choice', options: ['OFF', 'ON'], def: 0, mobileOnly: true },
   { key: 'dev', label: 'DEVELOPER MODE', type: 'choice', options: ['OFF', 'ON'], def: 0, dev: true, hint: 'GOD MODE, GIVE WEAPONS/PERKS, SKIP FLOORS (` KEY ON PC)' },

@@ -412,6 +412,49 @@ export const flash = () => tex('flash', 32, 32, (p, r) => {
   for (let y = -5; y <= 5; y++) for (let x = -5; x <= 5; x++) if (x * x + y * y <= 25) p.set(16 + x, 16 + y, [255, 255, 230]);
 }, { mip: false });
 
+// ---------------------------------------------------------------- effect sprites (phase 5)
+// chunky pixel smoke puff (white, tinted by the material)
+export const smoke = () => tex('smoke', 16, 16, (p, r) => {
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const d = Math.hypot(x - 7.5, y - 7.5) / 7.5 + (r() - 0.5) * 0.35;
+    const a = d < 1 ? Math.round((1 - d) * 4) / 4 : 0;
+    p.set(x, y, [255, 255, 255], Math.round(a * 230));
+  }
+}, { mip: false });
+// soft round glow for additive halos (projectiles, lights)
+export const glow = () => tex('glow', 16, 16, (p) => {
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const d = Math.hypot(x - 7.5, y - 7.5) / 7.5;
+    const a = d < 1 ? Math.pow(1 - d, 1.6) : 0;
+    p.set(x, y, [255, 255, 255], Math.round(Math.round(a * 6) / 6 * 255));
+  }
+}, { mip: false });
+// expanding shockwave ring
+export const ring = () => tex('ring', 32, 32, (p) => {
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    const d = Math.hypot(x - 15.5, y - 15.5);
+    const a = Math.max(0, 1 - Math.abs(d - 13) / 2.5);
+    p.set(x, y, [255, 230, 180], Math.round(a * 255));
+  }
+}, { mip: false });
+// scorch mark left by explosions
+export const scorch = () => tex('scorch', 32, 32, (p, r) => {
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    const a = Math.atan2(y - 15.5, x - 15.5);
+    const d = Math.hypot(x - 15.5, y - 15.5) / (13 + Math.sin(a * 5) * 2 + r() * 2);
+    p.set(x, y, [14, 12, 10], d < 1 ? Math.round((d < 0.55 ? 230 : 230 * (1 - (d - 0.55) / 0.45)) / 40) * 40 : 0);
+  }
+}, { mip: false });
+// blood / oil / goo splat (white-ish, tinted by the material)
+export const splat = (seed = 0) => tex('splat' + seed, 32, 32, (p, r) => {
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) p.set(x, y, [0, 0, 0], 0);
+  const blobs = [[15.5, 15.5, 8 + r() * 3]];
+  for (let i = 0; i < 9; i++) { const a = r() * 6.28, d = 6 + r() * 8; blobs.push([15.5 + Math.cos(a) * d, 15.5 + Math.sin(a) * d, 1 + r() * 3]); }
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    for (const [bx, by, br] of blobs) if (Math.hypot(x - bx, y - by) < br) { const sh2 = 200 + Math.floor(r() * 3) * 25; p.set(x, y, [sh2, sh2, sh2], 255); break; }
+  }
+}, { mip: false });
+
 // ---------------------------------------------------------------- characters
 export const SKINS = [[226, 180, 140], [196, 146, 108], [150, 100, 70], [110, 72, 50], [236, 196, 160], [170, 190, 150]];
 export const HAIRS = [[40, 28, 20], [90, 60, 30], [20, 20, 22], [160, 130, 70], [120, 120, 120], [130, 50, 24]];

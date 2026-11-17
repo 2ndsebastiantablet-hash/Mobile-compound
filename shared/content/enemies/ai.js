@@ -4,6 +4,7 @@ import { DEFS, isFlyer, rosterFor } from './roster.js';
 import { BUILDERS } from './models.js';
 import { BossBrain } from '../bosses/bosses.js';
 import { rand, clamp, pick } from '../../engine/util.js';
+import * as TX from '../../engine/textures.js';
 
 const FLASH = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const CLOAK = new THREE.MeshBasicMaterial({ color: 0x8090a0, transparent: true, opacity: 0.12, depthWrite: false });
@@ -100,6 +101,7 @@ export class Enemy {
     this.lastHit += dt;
     if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) this.applyMats(); }
     this.stagger = Math.max(0, this.stagger - dt * 4);
+    this.kick = Math.max(0, (this.kick || 0) - dt * 1.6);
     this.swingT = Math.max(0, this.swingT - dt);
     if (this.burnT > 0) {
       this.burnT -= dt; this.burnTick = (this.burnTick || 0) - dt;
@@ -151,6 +153,7 @@ export class Enemy {
     const cam = this.game.camPos;
     if (this.flyer || this.hover) this.root.position.set(this.pos.x, this.pos.y + this.yOff + Math.sin(this.bob) * 0.08, this.pos.z);
     else this.root.position.copy(this.pos);
+    this.body.position.z = -(this.kick || 0) / this.scale; // hit knockback (visual)
     this.body.position.y = -this.crouch * 0.75 + this.burrowY / this.scale + (this.leap ? this.leap.y / this.scale : 0);
     this.root.rotation.y = Math.atan2(cam.x - this.pos.x, cam.z - this.pos.z) + (this.yawExtra || 0);
   }
@@ -500,7 +503,8 @@ export class Enemy {
     let mult = head ? (human ? (this.def.boss ? 2 : 3) : 2) : 1;
     if (!head && this.traits.armor) { mult *= this.traits.armor; if (!quiet) g.fx.sparks(point, 3); }
     this.hp -= amount * mult;
-    this.lastHit = 0;
+    this.lastHit = 0; this.lastAmt = amount * mult;
+    if (!quiet && !this.def.boss) this.kick = Math.min(0.28, (this.kick || 0) + 0.04 + amount * mult * 0.03);
     if (!quiet) {
       this.flashT = 0.07; this.setFlash(); this.stagger = 1;
       if (this.gore === 'spark') g.fx.sparks(point, 6); else if (this.gore === 'goo') g.fx.goo(point, 7); else g.fx.blood(point, head ? 10 : 6);
@@ -528,8 +532,48 @@ export class Enemy {
     if (this.glow) this.glow.visible = false;
     this.root.updateMatrixWorld(true);
     const center = this.centerWorld(new THREE.Vector3());
+    const style = this.deathStyle(headshot);
+    if (style === 'gib') this.gib(center, headshot);
+    else {
+      // the body stays: game.js animates the fall (or crash, or wreck) and cleans it up
+      if (headshot && this.head && style === 'fall') {
+        g.scene.attach(this.head);
+        g.fx.debris(this.head, tmpV.subVectors(center, g.camPos).setY(0).normalize().multiplyScalar(1.5).add(new THREE.Vector3(rand(Math.random, -0.6, 0.6), 4, 0)));
+        this.meshes.splice(this.meshes.indexOf(this.head), 1);
+        g.fx.blood(this.head.position, 14);
+      }
+      g.addCorpse(this, style, center);
+    }
+    if (this.gore === 'spark') { g.fx.sparks(center, 24); g.sfx.botDeath(); }
+    else if (this.gore === 'goo') { g.fx.goo(center, 24); g.sfx.death(); }
+    else { g.fx.blood(center, 22); g.sfx.death(); }
+    if (!this.flyer) g.fx.floorDecal(this.pos.x, this.pos.z - 0.2, this.gore, 0.6 + this.scale * 0.5);
+    const T = this.traits;
+    if (T.deathBlast) g.blast(center, T.deathBlast, 4);
+    if (T.split) g.spawnMinion(T.split.type, this.pos, T.split.n);
+    g.onEnemyKilled(this, headshot, noScore);
+  }
+
+  // how this enemy dies: 'gib' (blown apart), 'fall' (collapses backward), 'flip' (critters
+  // land on their backs), 'crash' (flyers drop and explode), 'wreck' (machines spark and blow), 'boss'
+  deathStyle(headshot) {
+    const mk = this.def.model.kind;
+    if (this.def.boss) return 'boss';
+    if (this.gore === 'goo' || mk === 'swarm' || mk === 'blob') return 'gib';
+    if ((this.lastAmt || 0) >= Math.max(4, this.maxHp * 0.9) || Math.random() < 0.12) return 'gib';
+    if (this.flyer) return 'crash';
+    if (mk === 'human') return 'fall';
+    if (mk === 'mech') return headshot ? 'gib' : 'fall';
+    if (mk === 'spider' || mk === 'quad') return 'flip';
+    return 'wreck';
+  }
+
+  // blow the model apart into tumbling pieces
+  gib(center, headshot) {
+    const g = this.game;
+    this.root.updateMatrixWorld(true);
     for (const m of this.meshes) {
-      if (m.material.visible === false) continue;
+      if (m.material.visible === false || !m.parent) continue;
       g.scene.attach(m);
       const vel = m.getWorldPosition(new THREE.Vector3()).sub(center).setY(0).normalize().multiplyScalar(rand(Math.random, 1, 3));
       vel.y = rand(Math.random, 2, 4.5);
@@ -537,14 +581,7 @@ export class Enemy {
       if (headshot && m === this.head) vel.y += 3;
       g.fx.debris(m, vel);
     }
-    if (this.gore === 'spark') { g.fx.sparks(center, 24); g.sfx.botDeath(); }
-    else if (this.gore === 'goo') { g.fx.goo(center, 24); g.sfx.death(); }
-    else { g.fx.blood(center, 22); g.sfx.death(); }
     g.scene.remove(this.root);
-    const T = this.traits;
-    if (T.deathBlast) g.blast(center, T.deathBlast, 4);
-    if (T.split) g.spawnMinion(T.split.type, this.pos, T.split.n);
-    g.onEnemyKilled(this, headshot, noScore);
   }
 
   remove() { this.game.scene.remove(this.root); for (const m of this.meshes) if (m.parent) m.parent.remove(m); }
@@ -578,6 +615,20 @@ const PKINDS = {
   mine: { geo: new THREE.OctahedronGeometry(0.14, 0), mat: B(0xff3060), core: true },
 };
 
+// glowing halo around energy projectiles (and a red one on bombs and missiles), shared per kind
+const HALO = {};
+const NO_HALO = new Set(['coffee', 'package', 'shard', 'grenade']);
+function halo(kind, k) {
+  if (NO_HALO.has(kind)) return null;
+  if (!HALO[kind]) {
+    const col = kind === 'bomb' || kind === 'missile' ? 0xff4020 : k.mat.color.getHex();
+    HALO[kind] = new THREE.SpriteMaterial({ map: TX.glow(), color: col, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.85 });
+  }
+  const sp = new THREE.Sprite(HALO[kind]);
+  sp.scale.setScalar(kind === 'big' || kind === 'bomb' ? 0.75 : 0.5);
+  return sp;
+}
+
 export class Projectile {
   constructor(game, from, target, speed, dmg, kind, opts = {}) {
     this.game = game; this.dmg = dmg; this.kind = kind; this.alive = true; this.life = 0;
@@ -586,6 +637,7 @@ export class Projectile {
     this.k = k;
     this.mesh = new THREE.Mesh(k.geo, k.mat);
     if (k.core) { const c = new THREE.Mesh(k.geo, CORE); c.scale.setScalar(0.55); this.mesh.add(c); }
+    const h = halo(kind, k); if (h) this.mesh.add(h);
     this.mesh.position.copy(from);
     this.homing = opts.homing ? 2.2 : 0;
     this.gravity = opts.lob ? 7 : 0;
