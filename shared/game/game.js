@@ -63,7 +63,7 @@ camera.add(muzzleLight); muzzleLight.position.set(0.2, -0.2, -0.6);
 // flashlight for dark floors (always present so the light count never changes)
 const flashlight = new THREE.SpotLight(0xfff0d8, 0, 15, 0.42, 0.65, 1.6);
 camera.add(flashlight); flashlight.position.set(0.15, -0.15, 0); camera.add(flashlight.target); flashlight.target.position.set(0, -0.3, -5);
-let roomBase = 9, moodNow = 'normal';
+let roomBase = 9, moodNow = 'normal', lightningT = 6, boltT = 0, hemiBase = 1.5;
 
 // Viewmodel scene
 const gunScene = new THREE.Scene();
@@ -181,7 +181,7 @@ function loadFloor(n, variant) {
   scene.background = new THREE.Color(fogCol);
   renderer.setClearColor(fogCol);
   hemi.color.set(th.hemi[0]); hemi.groundColor.set(th.hemi[1]);
-  hemi.intensity = 1.5 * (md.hemi || 1); amb.intensity = 0.35 * (md.hemi || 1);
+  hemi.intensity = hemiBase = 1.5 * (md.hemi || 1); amb.intensity = 0.35 * (md.hemi || 1);
   const lc = new THREE.Color(md.light || th.light); if (md.tint) lc.lerp(new THREE.Color(md.tint), 0.4);
   roomBase = 9 * (md.room || 1); moodNow = plan.mood;
   for (const l of roomLights) { l.color.copy(lc); l.intensity = roomBase; }
@@ -462,6 +462,8 @@ G.hurtPlayer = (dmg, src, proj) => {
   stats.dmg += dmg;
   sfx.hurt();
   shake = Math.min(1, shake + 0.5);
+  dmgDir(proj ? proj.mesh.position : src && src.pos ? src.pos : null);
+  ui.hp.classList.remove('hit'); void ui.hp.offsetWidth; ui.hp.classList.add('hit');
   post.u.hurt.value = Math.min(1, 0.5 + dmg / 25); post.u.chroma.value = Math.min(1, dmg / 20);
   ui.hurt.style.transition = 'none'; ui.hurt.style.opacity = post.enabled ? 0.35 : 0.9;
   requestAnimationFrame(() => { ui.hurt.style.transition = 'opacity .5s'; ui.hurt.style.opacity = 0; });
@@ -695,7 +697,7 @@ function startFloor(n, sameVariant = false) {
     applyCamera();
     fade(0, 0.8);
     const bk = bossKindFor(n);
-    banner(`FLOOR ${String(n).padStart(2, '0')}`, (bk === 'boss' ? 'BOSS FLOOR · ' : bk === 'mini' ? 'MINI BOSS · ' : '') + G.floor.plan.name, 2.4);
+    floorCard(n, G.floor.plan.name, MOODS[G.floor.plan.mood]?.name, bk);
     yield 0.6;
     if (el) { sfx.ding(); yield 0.4; el.target = 1; sfx.door(); yield 0.9; }
     const from = G.camPos.clone();
@@ -727,7 +729,7 @@ function beginCombat() {
   let k = 0;
   for (const e of G.enemies) if (e.state === 'dormant') { const en = e; setTimeout(() => en.activate(), 150 + k++ * 220); }
   if (area.tutorial && !tutorial) { tutorial = new Tutorial(tutCtx); tutorial.start(); ui.tutSkip.classList.remove('hidden'); }
-  if (area.boss) { ui.bossbar.classList.remove('hidden'); banner(area.boss.def.name, area.boss.def.brain ? area.boss.def.brain.hint : 'PERFORMANCE REVIEW', 2.6); }
+  if (area.boss) { ui.bossbar.classList.remove('hidden'); bossCard(area.boss.def, area.boss.def.brain ? area.boss.def.brain.hint : 'PERFORMANCE REVIEW'); }
   updateHud(true);
 }
 
@@ -904,6 +906,36 @@ function showScreen(el) { el.classList.remove('hidden'); }
 function hideScreens() { $('hq').classList.add('hidden'); $('charSelect').classList.add('hidden'); $('diffSelect').classList.add('hidden'); for (const k of ['title', 'pause', 'floorClear', 'gameOver', 'win', 'settings', 'confirm', 'perks']) ui[k].classList.add('hidden'); }
 
 let bannerTimer = null;
+// big presentation cards (floor intro, boss intro)
+const cardEl = $('card');
+function showCard(html, cls, dur) {
+  cardEl.className = ''; cardEl.innerHTML = html; void cardEl.offsetWidth;
+  cardEl.className = 'show ' + (cls || '');
+  cardEl.style.animationDuration = dur + 's';
+}
+function floorCard(n, zone, mood, bk) {
+  const chip = bk === 'boss' ? '<span class="chip" style="color:#ff5040">BOSS FLOOR</span>' : bk === 'mini' ? '<span class="chip" style="color:#ff9040">MINI BOSS</span>' : mood ? `<span class="chip" style="color:#80c0ff">${mood}</span>` : '';
+  showCard(`<div class="stripe"></div><div class="row"><div class="lbl">FLOOR</div><div class="num${bk === 'boss' ? ' boss' : ''}">${String(n).padStart(2, '0')}</div><div class="zone">${zone}</div>${chip}</div><div class="stripe"></div>`, '', 2.6);
+}
+let slowT = 0;
+function bossCard(def, hint) {
+  $('letterbox').classList.add('on');
+  showCard(`<div class="row"><div class="lbl">${def.mini ? 'MINI BOSS' : 'BOSS'}</div><div class="num boss">${def.name}</div><div class="zone">${hint}</div></div>`, 'bossCard', 2.8);
+  setTimeout(() => $('letterbox').classList.remove('on'), 2300);
+  slowT = 0.9; sfx.unlock(); shake = Math.min(1, shake + 0.4);
+  post.u.flash.value = 0.35; post.u.flashCol.value.set(0xff3020);
+}
+
+// red arc pointing at whatever hurt you
+function dmgDir(from) {
+  if (!from) return;
+  const d = from.clone().sub(G.camPos);
+  const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  const ang = Math.atan2(fwd.x * d.z - fwd.z * d.x, fwd.x * d.x + fwd.z * d.z);
+  const el = document.createElement('i'); el.style.transform = `rotate(${-ang}rad)`;
+  $('dmgDir').appendChild(el); setTimeout(() => el.remove(), 900);
+}
+
 function banner(text, sub, dur) {
   ui.banner.textContent = text; ui.sub.textContent = sub || '';
   ui.banner.classList.add('show'); ui.sub.classList.toggle('show', !!sub);
@@ -1504,6 +1536,8 @@ function updateHud(force) {
   setText(ui.combo, 'c', combo > 1 && now - lastKill < M.comboWindow ? `x${combo} COMBO` : '');
   setText(ui.hp, 'h', String(Math.ceil(P.hp)));
   setText(ui.ammo, 'am', cur().melee ? '∞' : String(curSlot().ammo));
+  ui.hp.classList.toggle('low', P.hp <= M.maxHp * 0.25);
+  ui.ammo.classList.toggle('low', !cur().melee && curSlot().ammo <= Math.ceil(magOf(cur()) * 0.25));
   setText(ui.reload, 'r', P.reloadT > 0 ? 'RELOADING' : 'AMMO');
   ui.reload.classList.toggle('reloading', P.reloadT > 0);
   if (setText(ui.weapon, 'w', cur().short)) ui.weapon.style.color = RARITY[cur().rarity].color;
@@ -1626,6 +1660,21 @@ function update(dt) {
   }
   effects.update(dt);
   updateCorpses(dt);
+  // ambient life: broken lights spark, vents steam, lab vats bubble, lightning on stormy nights
+  if (G.room && G.floor && settings.gfx > 0) {
+    for (const em of G.room.emitters || []) {
+      em.t = (em.t ?? Math.random() * 3) - dt;
+      if (em.t > 0) continue;
+      if (em.type === 'spark') { em.t = rand(Math.random, 1.5, 5); effects.sparks(em.pos, 6); effects.light(em.pos, 0xfff0b0, 6, 4, 0.08); }
+      else if (em.type === 'steam') { em.t = 0.12; effects.sprite(em.pos.clone().add(new THREE.Vector3(rand(Math.random, -0.1, 0.1), 0, 0)), { color: 0xd8d8d8, s0: 0.15, s1: 0.9, a: 0.35, life: 1.6, v: new THREE.Vector3(rand(Math.random, -0.2, 0.2), -0.5, rand(Math.random, -0.2, 0.2)) }); }
+      else if (em.type === 'vapor') { em.t = 0.25; effects.sprite(em.pos.clone().add(new THREE.Vector3(rand(Math.random, -0.3, 0.3), 0, rand(Math.random, -0.3, 0.3))), { color: 0x80ff70, add: true, s0: 0.1, s1: 0.5, a: 0.3, life: 1.8, v: new THREE.Vector3(0, 0.35, 0) }); }
+    }
+    if (moodNow === 'night' && G.room.windows) {
+      lightningT -= dt;
+      if (lightningT <= 0) { lightningT = rand(Math.random, 7, 18); post.u.flash.value = 0.45; post.u.flashCol.value.set(0xc8d8ff); boltT = 0.12; }
+    }
+  }
+  if (boltT > 0) { boltT -= dt; hemi.intensity = hemiBase * (boltT > 0 ? 3.5 : 1); }
   // lockdown floors: the room lights pulse like an alarm
   // the flashlight follows your aim on PC
   if (flashlight.intensity > 0) {
@@ -1712,7 +1761,9 @@ function frame(t) {
   const dt = Math.min(0.05, (t - last) / 1000); last = t;
   if (PC && locked() && !inPlay()) document.exitPointerLock(); // menus need the real cursor
   // dev GAME SPEED runs several fixed updates per rendered frame; G.bot is the balance-test autoplayer
-  for (let k = 0; k < (G.timeScale || 1); k++) if (!paused) { if (G.bot) G.bot(dt); update(dt); }
+  if (slowT > 0 && !paused) slowT -= dt;
+  const sdt = slowT > 0 ? dt * 0.35 : dt; // boss intro slow-motion
+  for (let k = 0; k < (G.timeScale || 1); k++) if (!paused) { if (G.bot) G.bot(sdt); update(sdt); }
   post.update(dt);
   { const dv = post.u.dissolve; dv.value += clamp(dissolveGoal - dv.value, -dissolveRate * dt, dissolveRate * dt); }
   post.u.lowHp.value = mode === 'combat' || mode === 'moving' ? clamp(1 - P.hp / (M.maxHp * 0.3), 0, 1) : 0;
@@ -1757,7 +1808,7 @@ initDev({
   spawnBoss: (id) => { if (!area) return; const b = new Enemy(G, id, { x: 0, y: 1.9, z: area.room.z0 - 8.2, cover: false }); b.activate(); G.enemies.push(b); if (!area.boss) area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; },
 });
 
-window.__game = { get draws() { return drawCalls; }, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
+window.__game = { get draws() { return drawCalls; }, cards: { floorCard, bossCard, dmgDir }, post, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);

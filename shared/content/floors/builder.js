@@ -102,6 +102,7 @@ export function buildFloor(floor, plan) {
     floor, plan, theme: th, group, rooms, isBoss, elevators,
     update(dt) {
       ft += dt;
+      for (const sm of M.screens) if (sm.map) sm.map.offset.y = (ft * 0.12) % 1; // scrolling monitor text
       for (const e of elevators) {
         e.open += Math.sign(e.target - e.open) * Math.min(Math.abs(e.target - e.open), dt / 1.1);
         e.doorL.position.x = e.x - 0.35 - e.open * 0.68;
@@ -130,7 +131,7 @@ function buildRoom(c) {
   };
   const piece = (x, z, ry = 0, y = 0) => { const p = new THREE.Group(); p.position.set(x, y, z); p.rotation.y = ry; g.add(p); return p; };
 
-  const room = { type, z0, zf, group: g, stand: new THREE.Vector3(0, EYE, z0 - 1.0), spots: [], lightPos: [], doorSpawns: [], elevators: [] };
+  const room = { type, z0, zf, group: g, stand: new THREE.Vector3(0, EYE, z0 - 1.0), spots: [], lightPos: [], doorSpawns: [], elevators: [], emitters: [] };
   // tall cover (pillars, shelves) hides the whole body, so those spots get a sideways "peek" offset
   const spot = (x, d, cover = false, extra = {}) => room.spots.push({ x, z: Z(d), cover, ...extra,
     ...(cover && (extra.coverH || 0) >= 1.2 ? { peek: (x > 0 ? -1 : 1) * 0.95 } : {}) });
@@ -196,6 +197,7 @@ function buildRoom(c) {
   for (let k = 0; k < 4; k++) for (const lx of [-1.6, 1.6]) {
     const off = rng() < (c.mood.off || 0.07);
     const m = add(g, box(1.2, 0.04, 0.6), off ? M.lightOff : M.lightOn, lx, RH - 0.01, Z(1.6 + k * 3));
+    if (off && rng() < 0.45) room.emitters.push({ type: 'spark', pos: new THREE.Vector3(lx + rand(rng, -0.4, 0.4), RH - 0.06, Z(1.6 + k * 3)) }); // broken fixture
     if (!off && rng() < (c.mood.flicker || 0.08)) { m.userData.dyn = false; c.flicker.push({ mesh: m, t: rand(rng, 0, 2), on: true }); m.userData.keep = true; }
   }
   room.lightPos.push(new THREE.Vector3(0, RH - 0.3, Z(3)), new THREE.Vector3(0, RH - 0.3, Z(9)));
@@ -380,6 +382,7 @@ function buildRoom(c) {
       lane(); break;
     }
     case 'lab': {
+      room.emitters.push({ type: 'vapor', pos: new THREE.Vector3(rand(rng, -2, 2), 1.1, Z(rand(rng, 4, 9))) });
       // island benches with glowing glassware, specimen tanks along the walls
       for (const d of [4.5, 8.2]) for (const s of [-1, 1]) {
         const x = s * 2.2;
@@ -399,6 +402,7 @@ function buildRoom(c) {
       lane(); break;
     }
     case 'factory': {
+      for (const d of [3, 8.5]) room.emitters.push({ type: 'steam', pos: new THREE.Vector3(rand(rng, -1.5, 1.5), RH - 0.15, Z(d)) });
       for (const s of [-1, 1]) {
         add(g, box(0.9, 0.6, 9.5, 1), M.tread, s * 2.95, 0.3, Z(6.5));
         add(g, box(0.06, 0.62, 9.5), M.yellow, s * 2.48, 0.31, Z(6.5));
@@ -457,6 +461,7 @@ function buildRoom(c) {
       lane(); break;
     }
     case 'reactor': {
+      room.emitters.push({ type: 'steam', pos: new THREE.Vector3(2.4, 2.9, Z(7.5)) }, { type: 'vapor', pos: new THREE.Vector3(-2.3, 1.2, Z(4)) });
       for (const s of [-1, 1]) {
         add(g, box(0.25, 0.25, RD), M.metalDark, s * (HALF - 0.2), 2.5, zc);
         add(g, box(0.18, 0.18, RD), M.yellow, s * (HALF - 0.2), 0.35, zc);

@@ -206,3 +206,52 @@ body.lefty #tutSkip { right: auto; left: 12px; }
 .dev-b small { color: #8a8270; }
 .dev-in { font-family: inherit; font-size: 18px; background: #111; color: #e8e0c8; border: 2px solid #5a5446; padding: 3px 6px; max-width: 60vw; }
 #fps { position: absolute; left: 50%; top: calc(env(safe-area-inset-top) + 6px); transform: translateX(-50%); font-size: 16px; color: #60ff80; text-shadow: 1px 1px 0 #000; pointer-events: none; z-index: 35; }
+
+/* ---------------------------------------------------------------- phase 5: presentation */
+/* floor intro card */
+#card { position: absolute; left: 0; right: 0; top: 24%; display: flex; flex-direction: column; align-items: center; pointer-events: none; opacity: 0; z-index: 6; text-shadow: 3px 3px 0 #000; }
+#card.show { animation: cardIn 2.6s steps(26) forwards; }
+#card .stripe { width: 100%; height: 6px; background: repeating-linear-gradient(-45deg, #f0c860 0 10px, #1a1712 10px 20px); opacity: .9; }
+#card .row { width: 100%; background: linear-gradient(90deg, transparent, rgba(10,8,6,.88) 18%, rgba(10,8,6,.88) 82%, transparent); padding: 6px 0 8px; text-align: center; }
+#card .lbl { font-size: 18px; letter-spacing: 6px; color: #b8b0a0; }
+#card .num { font-size: 76px; line-height: .85; color: #f0c860; letter-spacing: 4px; }
+#card .num.boss { color: #ff5040; }
+#card .zone { font-size: 26px; color: #e8e0c8; letter-spacing: 3px; }
+#card .chip { display: inline-block; margin-top: 4px; padding: 1px 10px; font-size: 18px; letter-spacing: 3px; border: 2px solid currentColor; }
+@keyframes cardIn {
+  0% { opacity: 0; transform: translateX(-60%) skewX(-18deg); }
+  8% { opacity: 1; transform: translateX(4%) skewX(4deg); }
+  12% { transform: translateX(0) skewX(0); }
+  14% { transform: translateX(-1.5%); filter: hue-rotate(90deg); } 16% { transform: translateX(1%); filter: none; }
+  82% { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(40%) skewX(14deg); }
+}
+/* boss intro: letterbox bars + name slam */
+#letterbox i { position: absolute; left: 0; right: 0; height: 11%; background: #000; transform: scaleY(0); transition: transform .35s steps(6); z-index: 5; pointer-events: none; }
+#letterbox i:first-child { top: 0; transform-origin: top; } #letterbox i:last-child { bottom: 0; transform-origin: bottom; }
+#letterbox.on i { transform: scaleY(1); }
+#card.bossCard .num { font-size: 64px; animation: slam .45s steps(5) both; }
+@keyframes slam { 0% { transform: scale(2.6); opacity: 0; } 60% { transform: scale(.94); opacity: 1; } 100% { transform: scale(1); } }
+body.pc #card .num { font-size: 110px; } body.pc #card.bossCard .num { font-size: 92px; } body.pc #card .zone { font-size: 34px; }
+/* damage direction arcs */
+#dmgDir { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 4; }
+#dmgDir i { position: absolute; left: -70px; top: -150px; width: 140px; height: 40px; border-top: 8px solid rgba(255,40,20,.85); border-radius: 50% 50% 0 0 / 100% 100% 0 0; transform-origin: 70px 150px; animation: dmgFade .9s forwards; filter: drop-shadow(0 0 4px #f00); }
+body.pc #dmgDir i { top: -210px; transform-origin: 70px 210px; }
+@keyframes dmgFade { from { opacity: 1; } to { opacity: 0; } }
+/* HUD reactions */
+#hpLbl.hit { animation: hpHit .35s steps(4); }
+@keyframes hpHit { 0%, 50% { color: #fff; transform: translate(-3px, 0); } 25%, 75% { transform: translate(3px, 0); } }
+#hpLbl.low { animation: hpLow .8s steps(2) infinite; }
+@keyframes hpLow { 50% { color: #ff9a80; } }
+#ammoLbl.low { color: #ffb040; animation: hpLow .6s steps(2) infinite; }
+/* title: a little life in the logo */
+.logo { animation: logoGlitch 6s steps(1) infinite; }
+@keyframes logoGlitch {
+  0%, 91%, 100% { transform: none; filter: none; }
+  92% { transform: translate(-3px, 1px) skewX(-6deg); filter: hue-rotate(160deg); }
+  93% { transform: translate(4px, -1px); filter: none; }
+  94% { transform: translate(-1px, 0) scaleY(1.06); }
+  95% { transform: none; }
+}
+.logo span { animation: neon 4.3s steps(1) infinite; }
+@keyframes neon { 0%, 37%, 39%, 100% { opacity: 1; } 38% { opacity: .35; } }
