@@ -369,7 +369,7 @@ export class Enemy {
     switch (atk.type) {
       case 'shot': this.shoot(kind, 0, atk); break;
       case 'burst': this.burstLeft = (atk.n || 3) - 1; this.shoot(kind, 0, atk); break;
-      case 'rapid': this.burstLeft = (atk.n || 6) - 1; this.burstGap = 0.09; this.shoot(atk.kind || 'shard', 0, atk); break;
+      case 'rapid': this.burstLeft = (atk.n || 6) - 1; this.burstGap = 0.13; this.shoot(atk.kind || 'shard', 0, atk); break;
       case 'spread': { const n = atk.n || 3, a = atk.angle || 0.12; for (let k = 0; k < n; k++) this.shoot(kind, (k - (n - 1) / 2) * a, atk); break; }
       case 'lob': { const n = atk.n || 1; for (let k = 0; k < n; k++) this.shoot(kind, (k - (n - 1) / 2) * 0.15, { ...atk, lob: true }); break; }
       case 'homing': { const n = atk.n || 1; for (let k = 0; k < n; k++) this.shoot(kind === 'orb' ? 'missile' : kind, (k - (n - 1) / 2) * 0.5, { ...atk, homing: true }); break; }
@@ -426,7 +426,7 @@ export class Enemy {
     const miss = 0.4;
     target.x += rand(Math.random, -miss, miss); target.y += rand(Math.random, -miss * 0.6, miss * 0.4);
     if (spread) { const dir = target.clone().sub(from); dir.applyAxisAngle(UP, spread); target.copy(from).add(dir); }
-    const speed = this.pspeed * (atk.speed || 1) * (kind === 'shard' ? 1.35 : kind === 'sonic' ? 0.8 : 1);
+    const speed = this.pspeed * (atk.speed || 1) * (kind === 'shard' ? 1.2 : kind === 'sonic' ? 0.8 : 1);
     const dmg = this.dmg * (atk.dmg || 1);
     g.spawnProjectile(from, target, speed, dmg, kind, { lob: atk.lob || kind === 'grenade', homing: atk.homing });
     g.sfx.enemyShot();
