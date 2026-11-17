@@ -190,7 +190,8 @@ export class Enemy {
     if (this.meleeT <= 0) {
       if (this.cloak && this.cloak.on) { this.cloak.on = false; this.applyMats(); }
       this.swingT = 0.3; this.game.sfx.swing();
-      this.game.hurtPlayer(this.dmg, this);
+      if (this.ally) { const f = this.nearestFoe(); if (f && f.pos.distanceTo(this.pos) < 2) f.damage(this.dmg * 0.6, 'body', f.centerWorld(new THREE.Vector3())); }
+      else this.game.hurtPlayer(this.dmg, this);
       if (this.traits.leech) this.hp = Math.min(this.maxHp, this.hp + 2);
       this.meleeT = 1.35;
     }
@@ -305,6 +306,12 @@ export class Enemy {
     return true;
   }
 
+  nearestFoe() {
+    let best = null, bd = 1e9;
+    for (const o of this.game.enemies) { if (o === this || !o.alive || o.ally || o.off || o.state === 'dormant') continue; const d = o.pos.distanceTo(this.pos); if (d < bd) { bd = d; best = o; } }
+    return best;
+  }
+
   // is another enemy standing between this one and the player?
   lineBlocked() {
     const g = this.game, from = this.muzzle(new THREE.Vector3()), to = (g.playerPos || g.camPos);
@@ -410,7 +417,9 @@ export class Enemy {
       case 'sonic': { const n = atk.n || 5; for (let k = 0; k < n; k++) this.shoot('sonic', (k - (n - 1) / 2) * 0.13, atk); g.sfx.rail(); break; }
       case 'laser': {
         g.fx.beam(this.muzzle(new THREE.Vector3()), g.camPos.clone().add(new THREE.Vector3(0, -0.15, 0)), 0xff3020, 0.09, 0.22);
-        g.sfx.rail(); if (!(g.duck > 0.5)) g.hurtPlayer(this.dmg * 0.75, this); // ducking under a laser dodges it // can't be shot down, so lasers hit a bit softer
+        g.sfx.rail();
+        if (this.ally) { const f = this.nearestFoe(); if (f) f.damage(this.dmg * 0.5, 'body', f.centerWorld(new THREE.Vector3())); }
+        else if (!(g.duck > 0.5)) g.hurtPlayer(this.dmg * 0.75, this); // ducking under a laser dodges it // can't be shot down, so lasers hit a bit softer
         break;
       }
       case 'summon': {
@@ -456,7 +465,8 @@ export class Enemy {
     const g = this.game;
     if (!this.alive) return;
     const from = this.muzzle(new THREE.Vector3());
-    const target = (g.playerPos || g.camPos).clone(); // aims where you are now (ducking after the shot is fired dodges it)
+    const foe = this.ally ? this.nearestFoe() : null; // switched sides with THE REMOTE: shoot the others
+    const target = foe ? foe.centerWorld(new THREE.Vector3()) : (g.playerPos || g.camPos).clone(); // aims where you are now (ducking after the shot is fired dodges it)
     const miss = 0.4;
     target.x += rand(Math.random, -miss, miss); target.y += rand(Math.random, -miss * 0.6, miss * 0.4);
     if (spread) { const dir = target.clone().sub(from); dir.applyAxisAngle(UP, spread); target.copy(from).add(dir); }
@@ -736,12 +746,13 @@ export class Projectile {
         this.kill(); return;
       }
     }
-    if (this.mesh.position.distanceTo(cam) < 0.45) { this.game.hurtPlayer(this.dmg, null, this); this.kill(); return; }
+    const friendly = this.reflected || (this.owner && this.owner.ally);
+    if (!friendly && this.mesh.position.distanceTo(cam) < 0.45) { this.game.hurtPlayer(this.dmg, null, this); this.kill(); return; }
     // friendly fire: enemy shots hurt any enemy they run into (not the shooter right after firing)
     if (this.mineT == null && !this.bomb) {
       const p = this.mesh.position;
       for (const o of this.game.enemies) {
-        if (!o.alive || o.off || o.state === 'dormant' || (o === this.owner && this.life < 0.6)) continue;
+        if (!o.alive || o.off || o.state === 'dormant' || (o === this.owner && this.life < 0.6) || (this.owner && this.owner.ally && o.ally)) continue;
         if (Math.abs(o.pos.z - p.z) > 1.5 || Math.abs(o.pos.x - p.x) > 1.5) continue;
         const c = o.centerWorld(tmpV);
         const r = 0.33 * o.scale * (o.def.boss ? 1.3 : 1);

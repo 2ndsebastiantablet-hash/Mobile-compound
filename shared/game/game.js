@@ -4,6 +4,7 @@ import { Enemy, Projectile } from '../content/enemies/ai.js';
 import { DEFS, rosterFor, isFlyer, isMelee } from '../content/enemies/roster.js';
 import { bossFor, bossKindFor, BOSS_LIST } from '../content/bosses/bosses.js';
 import { initDev, devOn, devTick, devOpen, refreshDevUi } from './dev.js';
+import { initRemote, remoteUse, remoteUpdate, remoteSettle, showRemote, remoteFrozen, remoteRewinding, press as remotePress, remoteButtonAt } from './remote.js';
 import { Post } from '../engine/post.js';
 import { Effects } from '../engine/effects.js';
 import * as TX from '../engine/textures.js';
@@ -961,6 +962,7 @@ function startAmbush(room) {
 }
 
 function ambushCleared() {
+  remoteSettle();
   area.clearing = true;
   G.combatActive = false;
   mode = 'moving';
@@ -973,6 +975,7 @@ function ambushCleared() {
 }
 
 function areaCleared() {
+  remoteSettle();
   area.clearing = true;
   G.combatActive = false;
   mode = 'moving';
@@ -1088,6 +1091,7 @@ function showWin() {
 
 function toTitle() {
   hideScreens();
+  showRemote(false);
   ui.hud.classList.add('hidden');
   mode = 'title'; G.combatActive = false; seq = null;
   loadFloor(1, 0);
@@ -1160,7 +1164,8 @@ function equip(i, silent) {
   P.slot = clamp(i, 0, P.inv.length - 1);
   const id = cur().id;
   viewModel(id);
-  for (const k in models) models[k].g.visible = k === id;
+  for (const k in models) models[k].g.visible = k === id && !GUN[k].remote;
+  showRemote(!!cur().remote && mode !== 'title');
   P.swapT = silent || M.fastSwap ? 0 : 1; P.reloadT = 0; P.burstLeft = 0;
   if (M.autoload) for (const s2 of P.inv) if (s2 !== curSlot()) s2.ammo = magOf(GUN[s2.id]);
   if (!silent) sfx.reload();
@@ -1176,7 +1181,7 @@ function swapWeapon() {
 
 function startReload() {
   const w = cur();
-  if (w.melee || P.reloadT > 0 || curSlot().ammo >= magOf(w)) return;
+  if (w.melee || w.remote || P.reloadT > 0 || curSlot().ammo >= magOf(w)) return;
   P.reloadT = P.reloadDur = w.reload * M.reload * wlv(w.id).reload; P.burstLeft = 0;
   sfx.reload();
 }
@@ -1184,6 +1189,7 @@ function startReload() {
 function tryFire(x, y) {
   if (!G.combatActive || mode !== 'combat' || paused) return;
   const w = cur();
+  if (w.remote) { if (P.cd > 0) return; P.cd = w.cd; remoteUse(x, y); return; }
   if (P.reloadT > 0 || P.cd > 0 || P.swapT > 0.3 || P.burstLeft > 0) return;
   if (!w.melee && curSlot().ammo <= 0) { sfx.empty(); startReload(); P.cd = 0.25; return; }
   P.cd = w.cd * M.cd;
@@ -1477,7 +1483,11 @@ gameEl.addEventListener('pointerdown', (ev) => {
   if (ev.pointerType === 'mouse' && ev.button !== 0) return;
   let { x, y } = localXY(ev);
   if (PC && ev.pointerType === 'mouse') {
-    if (locked() && mouse) { x = mouse.x; y = mouse.y; } else { mouse = { x, y }; wantLock(); }
+    if (locked() && mouse) {
+      x = mouse.x; y = mouse.y;
+      const r0 = canvasRect(), act = cur().remote ? remoteButtonAt(r0.left + x, r0.top + y) : null;
+      if (act) { remoteHeld = act; remotePress(act, true); ev.preventDefault(); return; }
+    } else { mouse = { x, y }; wantLock(); }
   }
   hold = { id: ev.pointerId, x, y };
   tryFire(x, y);
@@ -1500,7 +1510,8 @@ gameEl.addEventListener('wheel', (ev) => {
   wheelT = performance.now();
   if (P.inv.length > 1) { equip((P.slot + (ev.deltaY > 0 ? 1 : P.inv.length - 1)) % P.inv.length); toast(cur().name, RARITY[cur().rarity].color); }
 }, { passive: true });
-const release = (ev) => { if (hold && hold.id === ev.pointerId) hold = null; };
+let remoteHeld = null;
+const release = (ev) => { if (remoteHeld) { remotePress(remoteHeld, false); remoteHeld = null; } if (hold && hold.id === ev.pointerId) hold = null; };
 gameEl.addEventListener('pointerup', release);
 gameEl.addEventListener('pointercancel', release);
 gameEl.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -1755,9 +1766,9 @@ function updateHud(force) {
   setText(ui.cash, 'cash', money(profile.cash));
   setText(ui.combo, 'c', combo > 1 && now - lastKill < M.comboWindow ? `x${combo} COMBO` : '');
   setText(ui.hp, 'h', String(Math.ceil(P.hp)));
-  setText(ui.ammo, 'am', cur().melee ? '∞' : String(curSlot().ammo));
+  setText(ui.ammo, 'am', cur().melee || cur().remote ? '∞' : String(curSlot().ammo));
   ui.hp.classList.toggle('low', P.hp <= M.maxHp * 0.25);
-  ui.ammo.classList.toggle('low', !cur().melee && curSlot().ammo <= Math.ceil(magOf(cur()) * 0.25));
+  ui.ammo.classList.toggle('low', !cur().melee && !cur().remote && curSlot().ammo <= Math.ceil(magOf(cur()) * 0.25));
   setText(ui.reload, 'r', P.reloadT > 0 ? 'RELOADING' : 'AMMO');
   ui.reload.classList.toggle('reloading', P.reloadT > 0);
   if (setText(ui.weapon, 'w', cur().short)) ui.weapon.style.color = RARITY[cur().rarity].color;
@@ -1867,10 +1878,12 @@ function update(dt) {
   if (mode === 'combat') stats.t += dt;
 
   const peace = devOn('peace');
-  for (const e of G.enemies) { G.actor = e; if (peace && e.atkState === 'cool') e.atkT = Math.max(e.atkT, 1); e.update(dt); }
+  const tStop = remoteFrozen() || remoteRewinding(); // THE REMOTE: time paused or running backwards
+  remoteUpdate(dt);
+  if (!tStop) for (const e of G.enemies) { if (e.off) continue; G.actor = e; if (peace && e.atkState === 'cool') e.atkT = Math.max(e.atkT, 1); e.update(dt); }
   G.actor = null;
   G.enemies = G.enemies.filter((e) => e.alive || e === area?.boss);
-  for (const p of G.projectiles) p.update(dt);
+  if (!tStop) for (const p of G.projectiles) if (!p.off) p.update(dt);
   G.projectiles = G.projectiles.filter((p) => p.alive);
   for (let i = G.pickups.length - 1; i >= 0; i--) {
     const p = G.pickups[i]; p.t += dt;
@@ -1885,8 +1898,7 @@ function update(dt) {
   G.playerPos.copy(G.camPos); G.playerPos.y -= G.duck * 0.65;
   effects.update(dt);
   updateCorpses(dt);
-  updateHoles(dt);
-  updateProps(dt);
+  if (!tStop) { updateHoles(dt); updateProps(dt); }
   // ambient life: broken lights spark, vents steam, lab vats bubble, lightning on stormy nights
   if (G.room && G.floor && settings.gfx > 0) {
     for (const em of G.room.emitters || []) {
@@ -1946,12 +1958,14 @@ function update(dt) {
         if (e.losT <= 0) { e.losT = 0.5; e.hiddenT = enemyInSight(e) ? 0 : (e.hiddenT || 0) + 0.5; }
         if (e.hiddenT >= 10) { e.hiddenT = 0; const ls = laneSpot(area.room); e.spot = ls; e.pos.set(ls.x, e.pos.y, ls.z); if (e.goal) e.goal.set(ls.x, e.goal.y, ls.z); e.crouchTarget = 0; effects.dust(e.pos.clone().setY(0.1), 10); }
       }
+      if (e.off || e.ally) continue; // switched off / on your side: don't hold the area open
       alive++;
     }
     if (area.ambush) {
       if (alive === 0) ambushCleared();
     } else {
       area.waveT -= dt;
+      if (tStop) area.waveT += dt; // nobody new walks in while time is stopped
       if (area.queue.length && alive < area.maxAlive && area.waveT <= 0) {
         spawnReinforcement(area.queue.shift()); area.waveT = rand(Math.random, 0.9, 2.0);
         alive++; // count it now, or the area could "clear" the same frame the last wave spawns
@@ -2009,6 +2023,45 @@ toTitle();
 requestAnimationFrame(frame);
 
 // expose for debugging / automated checks
+// ------------------------------------------------------------------ THE REMOTE
+let remWasPaused = false;
+initRemote({
+  G, P, post, sfx, toast, glowTex: TX.glow(),
+  active: () => !!cur().remote && mode !== 'title',
+  inCombat: () => mode === 'combat' && G.combatActive,
+  pause: () => { remWasPaused = paused; paused = true; hold = null; },
+  resume: () => { paused = remWasPaused; },
+  marker: (x, y, c) => marker(x, y, c),
+  pop: (e, text, color) => popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, 0.55, 0)), text, color),
+  moodGrade: () => GRADES[moodNow] || GRADES.normal,
+  applySettings: () => { post.u.scan.value = [0, 0, 1][settings.retro ?? 1]; post.u.chroma.value = 0; },
+  // what's under the cursor: an enemy (incl. switched-off ones) or a projectile
+  pick: (x, y) => {
+    const rect = canvasRect();
+    let bp = null, bd = PC ? 40 : 52;
+    for (const p of G.projectiles) { if (!p.alive) continue; const s2 = toScreen(p.mesh.position, rect); if (s2.behind) continue; const d = Math.hypot(s2.x - x, s2.y - y); if (d < bd) { bd = d; bp = p; } }
+    if (bp) return { p: bp };
+    raycaster.setFromCamera(new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1), camera);
+    const ms = []; for (const e of G.enemies) if (e.alive && e.state !== 'dormant') ms.push(...e.meshes);
+    const h = raycaster.intersectObjects(ms, false)[0];
+    if (h) return { e: h.object.userData.enemy };
+    // a little forgiveness
+    let be = null, bde = PC ? 30 : 46;
+    for (const e of G.enemies) { if (!e.alive || e.state === 'dormant') continue; const s2 = toScreen(e.centerWorld(new THREE.Vector3()), rect); if (s2.behind) continue; const d = Math.hypot(s2.x - x, s2.y - y); if (d < bde) { bde = d; be = e; } }
+    return be ? { e: be } : null;
+  },
+  clone: (e) => {
+    const s2 = { x: clamp(e.pos.x + (e.pos.x > 0 ? -1 : 1), -2.8, 2.8), y: e.pos.y || 1.9, z: e.pos.z, cover: false };
+    const c = new Enemy(G, e.type, s2, { active: true }); c.activate && c.activate();
+    if (e.ownDef) { c.def = e.def; c.traits = e.traits; c.st = e.def; c.ownDef = true; }
+    c.hp = c.maxHp = e.maxHp; c.dmg = e.dmg; c.fireMul = e.fireMul; c.scale = e.scale; c.root.scale.setScalar(e.scale);
+    if (e.ally) { c.ally = true; }
+    G.enemies.push(c); effects.pop(c.centerWorld(new THREE.Vector3()));
+  },
+  erase: (e, quiet) => { if (!quiet) { effects.pop(e.centerWorld(new THREE.Vector3())); effects.sparks(e.centerWorld(new THREE.Vector3()), 12); } e.remove(); e.state = 'dead'; },
+  unspawn: (e) => { if (area && !area.boss) area.queue.unshift(e.type); e.remove(); e.state = 'dead'; },
+});
+
 // ------------------------------------------------------------------ developer tools
 let devWasPaused = false;
 initDev({

@@ -101,6 +101,9 @@ export const GUNS = [
     m: { len: 0.3, h: 0.12, col: 'dark', blen: 0.16, bt: 0.08, tank: true } },
   { id: 'blackhole', name: 'BLACK HOLE GUN', short: 'BLACKHOLE', rarity: 'legendary', desc: 'Collapses a singularity that drags enemies in.', mag: 1, reload: 3, cd: 0.4, dmg: 16, explode: 2.8, pull: true, tracer: 0xa040ff, sound: 'rail', kick: 2.6,
     m: { len: 0.34, h: 0.14, col: 'dark', blen: 0.12, bt: 0.1, coil: 'purple', glow: 'purple', w: 0.12 } },
+  // not a gun: a remote control for reality (see shared/game/remote.js)
+  { id: 'remote', name: 'THE REMOTE', short: 'REMOTE', rarity: 'legendary', desc: 'Not a gun. Power things off, pause and rewind time, edit enemies.', remote: true, mag: 1, reload: 0, cd: 0.2, dmg: 0, sound: 'tap', kick: 0,
+    m: { remote: true } },
 ];
 export const GUN = Object.fromEntries(GUNS.map((g) => [g.id, g]));
 for (const g of GUNS) { if (g.melee) { g.mag = 0; g.reload = 0; } g.pellets ||= 1; g.spread ||= 0; g.pierce ||= 0; g.headMult ||= 3; g.short ||= g.name; }
@@ -213,6 +216,16 @@ export function setSleeve(hex) { mats().sleeve.color.set(hex).multiplyScalar(1 /
 
 export function buildGunModel(def, withArm = true) {
   if (def.melee) return buildMelee(def, withArm);
+  if (def.remote) {
+    // a chunky TV remote (the on-screen 2D remote is what you actually use)
+    const M = mats(), g = new THREE.Group();
+    part(g, 0.1, 0.05, 0.32, M.dark, 0, 0, -0.12);
+    const cols = [M.gred, M.gcyan, M.ggreen, M.gorange, M.gpurple];
+    cols.forEach((c, k) => part(g, 0.025, 0.02, 0.025, c, -0.025 + (k % 2) * 0.05, 0.03, -0.24 + Math.floor(k / 2) * 0.06));
+    part(g, 0.06, 0.015, 0.05, M.gcyan, 0, 0.03, -0.04);
+    if (withArm) { part(g, 0.1, 0.1, 0.12, M.skin, 0, -0.06, 0.0); part(g, 0.13, 0.13, 0.5, M.sleeve, 0.02, -0.14, 0.32, -0.35); }
+    return { g, tip: new THREE.Vector3(0, 0, -0.3) };
+  }
   const M = mats(), s = def.m;
   const g = new THREE.Group();
   const col = M[s.col] || M.dark, w = s.w || 0.07, h = s.h, len = s.len;

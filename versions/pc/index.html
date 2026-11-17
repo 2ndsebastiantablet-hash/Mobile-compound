@@ -39,6 +39,18 @@
     <div id="tutHint" class="hidden"></div>
     <div id="tutRing" class="hidden"></div>
     <button id="tutSkip" class="hidden">SKIP TUTORIAL</button>
+    <div id="remote" class="hidden">
+      <div class="r-ir"></div>
+      <div class="r-lcd" id="rLcd">POWER</div>
+      <button class="rbtn r-power" data-act="power" aria-label="Power">⏻<small>POWER</small></button>
+      <div class="r-grid">
+        <button class="rbtn r-info" data-act="info">i<small>INFO</small></button>
+        <button class="rbtn r-pause" data-act="pause">❚❚<small>PAUSE</small></button>
+        <button class="rbtn r-rew" data-act="rew">◀◀<small>HOLD</small></button>
+        <button class="rbtn r-fwd" data-act="fwd">▶▶<small>SKIP</small></button>
+      </div>
+      <div class="r-brand">REMOTE</div>
+    </div>
     <div id="statusbar">
       <div class="cell"><div class="big" id="hpLbl">100</div><div class="lbl">HEALTH</div></div>
       <div class="cell"><div class="big" id="ammoLbl">12</div><div class="lbl" id="reloadLbl">AMMO</div></div>
@@ -100,6 +112,12 @@
     <div class="tag">FIXED FOR THE WHOLE RUN</div>
     <div id="diffList"></div>
     <button class="go small" id="diffBack">BACK</button>
+  </div>
+
+  <div id="remotePanel" class="hidden">
+    <div class="rp-title" id="rpTitle">ENEMY</div>
+    <div id="rpBody"></div>
+    <button class="go small" id="rpClose">DONE</button>
   </div>
 
   <div id="dev" class="screen hidden">
