@@ -41,7 +41,7 @@ export const DEFS = {
     atk: [{ type: 'summon', minion: 'mousebot', n: 2 }, { type: 'shot', kind: 'bolt' }], fire: [3.0, 4.5], wind: 0.9, interrupt: true },
   mousebot: { name: 'MOUSE BOT', floors: [2, 9], w: 0.35, hp: 1, score: 50, dmg: 5, scale: 0.45,
     model: { kind: 'spider', legs: 4, col: [150, 150, 158], eye: 'mono', eyeCol: [255, 40, 30] }, move: 'crawl', speed: 3.4 },
-  auditor: { name: 'AUDITOR', floors: [3, 10], w: 0.3, hp: 4, score: 200, dmg: 18,
+  auditor: { name: 'AUDITOR', floors: [3, 10], w: 0.3, hp: 4, score: 200, dmg: 13,
     model: H('accountant', { face: 'bald', glasses: true, weapon: 'rifle' }), move: 'stand', speed: 1.2,
     atk: { type: 'laser' }, fire: [3.5, 5.0], wind: 1.6, interrupt: true },
   hr: { name: 'HR REP', floors: [2, 12], w: 0.3, hp: 4, score: 180, dmg: 5,
