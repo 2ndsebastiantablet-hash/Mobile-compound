@@ -371,7 +371,7 @@ export class Enemy {
       case 'shot': this.shoot(kind, 0, atk); break;
       case 'burst': this.burstLeft = (atk.n || 3) - 1; this.shoot(kind, 0, atk); break;
       case 'rapid': { this.burstLeft = (atk.n || 6) - 1; this.burstGap = 0.13; this.burstAtk = { ...atk, dmg: (atk.dmg || 1) * Math.min(1, 5 / (atk.n || 6)) }; this.shoot(atk.kind || 'shard', 0, this.burstAtk); break; }
-      case 'spread': { const n = atk.n || 3, a = atk.angle || 0.12; for (let k = 0; k < n; k++) this.shoot(kind, (k - (n - 1) / 2) * a, atk); break; }
+      case 'spread': { const n = atk.n || 3, a = atk.angle || 0.12, sa = { ...atk, dmg: (atk.dmg || 1) * (n >= 3 ? 0.7 : 1) }; for (let k = 0; k < n; k++) this.shoot(kind, (k - (n - 1) / 2) * a, sa); break; }
       case 'lob': { const n = atk.n || 1; for (let k = 0; k < n; k++) this.shoot(kind, (k - (n - 1) / 2) * 0.15, { ...atk, lob: true }); break; }
       case 'homing': { const n = atk.n || 1; for (let k = 0; k < n; k++) this.shoot(kind === 'orb' ? 'missile' : kind, (k - (n - 1) / 2) * 0.5, { ...atk, homing: true }); break; }
       case 'sonic': { const n = atk.n || 5; for (let k = 0; k < n; k++) this.shoot('sonic', (k - (n - 1) / 2) * 0.13, atk); g.sfx.rail(); break; }
