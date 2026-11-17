@@ -222,9 +222,26 @@ function prepareArea(i) {
 }
 
 
+// a spot is only usable if you can see a standing enemy's head there from where you stand
+// (some props, like the lobby pillar, used to hide a spot completely)
+const losRay = new THREE.Raycaster();
+function spotInSight(room, s) {
+  if (s.los != null) return s.los;
+  const from = room.stand.clone();
+  let ok = false;
+  for (const x of [s.x + (s.peek || 0), s.x]) {
+    const to = new THREE.Vector3(x, 1.55, s.z), dir = to.clone().sub(from), dist = dir.length();
+    losRay.set(from, dir.normalize()); losRay.far = dist - 0.35;
+    const hit = losRay.intersectObject(room.group, true).find((h) => !h.object.material.transparent);
+    if (!hit) { ok = true; break; }
+  }
+  s.los = ok;
+  return ok;
+}
+
 function visibleSpots(room) {
   const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
-  return room.spots.filter((s) => (!s.taken || !s.taken.alive) && Math.abs(s.x) < hw * (room.stand.z - s.z) - 0.45);
+  return room.spots.filter((s) => (!s.taken || !s.taken.alive) && Math.abs(s.x) < hw * (room.stand.z - s.z) - 0.45 && spotInSight(room, s));
 }
 
 function airSpot(room) { return { x: rand(Math.random, -2, 2), y: rand(Math.random, 1.8, 2.4), z: room.z0 - rand(Math.random, 5.5, 10), cover: false }; }
