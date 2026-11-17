@@ -40,5 +40,8 @@ export const ACHIEVEMENTS = [
   { id: 'golden', name: 'GOLDEN TICKET', desc: 'Find the Golden Gun', reward: 300, test: (p) => !!p.found.golden },
   { id: 'master', name: 'MASTERY', desc: 'Upgrade a weapon to level 5', reward: 300, test: (p) => Object.values(p.weapons).some((l) => l >= 5) },
   { id: 'bestiary', name: 'FIELD GUIDE', desc: 'Encounter 50 enemy types', reward: 400, test: (p) => p.stats.typesSeen >= 50 },
+  { id: 'lore1', name: 'READING MATERIAL', desc: 'Find a memo', reward: 50, test: (p) => Object.keys(p.lore || {}).length >= 1 },
+  { id: 'lore15', name: 'OFFICE GOSSIP', desc: 'Find 15 memos', reward: 600, test: (p) => Object.keys(p.lore || {}).length >= 15 },
+  { id: 'lore30', name: 'WHISTLEBLOWER', desc: 'Find all 30 memos', reward: 2000, test: (p) => Object.keys(p.lore || {}).length >= 30 },
   { id: 'staff', name: 'FULL STAFF', desc: 'Unlock every employee', reward: 1000, test: (p, r, allChars) => allChars && allChars() },
 ];

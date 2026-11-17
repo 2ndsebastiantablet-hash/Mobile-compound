@@ -60,6 +60,13 @@ The PC version shows the whole room in widescreen, the gun follows your cursor, 
 
 ## How it plays
 - **Saving:** your run is autosaved at the start of every floor. **Continue** on the title screen picks it up again, even after closing the game. Retrying after death, or choosing *Restart floor* from the pause menu, replays that floor's save with full health.
+- **Game modes** (CLOCK IN opens the mode screen):
+  - **Story:** floors 1-50, beat the Chairman. Winning lets you **keep climbing** into Endless.
+  - **Endless** (reach floor 10 to unlock): the tower never ends. Past 50, floors reuse upper-tower layouts and keep getting harder.
+  - **Daily Challenge** (reach floor 3): the same 8-floor run for everyone today: seeded start floor, floor versions, starting weapon and perks, plus a twist of the day (Glass Cannon, Big Heads, Headcount, Night Shift, Volatile, One-Hit Wonder). Your best score per day is kept.
+  - **Boss Rush** (defeat 3 bosses): all 10 bosses back to back with perks between fights. Fastest time wins.
+- **Memos:** 30 memos, emails and logs lie around the tower in Story and Endless (a glowing sheet of paper; tap it). Read them at **HQ > FILES** to find out what happened at Halvorsen-Pike Holdings.
+- **Records:** HQ > RECORDS shows your best runs per mode (kept on this device; online leaderboards come with the store release).
 - **Look & feel:** the 3D view goes through a retro post-processing pass: glow on lights and muzzle flashes, a colour grade for each lighting mood, and an optional dither/scanline **Retro Filter** (Settings: Off, Soft, Full). Explosions and gunfire light up the room, dark floors give you a flashlight, lockdown floors pulse with alarm lights, and night floors flash with lightning. Enemies get knocked back, splatter the walls, and die in different ways: humans fall, robots spark and blow, flyers crash, bosses explode in a chain. Every floor opens with an intro card and every boss with a letterboxed slow-motion intro. Turn **Effects** off in Settings for very old devices.
 - **Duck:** press `S` / down arrow (or the DUCK button on mobile) to drop down for a moment. Shots fired at you before you ducked fly over your head, and lasers miss. Homing shots and melee still get you.
 - **Destruction:** monitors, keyboards, mugs, chairs, plants, water coolers and boxes can be shot. Light ones get knocked flying (and hurt any enemy they slam into), everything breaks apart when wrecked. Copiers and vending machines take a beating, then blow. Windows shatter. Explosions and black holes throw props around.
@@ -74,7 +81,8 @@ The PC version shows the whole room in widescreen, the gun follows your cursor, 
   - **Upgrades:** 11 permanent boosts for every future run (Vitality, Firepower, Speed Loader, Body Plating, First Aid Kit, Bounty Hunter, Perk Scholar, More Options, Backpack, Signing Bonus, Life Insurance).
   - **Armory:** level up any weapon you've found, up to level 5 (+12% damage and +10% magazine per level; level 5 also reloads faster).
   - **Employees:** 8 starting characters, each with their own weapon and perks (The Temp, Night Guard, The Intern, The Janitor, IT Technician, Junior Executive, The Contractor, The Chairman's Heir). Unlock them through milestones or buy them.
-  - **Awards:** 31 achievements with cash rewards.
+  - **Awards:** 37 achievements with cash rewards.
+  - **Files** (memos) and **Records** (best runs per mode).
 - **Developer mode** (for testing; Settings > Developer Mode, then the green **DEV** button or the `` ` `` key): god mode, infinite ammo, one-hit kills, enemies that don't attack, FPS counter, game speed 1x/2x/4x, full heal, kill all, finish floor, go to any floor, +cash, unlock everything, give any weapon or perk, spawn any enemy or boss. Before a public release, set `DEV_BUILD = false` in `shared/game/settings.js` to hide it.
 - **Tutorial:** a new player's first area on floor 1 walks through shooting, headshots, shooting fireballs, reloading, picking up and switching weapons. It can be skipped.
 

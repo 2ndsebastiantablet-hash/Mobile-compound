@@ -95,7 +95,7 @@
   <div id="hq" class="screen hidden">
     <div class="hq-head"><div class="h mid">HQ</div><div class="hq-cash" id="hqCash">$0</div></div>
     <div id="hqTabs">
-      <button data-tab="upgrades">UPGRADES</button><button data-tab="armory">ARMORY</button><button data-tab="employees">EMPLOYEES</button><button data-tab="achievements">AWARDS</button>
+      <button data-tab="upgrades">UPGRADES</button><button data-tab="armory">ARMORY</button><button data-tab="employees">EMPLOYEES</button><button data-tab="achievements">AWARDS</button><button data-tab="files">FILES</button><button data-tab="records">RECORDS</button>
     </div>
     <div id="hqBody"></div>
     <button class="go" id="hqBack">BACK</button>
@@ -105,6 +105,12 @@
     <div class="h mid" id="charTitle">WHO'S CLOCKING IN?</div>
     <div id="charList"></div>
     <button class="go small" id="charBack">BACK</button>
+  </div>
+
+  <div id="modeSelect" class="screen hidden">
+    <div class="h mid">GAME MODE</div>
+    <div id="modeList"></div>
+    <button class="go small" id="modeBack">BACK</button>
   </div>
 
   <div id="diffSelect" class="screen hidden">
@@ -173,10 +179,11 @@
   </div>
 
   <div id="win" class="screen hidden">
-    <div class="h">HOSTILE TAKEOVER</div>
-    <div class="tag">YOU REACHED THE TOP.</div>
+    <div class="h" id="winTitle">HOSTILE TAKEOVER</div>
+    <div class="tag" id="winTag">YOU REACHED THE TOP.</div>
     <div class="stats" id="winStats"></div>
-    <button class="go" id="winBtn">MAIN MENU</button>
+    <button class="go" id="keepBtn">KEEP CLIMBING (ENDLESS)</button>
+    <button class="go small" id="winBtn">MAIN MENU</button>
   </div>
 </div>
 <script>window.OVERTIME_PC = true; // switches the shared game code into PC mode</script>

@@ -26,6 +26,8 @@ export class Enemy {
     const dd = game.dd || {}; // difficulty mode
     const late = Math.max(0, f - 20); // past floor 20 a full perk set made enemies trivial
     this.maxHp = this.hp = Math.round(this.hp * (dd.hp || 1) * (def.brain ? 1 + late * 0.012 : 1 + late * 0.03) * 10) / 10;
+    if (game.mod === 'headcount') this.maxHp = this.hp = Math.round(this.hp * 0.7 * 10) / 10;
+    if (game.mod === 'onehit') this.maxHp = this.hp = def.boss ? Math.round(this.hp * 0.25) : 0.1;
     if (opts.decoy) this.maxHp = this.hp = 1;
     this.decoy = !!opts.decoy; this.yawExtra = 0;
     this.dmg = def.dmg * (1 + f * 0.015) * (1 + late * 0.015); // balance pass: was 3% per floor, far too steep past floor 10
@@ -46,6 +48,7 @@ export class Enemy {
     this.flashT = 0; this.stagger = 0; this.aimAmt = 0; this.swingT = 0; this.crouch = 0; this.crouchTarget = 0;
     this.centerY = 1.15; this.shoulderY = 1.42;
     BUILDERS[mk](this, def.model);
+    if (game.mod === 'bigheads' && this.head && this.head.userData.part === 'head') this.head.scale.multiplyScalar(1.9); // daily twist
     this.hover = this.traits.hover || 0;
     this.yOff = this.flyer && mk === 'human' ? -1.3 : 0; // jetpack humans: flight height is measured at the chest
     this.pos = new THREE.Vector3(spot.x, this.flyer ? (spot.y || 2.1) : this.hover, spot.z);
@@ -590,6 +593,7 @@ export class Enemy {
     else { g.fx.blood(center, 22); g.sfx.death(); }
     if (!this.flyer) g.fx.floorDecal(this.pos.x, this.pos.z - 0.2, this.gore, 0.6 + this.scale * 0.5);
     const T = this.traits;
+    if (g.mod === 'volatile' && !this.def.boss) g.blast(center, 1.7, 3);
     if (T.deathBlast) g.blast(center, T.deathBlast, 4);
     if (T.split) g.spawnMinion(T.split.type, this.pos, T.split.n);
     g.onEnemyKilled(this, headshot, noScore);

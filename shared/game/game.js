@@ -17,11 +17,13 @@ import { profile, addCash, stat, statMax, touch, flushProfile } from './profile.
 import { applyUpgrades, weaponBonus } from '../content/meta/upgrades.js';
 import { CHAR } from '../content/meta/characters.js';
 import { DIFFS, diffOf } from './difficulty.js';
+import { MODES, MODE, modeOpen, RUSH_FLOORS, dailySetup, todayKey, recordRun } from './modes.js';
+import { LORE, LORE_BY_ID } from '../content/meta/lore.js';
 import { ACHIEVEMENTS } from '../content/meta/achievements.js';
 import { initHQ, bindHQ, openHQ, closeHQ, openCharSelect, openDiffSelect, unlockedCount, allUnlocked, money } from './hq.js';
 import { setMusic } from '../audio/music.js';
 import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine, setSleeve, aimSpeed } from '../content/weapons/weapons.js';
-import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet } from '../engine/util.js';
+import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet, mulberry32 } from '../engine/util.js';
 
 // ------------------------------------------------------------------ DOM
 const $ = (id) => document.getElementById(id);
@@ -129,13 +131,24 @@ const curSlot = () => P.inv[P.slot];
 let pendingGuns = [], choiceOpen = false, gunsThisFloor = 0;
 // run perks: level per perk id, derived modifiers M, free rerolls left
 let perkLv = {}, M = applyUpgrades(mods(perkLv), profile.upgrades), rerolls = 1, perkOffer = null;
-const recalc = () => { M = applyUpgrades(mods(perkLv), profile.upgrades); };
+const recalc = () => {
+  M = applyUpgrades(mods(perkLv), profile.upgrades);
+  // daily challenge twists
+  if (G.mod === 'glass') M.dmg *= 1.5;
+  if (G.mod === 'bigheads') M.headHeal += 3;
+  if (G.mod === 'nightshift') M.killHeal += 4;
+  if (G.mod === 'onehit') M.maxHp = 40;
+};
 const wlv = (id) => weaponBonus(profile.weapons[id] || 0); // Armory upgrade level
 const magOf = (def) => (def.melee ? 0 : Math.max(1, Math.round(def.mag * M.mag * wlv(def.id).mag)));
 // this run: cash earned, revives left, character, best combo (for achievements)
 let runCash = 0, runChar = 'temp', runMaxCombo = 0;
 // difficulty mode for this run (index into DIFFS); G.dd is read by enemies
 let runDiff = 1, D = diffOf(1);
+// game mode of this run (see modes.js)
+let runMode = 'story', runId = 0, daily = null, rushIdx = 0, rushTime = 0, noteThisFloor = false;
+// floors past 50 (endless) reuse layouts from the upper half of the tower; difficulty keeps the real number
+const layoutOf = (n) => (n > TOP_FLOOR ? 26 + ((n - TOP_FLOOR - 1) % 25) : n);
 function setDiff(i) { runDiff = DIFFS[i] ? i : 1; D = diffOf(runDiff); G.dd = D; }
 setDiff(1);
 const healP = (n) => { if (n > 0) P.hp = Math.min(M.maxHp, P.hp + n); };
@@ -181,8 +194,9 @@ function loadFloor(n, variant) {
   G.floorNum = n;
   G.diff = n <= 20 ? n : 20 + (n - 20) * 0.85; // balance: late floors were too easy with a full perk set
   G.variant = variant;
-  const plan = floorPlan(n, variant);
-  const f = buildFloor(n, plan);
+  const lf = layoutOf(n); G.layout = lf;
+  const plan = floorPlan(lf, variant); plan.display = n; plan.rush = runMode === 'rush';
+  const f = buildFloor(lf, plan);
   G.floor = f; scene.add(f.group);
   const th = f.theme, md = MOODS[plan.mood];
   const fogCol = md.fogCol ?? th.fog;
@@ -212,7 +226,7 @@ function setLights(a, b, k) {
 
 // ------------------------------------------------------------------ area planning
 function weightedType() {
-  const pool = rosterFor(G.floorNum, G.floor && G.floor.plan.focus);
+  const pool = rosterFor(G.layout || G.floorNum, G.floor && G.floor.plan.focus);
   let total = pool.reduce((a, [, d]) => a + d.w, 0), r = Math.random() * total;
   for (const [id, d] of pool) if ((r -= d.w) <= 0) return id;
   return 'grunt';
@@ -223,7 +237,7 @@ function prepareArea(i) {
   const last = i === G.floor.rooms.length - 1;
   room.spots.forEach((s) => (s.taken = null));
   const df = G.diff || f;
-  const n = Math.max(2, Math.min(14, Math.round((3 + Math.floor(df * 0.55) + Math.floor(i * 0.5)) * D.count)));
+  const n = Math.max(2, Math.min(18, Math.round((3 + Math.floor(df * 0.55) + Math.floor(i * 0.5)) * D.count * (G.mod === 'headcount' ? 1.5 : 1))));
   const initialN = Math.min(n, 3 + Math.floor(df / 7));
   const types = [];
   // cap the heavy hitters so an area is never a wall of tanks
@@ -239,7 +253,7 @@ function prepareArea(i) {
   area = { idx: i, room, queue: [], waveT: 2.5, maxAlive: Math.max(2, Math.min(8, 3 + Math.floor((G.diff || f) / 6) + D.alive)), clearing: false, boss: null };
   const bk = bossKindFor(f);
   if (last && bk) {
-    const id = bossFor(f, G.variant || 0);
+    const id = bossFor(G.layout || f, G.variant || 0);
     const bossSpot = { x: 0, y: 1.9, z: room.z0 - 8.2, cover: false };
     const b = new Enemy(G, id, bossSpot);
     G.enemies.push(b); area.boss = b;
@@ -247,6 +261,11 @@ function prepareArea(i) {
     // mini bosses bring a couple of regulars; Bosses bring their own help
     if (bk === 'mini') { spawnAt(weightedType()); if (f > 10) spawnAt(weightedType()); }
     return;
+  }
+  // a memo lying around (story & endless): one chance per floor, in a random area
+  if (!noteThisFloor && (runMode === 'story' || runMode === 'endless') && Math.random() < (i === G.floor.rooms.length - 2 ? 1 : 0.3)) {
+    noteThisFloor = true;
+    if (Math.random() < 0.5) spawnNote(room);
   }
   const initial = types.slice(0, initialN), rest = types.slice(initialN);
   for (const t of initial) spawnAt(t);
@@ -746,9 +765,33 @@ function dropGun(pos, id) {
   return p;
 }
 
+const NOTE_M = new THREE.MeshBasicMaterial({ color: 0xfff8e0, side: THREE.DoubleSide });
+function spawnNote(room) {
+  // which memo: an unfound one from this part of the tower (or any unfound one)
+  const zone = Math.min(9, Math.floor(ZONE_OF(G.layout || G.floorNum)));
+  const left = LORE.filter((l) => !profile.lore || !profile.lore[l.id]);
+  if (!left.length) return;
+  const pickL = left.find((l) => l.zone === zone) || (Math.random() < 0.35 ? left[0] : null);
+  if (!pickL) return;
+  const s = visibleSpots(room).filter((x) => !x.cover);
+  const at = s.length ? pick(Math.random, s) : laneSpot(room);
+  const g = new THREE.Group();
+  const paper = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.36), NOTE_M); paper.position.y = 0.45; paper.rotation.x = -0.3; g.add(paper);
+  const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: TX.glow(), color: 0xfff0a0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 }));
+  gl.scale.setScalar(0.9); gl.position.y = 0.45; g.add(gl);
+  addPickup('note', new THREE.Vector3(at.x + rand(Math.random, -0.4, 0.4), 0, at.z + 1), g, { id: pickL.id });
+}
+const ZONE_OF = (f) => (f <= 4 ? 0 : f <= 9 ? 1 : f <= 14 ? 2 : f <= 20 ? 3 : 4 + Math.floor((f - 21) / 5));
+
 function collectPickup(p) {
   if (p.collect) return;
   p.collect = true; p.ct = 0;
+  if (p.kind === 'note') {
+    profile.lore = profile.lore || {}; profile.lore[p.id] = Date.now(); touch(); checkAch();
+    sfx.unlock(); const l = LORE_BY_ID[p.id];
+    toast(`FOUND: ${l.title}`, '#fff0a0'); popText(p.mesh.position.clone().setY(0.9), 'READ IT AT HQ > FILES', '#fff0a0');
+    return;
+  }
   if (p.kind === 'gun') { giveGun(p.id); return; }
   sfx.pickup();
   const amt = Math.round(25 * M.medkit);
@@ -839,7 +882,7 @@ function continueRun(sv, fullHp = false) {
   hideScreens();
   score = sv.score || 0; floorStartScore = score;
   perkLv = { ...(sv.perks || {}) }; rerolls = sv.rerolls ?? 1; recalc();
-  P.revives = sv.revives ?? M.revives; runCash = sv.cash || 0; runChar = sv.char || 'temp'; setDiff(sv.diff ?? 1); setSleeve(CHAR[runChar]?.sleeve ?? 0xd2d2cc);
+  P.revives = sv.revives ?? M.revives; runCash = sv.cash || 0; runChar = sv.char || 'temp'; setDiff(sv.diff ?? 1); setRunMode(sv.rmode || 'story', sv.dailyKey); runId = sv.runId || Date.now(); rushIdx = sv.rushIdx || 0; rushTime = sv.rushTime || 0; setSleeve(CHAR[runChar]?.sleeve ?? 0xd2d2cc);
   P.hp = fullHp ? M.maxHp : Math.max(1, Math.min(M.maxHp, sv.hp || M.maxHp));
   P.inv = sv.inv.filter((s) => GUN[s.id]).map((s) => ({ ...s }));
   if (!P.inv.length) P.inv = [{ id: 'pistol', ammo: GUN.pistol.mag }];
@@ -858,7 +901,15 @@ function startGame(floor = 1, keepScore = false) {
     const ch = CHAR[profile.char] || CHAR.temp;
     runChar = ch.id; setSleeve(ch.sleeve); setDiff(profile.diff ?? 1);
     score = 0; perkLv = { ...ch.perks }; recalc(); rerolls = 1 + M.extraRerolls; P.revives = M.revives; runCash = 0;
-    stat('runs');
+    stat('runs'); runId = Date.now(); rushIdx = 0; rushTime = 0;
+    if (runMode === 'daily') {
+      // everyone gets the same run today: The Temp, medium, a seeded weapon and two seeded perks
+      daily = daily || dailySetup();
+      const r = mulberry32(daily.seed);
+      runChar = 'temp'; setSleeve(CHAR.temp.sleeve); setDiff(1);
+      perkLv = {}; for (let k = 0; k < 2; k++) { const o = rollPerks(perkLv, 1, r); if (o[0]) perkLv[o[0]] = (perkLv[o[0]] || 0) + 1; }
+      recalc(); daily.gun = rollGun(10, r, ['pistol'], 'uncommon');
+    }
   }
   floorStartScore = score;
   P.hp = M.maxHp;
@@ -866,6 +917,7 @@ function startGame(floor = 1, keepScore = false) {
   else {
     const ch = CHAR[runChar] || CHAR.temp;
     P.inv = [{ id: ch.weapon, ammo: magOf(GUN[ch.weapon]) }];
+    if (runMode === 'daily' && daily && daily.gun) P.inv.push({ id: daily.gun, ammo: magOf(GUN[daily.gun]) });
     if (M.luckyStart) { const id = rollGun(Math.max(4, floor), Math.random, [ch.weapon], 'uncommon'); if (id) P.inv.push({ id, ammo: magOf(GUN[id]) }); }
     for (const s2 of P.inv) foundGun(s2.id);
   }
@@ -877,11 +929,12 @@ function startGame(floor = 1, keepScore = false) {
 }
 
 function startFloor(n, sameVariant = false) {
+  noteThisFloor = false;
   endTutorial(true);
   mode = 'intro'; G.combatActive = false;
   stats = newStats(); combo = 0;
   // each floor has 3 versions; roll one (a retry replays the same version)
-  loadFloor(n, sameVariant && G.variant != null && G.floorNum === n ? G.variant : Math.floor(Math.random() * 3));
+  loadFloor(n, sameVariant && G.variant != null && G.floorNum === n ? G.variant : runMode === 'daily' && daily ? daily.variants[(n - daily.start) % 8] : Math.floor(Math.random() * 3));
   floorStartScore = score;
   ui.hud.classList.remove('hidden');
   ui.bossbar.classList.add('hidden');
@@ -889,7 +942,7 @@ function startFloor(n, sameVariant = false) {
   gunsThisFloor = 0;
   equip(P.slot, true);
   // autosave: a run can always be continued from the start of this floor
-  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls, revives: P.revives, cash: runCash, char: runChar, diff: runDiff });
+  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls, revives: P.revives, cash: runCash, char: runChar, diff: runDiff, rmode: runMode, runId, rushIdx, rushTime, dailyKey: daily && daily.key });
   statMax('maxFloor', n); checkAch();
   P.windUsed = false;
   tutorialPending = n === 1 && !tutorialDone();
@@ -1033,7 +1086,9 @@ function floorComplete() {
   mode = 'floorclear';
   const n = G.floorNum;
   if (n > best.floor || score > best.score) { best.floor = Math.max(best.floor, n); best.score = Math.max(best.score, score); storeSet('overtime.best', best); }
-  if (n >= TOP_FLOOR) { showWin(); return; }
+  if (runMode === 'story' && n >= TOP_FLOOR) { showWin(); return; }
+  if (runMode === 'daily' && daily && n >= daily.end) { showModeEnd(); return; }
+  if (runMode === 'rush' && rushIdx >= RUSH_FLOORS.length - 1) { showModeEnd(); return; }
   const acc = stats.shots ? Math.round((stats.hits / stats.shots) * 100) : 0;
   const bonus = addCash((20 + n * 4) * M.cash * D.cash); runCash += bonus;
   stat('orbs', stats.orbs); statMax('maxFloor', n + 1);
@@ -1045,7 +1100,7 @@ function floorComplete() {
     `ACCURACY    ${acc}%`, `TIME        ${fmtTime(stats.t)}`, `SCORE       ${score}`,
     `CASH        +${money(bonus)} BONUS`, `WALLET      ${money(profile.cash)}`,
   ].join('\n');
-  const heal = Math.max(0, Math.min(M.maxHp - P.hp, Math.round((30 + M.coffee) * D.heal)));
+  const heal = G.mod === 'nightshift' ? 0 : Math.max(0, Math.min(M.maxHp - P.hp, Math.round((30 + M.coffee) * D.heal)));
   P.hp += heal;
   let unlock = heal > 0 ? `+${heal} HP COFFEE BREAK` : '';
   unlock += (unlock ? '\n' : '') + 'LOADOUT: ' + P.inv.map((s) => GUN[s.id].short).join(' / ');
@@ -1060,12 +1115,30 @@ function fmtTime(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); retu
 function nextFloor() {
   hideScreens();
   healP(M.floorHeal); // First Aid Kit upgrade
-  const n = G.floorNum + 1;
+  const n = runMode === 'rush' ? RUSH_FLOORS[++rushIdx] : G.floorNum + 1;
   G.floorNum = n;
   startFloor(n);
 }
 
+// local records for the RECORDS tab
+function logRun(finished) {
+  recordRun(profile, { mode: runMode, run: runId, score, floor: G.floorNum, char: runChar, diff: runDiff, date: Date.now(),
+    time: Math.round(rushTime), bosses: runMode === 'rush' ? rushIdx + (finished ? 1 : 0) : undefined, dailyKey: daily && daily.key });
+  touch(); flushProfile(true);
+}
+function showModeEnd() {
+  logRun(true); clearRun(); flushProfile(true);
+  const m = MODE[runMode];
+  $('winTitle').textContent = runMode === 'rush' ? 'BOSS RUSH COMPLETE' : 'DAILY COMPLETE';
+  $('winTag').textContent = runMode === 'rush' ? `ALL 10 BOSSES IN ${fmtTime(rushTime)}` : `TODAY: ${daily.mod.name}`;
+  const recs = runMode === 'daily' ? `TODAY'S BEST ${(profile.records.daily || {})[daily.key] || score}` : `BEST TIME ${fmtTime((profile.records.rush[0] || {}).time || rushTime)}`;
+  $('winStats').textContent = `${m.name}\nSCORE ${score}\n${recs}`;
+  $('keepBtn').classList.add('hidden');
+  showScreen(ui.win); setMusic('calm');
+}
+
 function playerDied() {
+  logRun(false);
   G.combatActive = false; mode = 'dead';
   setMusic('off');
   for (const p of G.projectiles) p.kill();
@@ -1083,8 +1156,10 @@ function playerDied() {
 }
 
 function showWin() {
+  logRun(true);
   clearRun(); stat('wins'); statMax('maxFloor', TOP_FLOOR); checkAch({ won: true }); flushProfile(true);
-  $('winStats').textContent = `FINAL SCORE ${score}\nBEST ${best.score}`;
+  $('winTitle').textContent = 'HOSTILE TAKEOVER'; $('winTag').textContent = 'YOU REACHED THE TOP.'; $('keepBtn').classList.remove('hidden');
+  $('winStats').textContent = `FINAL SCORE ${score}\nBEST ${best.score}\nKEEP CLIMBING TO PLAY ON IN ENDLESS MODE`;
   showScreen(ui.win);
   setMusic('calm');
 }
@@ -1112,7 +1187,7 @@ function toTitle() {
 }
 
 function showScreen(el) { el.classList.remove('hidden'); }
-function hideScreens() { $('hq').classList.add('hidden'); $('charSelect').classList.add('hidden'); $('diffSelect').classList.add('hidden'); for (const k of ['title', 'pause', 'floorClear', 'gameOver', 'win', 'settings', 'confirm', 'perks']) ui[k].classList.add('hidden'); }
+function hideScreens() { $('hq').classList.add('hidden'); $('charSelect').classList.add('hidden'); $('diffSelect').classList.add('hidden'); $('modeSelect').classList.add('hidden'); for (const k of ['title', 'pause', 'floorClear', 'gameOver', 'win', 'settings', 'confirm', 'perks']) ui[k].classList.add('hidden'); }
 
 let bannerTimer = null;
 // big presentation cards (floor intro, boss intro)
@@ -1528,13 +1603,41 @@ window.addEventListener('keydown', (e) => {
 });
 
 const onBtn = (id, fn) => $(id).addEventListener('click', (e) => { e.stopPropagation(); initAudio(); fn(); });
-const launchRun = () => { sfx.tap(); fade(1, 0.3); setTimeout(() => startGame(1), 320); };
+const launchRun = () => { sfx.tap(); fade(1, 0.3); setTimeout(() => startGame(startFloorFor(runMode)), 320); };
 // with more than one employee unlocked, pick who starts the run
 // a new run: pick a difficulty, then (with more than one employee unlocked) who starts it
+function setRunMode(m, dkey) {
+  runMode = m;
+  daily = m === 'daily' ? dailySetup(dkey || todayKey()) : null;
+  G.mod = daily ? daily.mod.id : null;
+}
+const startFloorFor = (m) => (m === 'daily' ? daily.start : m === 'rush' ? RUSH_FLOORS[0] : 1);
 const newRun = () => {
   ui.title.classList.add('hidden');
-  openDiffSelect(DIFFS, () => { if (unlockedCount() > 1) openCharSelect(() => launchRun()); else launchRun(); });
+  openModeSelect((m) => {
+    setRunMode(m);
+    if (m === 'daily') { launchRun(); return; }
+    openDiffSelect(DIFFS, () => { if (unlockedCount() > 1) openCharSelect(() => launchRun()); else launchRun(); });
+  });
 };
+function openModeSelect(onPick) {
+  const box = $('modeList'); box.innerHTML = '';
+  for (const m of MODES) {
+    const open = modeOpen(m, profile);
+    const row = document.createElement('div'); row.className = 'hq-row' + (open ? '' : ' dim');
+    let extra = '';
+    const rec = profile.records || {};
+    if (m.id === 'daily') { const d = dailySetup(); extra = `<small style="color:#60ff80">TODAY: ${d.mod.name} · ${d.mod.desc} FLOORS ${d.start}-${d.end}${rec.daily && rec.daily[d.key] ? ' · BEST ' + rec.daily[d.key] : ''}</small>`; }
+    if (m.id === 'endless' && rec.endless && rec.endless[0]) extra = `<small>BEST: FLOOR ${rec.endless[0].floor}</small>`;
+    if (m.id === 'rush' && rec.rush && rec.rush[0]) extra = `<small>BEST: ${rec.rush[0].bosses}/10 BOSSES · ${fmtTime(rec.rush[0].time)}</small>`;
+    if (m.id === 'story' && rec.story && rec.story[0]) extra = `<small>BEST: ${rec.story[0].score} PTS · FLOOR ${rec.story[0].floor}</small>`;
+    row.innerHTML = `<div class="hq-info"><b style="color:${m.color}">${m.name}</b><span>${m.desc}</span>${extra}${open ? '' : `<small class="req">UNLOCK: ${m.lock.text}</small>`}</div>`;
+    const b = document.createElement('button'); b.className = 'hq-buy' + (open ? '' : ' off'); b.textContent = open ? 'PLAY' : 'LOCKED';
+    b.addEventListener('click', (e) => { e.stopPropagation(); if (!open) { sfx.empty(); return; } sfx.tap(); $('modeSelect').classList.add('hidden'); onPick(m.id); });
+    row.append(b); box.append(row);
+  }
+  $('modeSelect').classList.remove('hidden');
+}
 // continuing: you may swap to a different employee for the rest of the run
 const resumeRun = (sv) => { sfx.tap(); fade(1, 0.3); setTimeout(() => continueRun(sv), 320); };
 onBtn('hqBtn', () => { sfx.tap(); ui.title.classList.add('hidden'); openHQ(); });
@@ -1553,6 +1656,8 @@ onBtn('continueBtn', () => {
     openCharSelect((ch) => resumeRun(switchChar(sv, ch.id)), `CONTINUE FLOOR ${sv.floor} AS...`);
   } else resumeRun(sv);
 });
+onBtn('modeBack', () => { sfx.tap(); $('modeSelect').classList.add('hidden'); showScreen(ui.title); });
+onBtn('keepBtn', () => { sfx.tap(); runMode = 'endless'; hideScreens(); nextFloor(); });
 onBtn('diffBack', () => { sfx.tap(); $('diffSelect').classList.add('hidden'); showScreen(ui.title); });
 onBtn('settingsBtn', () => openSettings(ui.title));
 onBtn('pSettingsBtn', () => openSettings(ui.pause));
@@ -1761,7 +1866,7 @@ function setText(el, key, v) { if (hudCache[key] !== v) { hudCache[key] = v; el.
 function updateHud(force) {
   if (force) for (const k in hudCache) delete hudCache[k];
   setText(ui.floor, 'f', `FLOOR ${String(G.floorNum).padStart(2, '0')}`);
-  if (G.floor) setText(ui.area, 'a', `AREA ${Math.min(G.roomIdx + 1, G.floor.rooms.length)}/${G.floor.rooms.length}`);
+  if (G.floor) setText(ui.area, 'a', runMode === 'rush' ? `BOSS ${rushIdx + 1}/10 · ${fmtTime(rushTime)}` : runMode === 'daily' && daily ? `DAILY ${G.floorNum - daily.start + 1}/8 · ${daily.mod.name}` : `AREA ${Math.min(G.roomIdx + 1, G.floor.rooms.length)}/${G.floor.rooms.length}`);
   setText(ui.score, 's', String(score).padStart(6, '0'));
   setText(ui.cash, 'cash', money(profile.cash));
   setText(ui.combo, 'c', combo > 1 && now - lastKill < M.comboWindow ? `x${combo} COMBO` : '');
@@ -1875,7 +1980,7 @@ function update(dt) {
     G.floor.update(dt);
     for (const el of G.floor.elevators) if (el.closeAt && now > el.closeAt) { el.target = 0; el.closeAt = 0; }
   }
-  if (mode === 'combat') stats.t += dt;
+  if (mode === 'combat') { stats.t += dt; if (runMode === 'rush' && !paused) rushTime += dt; }
 
   const peace = devOn('peace');
   const tStop = remoteFrozen() || remoteRewinding(); // THE REMOTE: time paused or running backwards
@@ -2076,7 +2181,7 @@ initDev({
   finishFloor: () => { paused = false; ui.pause.classList.add('hidden'); for (const e of G.enemies) if (e.alive) e.die(false, null, true); G.combatActive = false; hideScreens(); floorComplete(); },
   gotoFloor: (n) => { paused = false; hideScreens(); for (const pr of G.projectiles) pr.kill(); G.projectiles = []; G.floorNum = n; startFloor(n); },
   cash: (n) => { addCash(n); touch(); flushProfile(true); },
-  unlockAll: () => { for (const c of Object.keys(CHAR)) profile.chars[c] = 1; for (const g of GUNS) profile.found[g.id] = 1; touch(); flushProfile(true); checkAch(); toast('EVERYTHING UNLOCKED'); },
+  unlockAll: () => { profile.allModes = true; for (const c of Object.keys(CHAR)) profile.chars[c] = 1; for (const g of GUNS) profile.found[g.id] = 1; touch(); flushProfile(true); checkAch(); toast('EVERYTHING UNLOCKED'); },
   floor: () => G.floorNum,
   guns: () => GUNS.map((g) => ({ id: g.id, short: g.short, color: RARITY[g.rarity].color })),
   giveGun: (id) => { giveGun(id); },
@@ -2089,7 +2194,7 @@ initDev({
   spawnBoss: (id) => { if (!area) return; const b = new Enemy(G, id, { x: 0, y: 1.9, z: area.room.z0 - 8.2, cover: false }); b.activate(); G.enemies.push(b); if (!area.boss) area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; },
 });
 
-window.__game = { get draws() { return drawCalls; }, cards: { floorCard, bossCard, dmgDir }, post, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
+window.__game = { get draws() { return drawCalls; }, get run() { return { runMode, daily, rushIdx, rushTime, layout: G.layout, mod: G.mod }; }, goto(n) { hideScreens(); G.floorNum = n; startFloor(n); }, spawnNote: () => spawnNote(G.room), nextFloor: () => nextFloor(), cards: { floorCard, bossCard, dmgDir }, post, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);

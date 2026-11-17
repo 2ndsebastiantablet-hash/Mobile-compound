@@ -60,10 +60,10 @@ export class Effects {
       water: [0, 1, 2].map((k) => decalMat(TX.splat(k), 0x6aa8ff, 0.45)),
     };
     // floating dust in the light
-    const N = 160, pos = new Float32Array(N * 3);
+    const N = 28, pos = new Float32Array(N * 3); // just a few motes (was 160: too busy)
     for (let i = 0; i < N; i++) { pos[i * 3] = rand(Math.random, -3.3, 3.3); pos[i * 3 + 1] = rand(Math.random, 0.2, 2.9); pos[i * 3 + 2] = rand(Math.random, -12, 0); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.motes = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xfff0d0, size: 0.022, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.motes = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xfff0d0, size: 0.016, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.motes.frustumCulled = false; scene.add(this.motes); this.moteT = 0;
     this.casings = [];
   }

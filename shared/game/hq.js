@@ -5,6 +5,9 @@ import { UPGRADES, upgradeCost, WEAPON_MAX, weaponCost } from '../content/meta/u
 import { CHARACTERS, isUnlocked } from '../content/meta/characters.js';
 import { ACHIEVEMENTS } from '../content/meta/achievements.js';
 import { GUNS, GUN, RARITY } from '../content/weapons/weapons.js';
+import { LORE } from '../content/meta/lore.js';
+import { DIFFS } from './difficulty.js';
+import { CHAR } from '../content/meta/characters.js';
 
 const $ = (id) => document.getElementById(id);
 const money = (n) => '$' + Math.round(n).toLocaleString('en-US');
@@ -52,6 +55,38 @@ function render() {
   } else if (tab === 'employees') {
     box.append(el('div', 'hq-note', 'Pick who starts the next run. Each employee brings their own weapon and perks.'));
     for (const c of CHARACTERS) box.append(charRow(c, false));
+  } else if (tab === 'files') {
+    const lore = profile.lore || {};
+    box.append(el('div', 'hq-note', `${Object.keys(lore).length} / ${LORE.length} memos found. They turn up lying around the tower in Story and Endless runs.`));
+    for (const l of LORE) {
+      const got = !!lore[l.id];
+      const row = el('div', 'hq-row' + (got ? '' : ' dim'));
+      const info = el('div', 'hq-info', got ? `<b style="color:#fff0a0">${l.title}</b><span class="lore-from">FROM: ${l.from}</span>` : `<b>??? MEMO #${l.id.slice(1)}</b><span class="lore-from">FLOORS ${zoneFloors(l.zone)}</span>`);
+      if (got) {
+        const txt = el('div', 'lore-txt hidden', l.text); info.append(txt);
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', (e) => { e.stopPropagation(); hooks.sfx.tap(); txt.classList.toggle('hidden'); });
+        row.append(info, el('div', 'hq-done', 'READ'));
+      } else row.append(info, el('div', 'hq-done', 'MISSING'));
+      box.append(row);
+    }
+  } else if (tab === 'records') {
+    const rec = profile.records || {};
+    const date = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
+    const tm = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+    const list = (title, rows, fmt) => {
+      box.append(el('div', 'hq-note', `<b style="color:#f0c860">${title}</b>`));
+      if (!rows || !rows.length) { box.append(el('div', 'hq-note', 'NO RUNS YET')); return; }
+      rows.forEach((r, i) => box.append(el('div', 'rec-row', `<span>${i + 1}. ${fmt(r)}</span><span>${CHAR[r.char] ? CHAR[r.char].name : ''} · ${(DIFFS[r.diff] || DIFFS[1]).name} · ${date(r.date)}</span>`)));
+    };
+    list('STORY · TOP SCORES', rec.story, (r) => `${r.score} PTS · FLOOR ${r.floor}`);
+    list('ENDLESS · HIGHEST FLOORS', rec.endless, (r) => `FLOOR ${r.floor} · ${r.score} PTS`);
+    list('BOSS RUSH · BEST RUNS', rec.rush, (r) => `${r.bosses}/10 BOSSES · ${tm(r.time)}`);
+    const days = Object.entries(rec.daily || {}).sort((a, b) => b[0] - a[0]).slice(0, 7);
+    box.append(el('div', 'hq-note', '<b style="color:#60ff80">DAILY CHALLENGE · LAST 7 DAYS</b>'));
+    if (!days.length) box.append(el('div', 'hq-note', 'NO RUNS YET'));
+    for (const [k, v] of days) box.append(el('div', 'rec-row', `<span>${String(k).slice(4, 6)}/${String(k).slice(6)}</span><span>${v} PTS</span>`));
+    box.append(el('div', 'hq-note', 'Records are kept on this device. Online leaderboards come with the app store release.'));
   } else if (tab === 'achievements') {
     const got = ACHIEVEMENTS.filter((a) => profile.ach[a.id]).length;
     box.append(el('div', 'hq-note', `${got} / ${ACHIEVEMENTS.length} unlocked`));
@@ -64,6 +99,8 @@ function render() {
     }
   }
 }
+
+const zoneFloors = (z) => ['1-4', '5-9', '10-14', '15-20', '21-25', '26-30', '31-35', '36-40', '41-45', '46-50'][z];
 
 function charRow(c, picking, onPick) {
   const open = isUnlocked(c, profile), sel = profile.char === c.id;

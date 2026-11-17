@@ -4,7 +4,7 @@ import { storeGet, storeSet } from '../engine/util.js';
 
 const KEY = 'overtime.profile';
 const blank = () => ({
-  v: 1, cash: 0, upgrades: {}, weapons: {}, chars: {}, found: {}, ach: {}, char: 'temp', diff: 1,
+  v: 1, cash: 0, upgrades: {}, weapons: {}, chars: {}, found: {}, ach: {}, char: 'temp', diff: 1, lore: {}, records: { story: [], endless: [], rush: [], daily: {} },
   stats: { kills: 0, heads: 0, orbs: 0, meleeKills: 0, bossKills: 0, miniKills: 0, maxFloor: 0, wins: 0, spent: 0, perksTaken: 0, saves: 0, typesSeen: 0, runs: 0, earned: 0 },
 });
 

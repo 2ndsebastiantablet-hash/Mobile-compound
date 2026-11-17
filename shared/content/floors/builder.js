@@ -81,14 +81,14 @@ export function buildFloor(floor, plan) {
   const rng = mulberry32(floor * 7919 + plan.variant * 104729 + 17);
   const group = new THREE.Group();
   const isBoss = floor % 5 === 0;
-  const nCombat = Math.min(2 + Math.ceil(floor / 4), 5);
+  const nCombat = plan.rush ? 0 : Math.min(2 + Math.ceil(floor / 4), 5); // boss rush: straight to the boss room
   const types = [];
   const pool = shuffle(rng, th.rooms.slice());
   for (let i = 0; i < nCombat; i++) types.push(floor === 1 && i === 0 ? 'lobby' : pool[i % pool.length]);
   types.push('elevator');
 
   const sky = basic('sky' + floor, TX.skyline(floor), { fog: false });
-  const sign = basic('sign' + floor, TX.floorSign(floor));
+  const sign = basic('sign' + (plan.display || floor), TX.floorSign(plan.display || floor));
   const flicker = [];
   const elevators = [];
   const rooms = types.map((type, i) => buildRoom({ i, type, floor, th, M, rng, group, sky, sign, flicker, elevators, mood, focus: plan.focus, last: i === types.length - 1, isBoss }));

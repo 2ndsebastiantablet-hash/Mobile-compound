@@ -56,12 +56,14 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 - [x] **Presentation:** floor intro cards, boss intro with letterbox and slow-motion, damage direction arcs, HUD hit/low-health/low-ammo reactions, glitching title logo
 - [x] New settings: EFFECTS on/off, RETRO FILTER off/soft/full (graphics LOW turns off bloom, flash lights and ambient particles)
 
-## Phase 6: Modes & content (2 sessions · weeks 6–7)
-- [ ] **Endless mode** after floor 50
-- [ ] **Daily challenge:** fixed seed for everyone that day
-- [ ] **Boss rush**
-- [ ] **Lore:** collectible emails or notes that tell the tower's story
-- [ ] Online leaderboards (needs a small server or service; decide in this phase)
+## Phase 6: Modes & content ✅ DONE (v0.13)
+- [x] **Game mode screen:** Story, Endless, Daily Challenge, Boss Rush (later modes unlock by playing)
+- [x] **Endless mode:** no top floor; past 50 the floors reuse upper-tower layouts and keep getting harder. A won story run can keep climbing
+- [x] **Daily challenge:** same run for everyone each day (seeded start floor, floor versions, weapon, perks, perk offers) plus a twist of the day: Glass Cannon, Big Heads, Headcount, Night Shift, Volatile, One-Hit Wonder
+- [x] **Boss rush:** the 10 bosses back to back with perks between fights, timed
+- [x] **Lore:** 30 collectible memos telling the story of Halvorsen-Pike Holdings; read them at HQ > FILES (+3 achievements)
+- [x] **Records:** local leaderboards per mode at HQ > RECORDS
+- [ ] Online leaderboards: need a small server or service; planned with the store release (Phase 8)
 
 **🏁 MILESTONE: BETA.** Gameplay feature complete (audio still to come). Wider testing and store preparation start.
 
