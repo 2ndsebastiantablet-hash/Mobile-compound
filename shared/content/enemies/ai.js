@@ -377,7 +377,7 @@ export class Enemy {
       case 'sonic': { const n = atk.n || 5; for (let k = 0; k < n; k++) this.shoot('sonic', (k - (n - 1) / 2) * 0.13, atk); g.sfx.rail(); break; }
       case 'laser': {
         g.fx.beam(this.muzzle(new THREE.Vector3()), g.camPos.clone().add(new THREE.Vector3(0, -0.15, 0)), 0xff3020, 0.09, 0.22);
-        g.sfx.rail(); g.hurtPlayer(this.dmg, this);
+        g.sfx.rail(); g.hurtPlayer(this.dmg * 0.75, this); // can't be shot down, so lasers hit a bit softer
         break;
       }
       case 'summon': {
