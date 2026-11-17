@@ -381,7 +381,7 @@ function causeOf(src, proj) {
 G.hurtPlayer = (dmg, src, proj) => {
   if (!G.combatActive || mode !== 'combat') return;
   if (devOn('god')) { sfx.hurt(); return; }
-  dmg *= D.dmg;
+  dmg *= D.dmg * Math.min(1, 0.8 + G.floorNum * 0.02); // gentler first floors while players learn
   if (tutorial && !tutorial.done) dmg *= 0.5;
   if (!src && M.deflect && Math.random() < M.deflect) { popText(G.camPos.clone().add(new THREE.Vector3(0, -0.2, -1.2)), 'DEFLECTED', '#80e0ff'); sfx.zap(); return; }
   dmg *= M.armor;
