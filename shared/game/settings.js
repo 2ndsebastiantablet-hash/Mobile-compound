@@ -12,6 +12,7 @@ export const SCHEMA = [
   { key: 'gfx', label: 'GRAPHICS', type: 'choice', options: ['LOW', 'MEDIUM', 'HIGH'], def: 1, hint: 'LOWER = FASTER ON OLDER DEVICES' },
   { key: 'post', label: 'EFFECTS', type: 'choice', options: ['OFF', 'ON'], def: 1, hint: 'GLOW, COLOUR GRADING, DAMAGE EFFECTS' },
   { key: 'retro', label: 'RETRO FILTER', type: 'choice', options: ['OFF', 'SOFT', 'FULL'], def: 1, hint: 'DITHERING · FULL ADDS SCANLINES' },
+  { key: 'gore', label: 'GORE', type: 'choice', options: ['LOW', 'NORMAL', 'EXTRA'], def: 2 },
   { key: 'shake', label: 'SCREEN SHAKE', type: 'choice', options: ['OFF', 'ON'], def: 1 },
   { key: 'lefty', label: 'LEFT-HANDED HUD', type: 'choice', options: ['OFF', 'ON'], def: 0, mobileOnly: true },
   { key: 'dev', label: 'DEVELOPER MODE', type: 'choice', options: ['OFF', 'ON'], def: 0, dev: true, hint: 'GOD MODE, GIVE WEAPONS/PERKS, SKIP FLOORS (` KEY ON PC)' },

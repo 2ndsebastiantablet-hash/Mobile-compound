@@ -32,6 +32,7 @@ uniform sampler2D tScene; uniform sampler2D tBloom;
 uniform vec2 res; uniform float time;
 uniform float bloom, retro, scan, vign, hurt, lowHp, chroma, dissolve, flash, sat, contrast, useBloom;
 uniform vec3 tint, lift, flashCol;
+uniform vec3 hole; // x, y (uv), strength: black hole lens
 varying vec2 vUv;
 float bayer(vec2 p) {
   vec2 q = mod(p, 4.0);
@@ -45,6 +46,12 @@ vec3 toSRGB(vec3 c) { c = max(c, 0.0); return mix(c * 12.92, 1.055 * pow(c, vec3
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 void main() {
   vec2 uv = vUv;
+  if (hole.z > 0.001) {
+    vec2 hv = uv - hole.xy; hv.x *= res.x / res.y;
+    float hd = length(hv);
+    float pinch = hole.z * 0.06 * smoothstep(0.32, 0.0, hd) / max(hd, 0.02) * hd;
+    uv -= normalize(uv - hole.xy + 0.0001) * pinch;
+  }
   vec2 d = uv - 0.5;
   vec3 c;
   if (chroma > 0.001) {
@@ -98,6 +105,7 @@ export class Post {
       tScene: { value: this.rt.texture }, tBloom: { value: this.rtA.texture }, res: { value: new THREE.Vector2() }, time: { value: 0 },
       bloom: { value: 0.9 }, useBloom: { value: 1 }, retro: { value: 0 }, scan: { value: 0 }, vign: { value: 0.35 }, hurt: { value: 0 }, lowHp: { value: 0 },
       chroma: { value: 0 }, dissolve: { value: 0 }, flash: { value: 0 }, flashCol: { value: new THREE.Color(1, 1, 1) },
+      hole: { value: new THREE.Vector3() },
       sat: { value: 1.08 }, contrast: { value: 1.06 }, tint: { value: new THREE.Color(1, 1, 1) }, lift: { value: new THREE.Color(0, 0, 0) },
     };
     this.mComp = mk(COMPOSITE, this.u);

@@ -105,12 +105,13 @@ function viewModel(id) {
 const G = {
   scene, camera, fx: effects, sfx,
   camPos: new THREE.Vector3(0, EYE, 0),
+  playerPos: new THREE.Vector3(0, EYE, 0), duck: 0, // where you can be hit (lower while ducking)
   lowReach: PC ? 3.1 : 2.1, // how close floor crawlers get (kept above the status bar)
   floorNum: 1, floor: null, room: null, roomIdx: 0,
   combatActive: false,
   enemies: [], projectiles: [], pickups: [],
 };
-const P = { punch: 0, swing: 0, swingDir: 1, hp: 100, inv: [{ id: 'pistol', ammo: 12 }], slot: 0, invAtFloor: null, burstLeft: 0, burstT: 0, reloadT: 0, cd: 0, recoil: 0, flashT: 0, aimYaw: 0, aimPitch: 0, aimTY: 0, aimTP: 0, swapT: 0 };
+const P = { duckT: 0, duckCd: 0, punch: 0, swing: 0, swingDir: 1, hp: 100, inv: [{ id: 'pistol', ammo: 12 }], slot: 0, invAtFloor: null, burstLeft: 0, burstT: 0, reloadT: 0, cd: 0, recoil: 0, flashT: 0, aimYaw: 0, aimPitch: 0, aimTY: 0, aimTP: 0, swapT: 0 };
 let score = 0, floorStartScore = 0, combo = 0, lastKill = -10, now = 0;
 let stats = newStats();
 let mode = 'title', paused = false;
@@ -162,6 +163,8 @@ function fade(to, dur) {
 
 // ------------------------------------------------------------------ floor setup
 function clearFloor() {
+  flying.length = 0;
+  for (const h of holes) scene.remove(h.g); holes.length = 0;
   for (const c of corpses) scene.remove(c.e.root); corpses.length = 0;
   for (const e of G.enemies) e.remove();
   for (const p of G.projectiles) p.kill();
@@ -332,6 +335,162 @@ function spawnReinforcement(type) {
   for (const el of room.elevators) if (Math.abs(el.x - entry.x) < 0.5 && el !== room.exitElevator) { el.target = 1; el.closeAt = now + 2.8; sfx.ding(); }
   return e;
 }
+// ------------------------------------------------------------------ environmental destruction
+// Small props can be shot: light ones get knocked flying (and hurt enemies they slam into),
+// everything breaks apart when it runs out of health. Windows shatter.
+const PROPS = {
+  monitor: { hp: 1.5, mass: 1, fx: 'spark' }, keyboard: { hp: 0.8, mass: 0.4, fx: 'chip' }, mug: { hp: 0.3, mass: 0.2, fx: 'chip' },
+  chair: { hp: 4, mass: 2, fx: 'chip' }, plant: { hp: 2.5, mass: 1.5, fx: 'dirt' }, cooler: { hp: 3, mass: 2.5, fx: 'water' },
+  box: { hp: 2, mass: 0.8, fx: 'card' }, copier: { hp: 14, mass: 30, fx: 'spark', heavy: true }, vending: { hp: 18, mass: 50, fx: 'glass', heavy: true },
+};
+const flying = [];
+function findProp(o) { while (o) { if (o.userData && o.userData.prop) return o; o = o.parent; } return null; }
+function propCenter(p) { return new THREE.Box3().setFromObject(p).getCenter(new THREE.Vector3()); }
+function propFx(kind, at, n) {
+  const fx = PROPS[kind].fx;
+  if (fx === 'spark') { effects.sparks(at, n); if (n > 6) { effects.smoke(at, 2, 0x303030, 0.3, 0.5, 1.2); effects.light(at, 0x80c0ff, 6, 4, 0.12); } }
+  else if (fx === 'water') { effects.emit(at, n * 2, 'ice', 2.5, 9, 0.7); if (n > 6) effects.floorDecal(at.x, at.z, 'water', 1.1); }
+  else if (fx === 'dirt') { effects.emit(at, n, 'dust', 2, 9, 0.8); effects.emit(at, n, 'goo', 1.8, 9, 0.6); }
+  else if (fx === 'glass') { effects.emit(at, n * 2, 'ice', 3, 9, 0.8); effects.sparks(at, n); }
+  else effects.emit(at, n, 'dust', 2.2, 9, 0.6);
+}
+function hitProp(p, dmg, point, dir, impulse = 3) {
+  const st = p.userData.prop, def = PROPS[st.kind] || PROPS.box;
+  st.hp = (st.hp ?? def.hp) - dmg;
+  propFx(st.kind, point, 3);
+  if (st.hp <= 0) { breakProp(p, dir, impulse); return; }
+  if (!def.heavy) launchProp(p, dir.clone().setY(0).normalize().multiplyScalar(impulse / def.mass).add(new THREE.Vector3(0, 1.2 + impulse / def.mass * 0.4, 0)));
+}
+function launchProp(p, v) {
+  const room = G.floor.rooms.find((r) => r.props.includes(p));
+  if (room && p.parent !== room.group) room.group.attach(p);
+  p.matrixAutoUpdate = true;
+  let f = flying.find((x) => x.p === p);
+  if (!f) { const b = new THREE.Box3().setFromObject(p); f = { p, v: new THREE.Vector3(), av: new THREE.Vector3(), h: p.position.y - b.min.y, mass: (PROPS[p.userData.prop.kind] || PROPS.box).mass }; flying.push(f); }
+  f.v.add(v); f.av.set(rand(Math.random, -6, 6), rand(Math.random, -6, 6), rand(Math.random, -6, 6)).multiplyScalar(Math.min(1.5, v.length() / 4));
+}
+function breakProp(p, dir, impulse) {
+  const kind = p.userData.prop.kind, at = propCenter(p);
+  propFx(kind, at, 12);
+  if (PROPS[kind] && PROPS[kind].heavy) { effects.explosion(at, 0.5); sfx.explode(); }
+  else sfx.metalHit();
+  for (const r of G.floor.rooms) { const i = r.props.indexOf(p); if (i >= 0) r.props.splice(i, 1); }
+  const fi = flying.findIndex((x) => x.p === p); if (fi >= 0) flying.splice(fi, 1);
+  p.updateMatrixWorld(true);
+  const meshes = []; p.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  for (const m of meshes) {
+    scene.attach(m); m.matrixAutoUpdate = true;
+    effects.debris(m, dir.clone().setY(0).normalize().multiplyScalar(rand(Math.random, 0.5, 1.5) * Math.min(3, impulse * 0.4)).add(new THREE.Vector3(rand(Math.random, -1, 1), rand(Math.random, 1.5, 3), rand(Math.random, -1, 1))));
+  }
+  p.removeFromParent();
+}
+function updateProps(dt) {
+  for (let i = flying.length - 1; i >= 0; i--) {
+    const f = flying[i], p = f.p;
+    f.v.y -= 9.8 * dt;
+    p.position.addScaledVector(f.v, dt);
+    p.rotation.x += f.av.x * dt; p.rotation.y += f.av.y * dt; p.rotation.z += f.av.z * dt;
+    if (Math.abs(p.position.x) > HALF_W) { p.position.x = Math.sign(p.position.x) * HALF_W; f.v.x *= -0.4; }
+    if (p.position.y - f.h < 0) {
+      p.position.y = f.h; f.v.y = Math.abs(f.v.y) > 1.2 ? -f.v.y * 0.3 : 0; f.v.x *= 0.55; f.v.z *= 0.55; f.av.multiplyScalar(0.5);
+      if (f.v.y === 0) { p.rotation.x *= 0.8; p.rotation.z *= 0.8; }
+    }
+    // slamming into enemies hurts them
+    const sp = f.v.length();
+    if (sp > 2.2) {
+      const c = p.position;
+      for (const e of G.enemies) {
+        if (!e.alive || e.state === 'dormant' || e.off) continue;
+        const ec = e.centerWorld(V3());
+        if (Math.abs(ec.x - c.x) < 0.5 * e.scale && Math.abs(ec.z - c.z) < 0.5 * e.scale && c.y < ec.y + 0.9 * e.scale && c.y > e.pos.y - 0.2) {
+          const r = e.damage(sp * f.mass * 0.35, 'body', c.clone());
+          if (r && r !== 'immune') { e.stagger = 1; popText(ec.clone().add(new THREE.Vector3(0, 0.5, 0)), 'SMACK!', '#ffe070'); }
+          f.v.multiplyScalar(-0.3); break;
+        }
+      }
+    }
+    if (sp < 0.15 && p.position.y - f.h < 0.01) { p.matrixAutoUpdate = false; p.updateMatrix(); flying.splice(i, 1); }
+  }
+}
+// explosions and black holes shove props around
+function propsInRange(at, r, fn) {
+  if (!G.floor) return;
+  for (const room of G.floor.rooms) {
+    if (!room.group.visible) continue;
+    for (const p of room.props.slice()) { p.updateMatrixWorld(true); const c = propCenter(p); const d = c.distanceTo(at); if (d < r) fn(p, c, d); }
+    for (const g of room.glass.slice()) if (g.parent && g.getWorldPosition(V3()).distanceTo(at) < r * 0.9) shatterGlass(g, room);
+  }
+}
+function blastProps(at, r, dmg) {
+  propsInRange(at, r + 0.6, (p, c, d) => hitProp(p, dmg * (1 - d / (r + 0.6)) + 0.5, c, c.clone().sub(at).setY(0.3), 9));
+}
+G.pullProps = (h, dt, pull) => propsInRange(h.at, h.R, (p, c, d) => {
+  const kind = p.userData.prop.kind; if ((PROPS[kind] || {}).heavy) return;
+  if (d < 0.6) { breakProp(p, new THREE.Vector3(0, 1, 0), 1); return; }
+  launchProp(p, h.at.clone().sub(c).normalize().multiplyScalar(14 * dt).add(new THREE.Vector3(0, 9.8 * dt * 1.05, 0)));
+});
+function shatterGlass(pane, room) {
+  if (!pane.parent) return;
+  const at = pane.getWorldPosition(new THREE.Vector3());
+  for (let k = 0; k < 8; k++) effects.emit(at.clone().add(new THREE.Vector3(0, rand(Math.random, -0.7, 0.7), rand(Math.random, -0.9, 0.9))), 4, 'ice', 1.5, 9, 0.9);
+  sfx.metalHit(); pane.removeFromParent();
+  const i = room.glass.indexOf(pane); if (i >= 0) room.glass.splice(i, 1);
+}
+
+// ------------------------------------------------------------------ black holes
+// The Black Hole Gun opens a singularity where the shot lands: for a few seconds it drags in
+// enemies, their shots, gibs and loose props (never you), crushing what reaches the middle,
+// then collapses in a blast.
+const holes = [];
+const HALF_W = 3.25;
+const HOLE_CORE = new THREE.MeshBasicMaterial({ color: 0x000000 });
+function spawnBlackHole(at, w) {
+  const p = at.clone(); p.y = clamp(p.y, 0.8, 2.3);
+  const g = new THREE.Group(); g.position.copy(p); scene.add(g);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), HOLE_CORE); g.add(core);
+  const mk = (size, col, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: TX.ring(), color: col, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: op })); sp.scale.setScalar(size); g.add(sp); return sp; };
+  const disc = [mk(1.6, 0xb050ff, 0.9), mk(2.4, 0x6020c0, 0.6), mk(1.1, 0xffffff, 0.7)];
+  const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: TX.glow(), color: 0x8030ff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 })); gl.scale.setScalar(3); g.add(gl);
+  holes.push({ g, core, disc, t: 0, life: 3.6, R: 4.2, dps: w.dmg * 0.55 * M.dmg * wlv(w.id).dmg, burst: w.dmg * M.dmg * wlv(w.id).dmg, at: p });
+  sfx.rail(); shake = Math.min(1, shake + 0.3);
+}
+function updateHoles(dt) {
+  post.u.hole.value.z = 0;
+  for (let i = holes.length - 1; i >= 0; i--) {
+    const h = holes[i]; h.t += dt;
+    const grow = Math.min(1, h.t / 0.3) * (h.t > h.life - 0.3 ? Math.max(0, (h.life - h.t) / 0.3) : 1);
+    h.core.scale.setScalar(0.4 + grow * (1 + Math.sin(h.t * 30) * 0.05));
+    h.disc.forEach((d, k) => { d.material.rotation += dt * (k % 2 ? -5 : 7); d.scale.setScalar((1.1 + k * 0.65) * grow * (1 + Math.sin(h.t * 9 + k) * 0.08)); });
+    effects.light(h.at, 0x9040ff, 10 * grow, 6, 0.06);
+    if (Math.random() < dt * 30) { const a = Math.random() * 6.28, r = rand(Math.random, 1.2, h.R * 0.7); effects.emit(h.at.clone().add(new THREE.Vector3(Math.cos(a) * r, rand(Math.random, -0.8, 0.8), Math.sin(a) * r)), 1, 'pop', 0.1, 0, 0.3); }
+    const pull = (pos, strength) => { const d = h.at.clone().sub(pos); const dist = d.length(); if (dist > h.R || dist < 0.01) return dist; pos.addScaledVector(d.normalize(), Math.min(dist, strength * (1.3 - dist / h.R) * dt)); return dist; };
+    // enemies
+    for (const e of G.enemies) {
+      if (!e.alive || e.state === 'dormant' || e.off) continue;
+      const c = e.centerWorld(V3()), dist = c.distanceTo(h.at);
+      if (dist > h.R) continue;
+      const y0 = e.pos.y;
+      pull(e.pos, e.def.boss ? 0.6 : 4.5); e.pos.y = y0;
+      if (e.goal) e.goal.copy(e.pos);
+      e.stagger = 1; e.yawExtra = (e.yawExtra || 0) + dt * 6 * (1 - dist / h.R);
+      e.damage(h.dps * dt * (dist < 0.9 ? 3 : 1), 'body', c, true);
+    }
+    // enemy shots, gibs and loose props get swallowed
+    for (const p of G.projectiles) if (p.alive) { const d = pull(p.mesh.position, 9); if (d < 0.4) { p.kill(); stats.orbs++; score += 25; } }
+    for (const d of effects.debrisList) { const dist = pull(d.m.position, 7); if (dist < h.R) { d.v.multiplyScalar(0.9); if (dist < 0.35) d.life = 99; } }
+    if (G.pullProps) G.pullProps(h, dt, pull);
+    // lens distortion on screen
+    const r = canvasRect(), s = toScreen(h.at, r);
+    if (!s.behind) post.u.hole.value.set(s.x / r.width, 1 - s.y / r.height, grow);
+    if (h.t >= h.life) {
+      scene.remove(h.g); holes.splice(i, 1);
+      effects.explosion(h.at, 1.6); sfx.explode(); shake = Math.min(1, shake + 0.7);
+      post.u.flash.value = 0.5; post.u.flashCol.value.set(0xa060ff);
+      for (const e of G.enemies) { if (!e.alive || e.state === 'dormant') continue; const c = e.centerWorld(V3()); if (c.distanceTo(h.at) < 2.6) e.damage(h.burst, 'body', c); }
+    }
+  }
+}
+
 // ------------------------------------------------------------------ death animations
 // Bodies that don't gib stay in the world for a few seconds: humans fall backward, critters flip
 // over, flyers drop and explode, machines spark and blow, bosses go out in a chain of blasts.
@@ -378,6 +537,33 @@ function updateCorpses(dt) {
       if (c.t > 1.7) { blowUp(2); post.u.flash.value = 0.6; post.u.flashCol.value.set(0xffd8a0); }
     }
   }
+}
+
+// gore: a kill sprays the nearby walls, floor and ceiling
+const goreRay = new THREE.Raycaster();
+G.splatter = (center, kind, n) => {
+  const gl = settings.gore ?? 2;
+  if (!G.floor || gl === 0 || kind === 'spark' && Math.random() < 0.5) return;
+  const objs = G.floor.group.children.filter((c) => c.visible);
+  for (let k = 0; k < n * gl; k++) {
+    const d = new THREE.Vector3(rand(Math.random, -1, 1), rand(Math.random, -0.8, 0.6), rand(Math.random, -1, 0.3)).normalize();
+    goreRay.set(center, d); goreRay.far = 3;
+    const h = goreRay.intersectObjects(objs, true).find((x) => !x.object.material.transparent && x.object.material.fog !== false);
+    if (h) effects.decal(h.point, h.face.normal.clone().transformDirection(h.object.matrixWorld), kind, rand(Math.random, 0.25, 0.7));
+  }
+};
+// bullet wounds stay on the enemy that took them
+const WOUND_G = new THREE.PlaneGeometry(0.09, 0.09);
+const WOUND_M = { blood: new THREE.MeshBasicMaterial({ map: TX.splat(1), color: 0x5a0000, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
+  spark: new THREE.MeshBasicMaterial({ map: TX.bulletHole(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }),
+  goo: new THREE.MeshBasicMaterial({ map: TX.splat(2), color: 0x2a6a10, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }) };
+function wound(e, obj, point, dir) {
+  if (!obj || !(settings.gore ?? 2) || (e.wounds || 0) >= 10 || !obj.parent) return;
+  e.wounds = (e.wounds || 0) + 1;
+  const w = new THREE.Mesh(WOUND_G, WOUND_M[e.gore] || WOUND_M.blood);
+  obj.add(w); w.position.copy(obj.worldToLocal(point.clone().addScaledVector(dir, -0.01)));
+  const ws = obj.getWorldScale(new THREE.Vector3()); w.scale.set(1 / ws.x, 1 / ws.y, 1 / ws.z).multiplyScalar(rand(Math.random, 0.7, 1.3));
+  w.lookAt(point.clone().addScaledVector(dir, -1)); w.rotateZ(Math.random() * 6);
 }
 
 G.spawnReinforcement = (t) => { if (area) spawnReinforcement(t); };
@@ -434,7 +620,18 @@ G.bossImmune = (e) => { if (immuneT <= 0) { immuneT = 0.5; popText(e.centerWorld
 G.bossEnraged = (e) => { banner('ENRAGED!', e.def.name, 1.4); sfx.explode(); shake = 1; };
 G.shakeCam = (a) => { shake = Math.min(1, shake + a); };
 
+// enemy bombs and shots hurt other enemies too
+G.splashEnemies = (center, r, dmg, owner) => {
+  for (const o of G.enemies) {
+    if (!o.alive || o.off || o.state === 'dormant') continue;
+    const c = o.centerWorld(new THREE.Vector3());
+    if (c.distanceTo(center) < r) { const res = o.damage(dmg, 'body', c); if (res && res !== 'immune') G.onFriendlyFire(o, c); }
+  }
+};
+let ffT = 0;
+G.onFriendlyFire = (o, p) => { if (now - ffT > 1.2) { ffT = now; popText(p.clone().add(new THREE.Vector3(0, 0.4, 0)), 'FRIENDLY FIRE!', '#ffb040'); } };
 G.blast = (center, r, dmg) => {
+  blastProps(center, r, dmg);
   effects.explosion(center, r); sfx.explode(); shake = Math.min(1, shake + 0.4);
   for (const o of G.enemies) {
     if (!o.alive || o.state === 'dormant') continue;
@@ -1089,7 +1286,7 @@ function resolveShot(x, y, w, rect, primary) {
     const e = h.object.userData.enemy;
     if (seen.has(e)) continue;
     seen.add(e);
-    hits.push({ e, part: h.object.userData.part, point: h.point, dist: h.distance });
+    hits.push({ e, part: h.object.userData.part, point: h.point, dist: h.distance, obj: h.object });
     if (hits.length > w.pierce) break;
   }
   // 3. aim assist (screen space, small radius, not through walls, not on hidden enemies)
@@ -1122,9 +1319,10 @@ function resolveShot(x, y, w, rect, primary) {
   let best = null;
   hits.forEach((h, i) => {
     const r = applyHit(h.e, h.part, h.point, w, primary && i === 0, ray.direction);
+    if (r === 'head' || r === 'body') wound(h.e, h.obj, h.point, ray.direction);
     if (!best || r === 'head') best = r;
     // exit splatter on the wall or floor just behind the target
-    if ((r === 'head' || r === 'body') && primary && !w.melee && levelHit && levelHit.distance - h.dist < 2.2 && Math.random() < 0.6) {
+    if ((r === 'head' || r === 'body') && primary && !w.melee && (settings.gore ?? 2) > 0 && levelHit && levelHit.distance - h.dist < 2.6 && Math.random() < 0.35 + 0.3 * (settings.gore ?? 2)) {
       const n = levelHit.face.normal.clone().transformDirection(levelHit.object.matrixWorld);
       effects.decal(levelHit.point, n, h.e.gore, r === 'head' ? 0.55 : 0.4);
     }
@@ -1139,11 +1337,22 @@ function resolveShot(x, y, w, rect, primary) {
     const stop = hits.length ? hits[0].dist : Math.min(wallD, range || 30);
     for (let t = 1.2; t < stop; t += 1.3) effects.fire(ray.at(t, V3()), 1);
   }
+  // windows the shot passes through shatter
+  if (!w.melee) {
+    const panes = []; for (const r of G.floor.rooms) if (r.group.visible) panes.push(...r.glass);
+    const stop = hits.length ? hits[hits.length - 1].dist : levelHit ? levelHit.distance : 40;
+    for (const gh of raycaster.intersectObjects(panes, false)) if (gh.distance < stop) shatterGlass(gh.object, G.floor.rooms.find((r) => r.glass.includes(gh.object)));
+  }
+  // props the shot hits get damaged and knocked back
+  if (!hits.length && levelHit && !(range && levelHit.distance > range)) {
+    const pr = findProp(levelHit.object);
+    if (pr) hitProp(pr, w.dmg * w.pellets * M.dmg * (w.melee ? 2 : 1), levelHit.point, ray.direction, (w.kick || 1) * 2.2 + (w.melee ? 4 : 0));
+  }
   if (!hits.length && levelHit && !(range && levelHit.distance > range)) {
     const n = levelHit.face.normal.clone().transformDirection(levelHit.object.matrixWorld);
     if (w.burn) effects.fire(levelHit.point.clone().addScaledVector(n, 0.05), 3);
     else {
-      if (!levelHit.object.userData.noHole && !levelHit.object.userData.dyn) effects.hole(levelHit.point, n);
+      if (!levelHit.object.userData.noHole && !levelHit.object.userData.dyn && !findProp(levelHit.object)) effects.hole(levelHit.point, n);
       effects.dust(levelHit.point.clone().addScaledVector(n, 0.03), 3);
       if (primary) effects.impact(levelHit.point.clone().addScaledVector(n, 0.05));
     }
@@ -1197,18 +1406,12 @@ function perkBlast(at) {
 }
 
 function explode(at, w) {
+  if (w.pull) { spawnBlackHole(at, w); return 'body'; }
+  blastProps(at, w.explode, w.dmg);
   sfx.explode();
   shake = Math.min(1, shake + 0.6);
   effects.explosion(at, w.explode);
   let hit = null;
-  if (w.pull) {
-    // singularity: drag everything nearby into the blast
-    for (const e of G.enemies) {
-      if (!e.alive || e.state === 'dormant' || e.def.boss) continue;
-      const c = e.centerWorld(V3());
-      if (c.distanceTo(at) < w.explode * 1.6) { effects.lightning(c, at, 0xa040ff); e.pos.x += (at.x - e.pos.x) * 0.7; e.pos.z += (at.z - e.pos.z) * 0.7; }
-    }
-  }
   for (const e of G.enemies) {
     if (!e.alive || e.state === 'dormant') continue;
     const c = e.centerWorld(V3());
@@ -1303,6 +1506,7 @@ gameEl.addEventListener('pointercancel', release);
 gameEl.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') startReload();
+  if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') { e.preventDefault(); duck(); }
   if (e.key === 'q' || e.key === 'Q' || e.key === 'Tab') { e.preventDefault(); swapWeapon(); }
   if ((e.key === 'Escape' && performance.now() - lockLostT > 400) || e.key === 'p' || e.key === 'P') togglePause();
   if (e.key === 'e' || e.key === 'E') swapWeapon();
@@ -1347,6 +1551,7 @@ onBtn('confirmYes', () => { const fn = confirmFn; closeConfirm(false); fn && fn(
 onBtn('confirmNo', () => closeConfirm(true));
 onBtn('tutSkip', () => { sfx.tap(); if (tutorial) tutorial.finish(); });
 onBtn('reloadBtn', startReload);
+onBtn('duckBtn', duck);
 onBtn('weaponBtn', swapWeapon);
 onBtn('pauseBtn', togglePause);
 onBtn('resumeBtn', togglePause);
@@ -1358,6 +1563,12 @@ onBtn('menuBtn', toTitle);
 onBtn('gcLeave', () => { sfx.tap(); openChoice(); });
 onBtn('winBtn', toTitle);
 document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'combat' && !paused) togglePause(); });
+
+// duck: a quick crouch that lets shots fly over your head (S / down arrow / DUCK button)
+function duck() {
+  if (P.duckCd > 0 || mode !== 'combat' || paused) return;
+  P.duckT = 0.75; P.duckCd = 1.1; sfx.swing && sfx.swing();
+}
 
 function togglePause() {
   if (choiceOpen || settingsOpen || confirmOpen || devOpen()) return;
@@ -1482,6 +1693,7 @@ function restartFloor() {
 onSettingsChange((s, key) => {
   setVolumes(s.music / 100, s.sfx / 100);
   effects.mult = FX_MULT[s.gfx];
+  effects.gore = s.gore ?? 2;
   post.enabled = s.post !== 0;
   post.u.useBloom.value = s.gfx > 0 ? 1 : 0;
   post.u.retro.value = [0, 0.35, 1][s.retro ?? 1];
@@ -1583,7 +1795,7 @@ resize();
 // ------------------------------------------------------------------ loop
 function applyCamera() {
   const s = shake * shake * 0.08 * (settings.shake ? 1 : 0);
-  camera.position.set(G.camPos.x + (Math.random() - 0.5) * s, G.camPos.y + (Math.random() - 0.5) * s, G.camPos.z);
+  camera.position.set(G.camPos.x + (Math.random() - 0.5) * s, G.camPos.y - G.duck * 0.65 + (Math.random() - 0.5) * s, G.camPos.z);
   const breathe = mode === 'combat' ? Math.sin(now * 1.3) * 0.006 : 0;
   P.punch = Math.max(0, (P.punch || 0) - 0.016 * 0.4 - P.punch * 0.12);
   camera.rotation.set(pitch + breathe + (P.punch || 0) + (Math.random() - 0.5) * s * 0.5, yaw, roll, 'YXZ');
@@ -1668,8 +1880,13 @@ function update(dt) {
       if (p.ct > 0.5) { scene.remove(p.mesh); G.pickups.splice(i, 1); }
     }
   }
+  P.duckT = Math.max(0, P.duckT - dt); P.duckCd = Math.max(0, P.duckCd - dt);
+  G.duck += ((P.duckT > 0 ? 1 : 0) - G.duck) * Math.min(1, dt * 16);
+  G.playerPos.copy(G.camPos); G.playerPos.y -= G.duck * 0.65;
   effects.update(dt);
   updateCorpses(dt);
+  updateHoles(dt);
+  updateProps(dt);
   // ambient life: broken lights spark, vents steam, lab vats bubble, lightning on stormy nights
   if (G.room && G.floor && settings.gfx > 0) {
     for (const em of G.room.emitters || []) {

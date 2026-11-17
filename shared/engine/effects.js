@@ -57,6 +57,7 @@ export class Effects {
       blood: [0, 1, 2].map((k) => decalMat(TX.splat(k), SPLAT_COL.blood)),
       spark: [0, 1, 2].map((k) => decalMat(TX.splat(k), SPLAT_COL.spark, 0.8)),
       goo: [0, 1, 2].map((k) => decalMat(TX.splat(k), SPLAT_COL.goo)),
+      water: [0, 1, 2].map((k) => decalMat(TX.splat(k), 0x6aa8ff, 0.45)),
     };
     // floating dust in the light
     const N = 160, pos = new Float32Array(N * 3);
@@ -105,7 +106,7 @@ export class Effects {
     const mats = this.decalMats[kind] || this.decalMats.blood;
     const mat = Array.isArray(mats) ? mats[Math.floor(Math.random() * mats.length)] : mats;
     let m;
-    if (this.decals.length > 50) { m = this.decals.shift(); m.material = mat; } else m = new THREE.Mesh(DECAL_G, mat);
+    if (this.decals.length > 110) { m = this.decals.shift(); m.material = mat; } else m = new THREE.Mesh(DECAL_G, mat);
     m.position.copy(point).addScaledVector(normal, 0.012);
     m.lookAt(point.clone().add(normal)); m.rotateZ(Math.random() * 6.28);
     m.scale.setScalar(size * rand(Math.random, 0.8, 1.25));
@@ -150,7 +151,7 @@ export class Effects {
       else this.parts.push({ m, v, life: life * rand(Math.random, 0.6, 1), g: grav });
     }
   }
-  blood(p, n) { this.emit(p, n, 'blood', 2.6); }
+  blood(p, n) { this.emit(p, n * (0.5 + 0.5 * (this.gore ?? 1)), 'blood', 2.6); if ((this.gore ?? 1) > 1 && n >= 6) this.sprite(p, { color: 0x8a0a0a, s0: 0.15, s1: 0.55, a: 0.55, life: 0.45, v: new THREE.Vector3(0, -0.2, 0) }); }
   sparks(p, n) { this.emit(p, n, 'spark', 4, 6, 0.5); }
   dust(p, n) { this.emit(p, n, 'dust', 1.5, 6, 0.5); }
   pop(p) { this.emit(p, 10, 'pop', 3, 0, 0.3); }
@@ -192,10 +193,10 @@ export class Effects {
     }
   }
 
-  debris(mesh, vel) {
+  debris(mesh, vel, gore) {
     const geo = mesh.geometry;
     if (!bbCache.has(geo.uuid)) { geo.computeBoundingBox(); const s = new THREE.Vector3(); geo.boundingBox.getSize(s); bbCache.set(geo.uuid, Math.min(s.x, s.y, s.z) / 2); }
-    this.debrisList.push({ m: mesh, v: vel, av: new THREE.Vector3(rand(Math.random, -8, 8), rand(Math.random, -8, 8), rand(Math.random, -8, 8)), life: 0, r: bbCache.get(geo.uuid) * mesh.getWorldScale(new THREE.Vector3()).x });
+    this.debrisList.push({ gore, m: mesh, v: vel, av: new THREE.Vector3(rand(Math.random, -8, 8), rand(Math.random, -8, 8), rand(Math.random, -8, 8)), life: 0, r: bbCache.get(geo.uuid) * mesh.getWorldScale(new THREE.Vector3()).x });
   }
 
   hole(point, normal, obj) {
@@ -258,7 +259,10 @@ export class Effects {
         d.v.y -= 11 * dt;
         d.m.position.addScaledVector(d.v, dt);
         d.m.rotation.x += d.av.x * dt; d.m.rotation.y += d.av.y * dt; d.m.rotation.z += d.av.z * dt;
+        // gibs bleed while they fly and leave a splat where they land
+        if (d.gore && d.gore !== 'spark' && (this.gore ?? 1) > 0 && Math.random() < dt * 14 * (this.gore ?? 1)) this.emit(d.m.position, 1, d.gore === 'goo' ? 'goo' : 'blood', 0.4, 9, 0.5);
         if (d.m.position.y < d.r) {
+          if (!d.landed && d.gore && (this.gore ?? 1) > 0) { d.landed = true; if (Math.random() < 0.5 + 0.25 * (this.gore ?? 1)) this.floorDecal(d.m.position.x, d.m.position.z, d.gore, 0.25 + Math.random() * 0.25); }
           d.m.position.y = d.r; d.v.y = -d.v.y * 0.3; d.v.x *= 0.6; d.v.z *= 0.6; d.av.multiplyScalar(0.5);
           if (Math.abs(d.v.y) < 0.4) { d.v.y = 0; d.av.set(0, 0, 0); }
         }

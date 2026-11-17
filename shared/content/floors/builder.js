@@ -99,7 +99,10 @@ export function buildFloor(floor, plan) {
     const sp = new THREE.Mesh(plane(len, 7, Math.round(len / 14.4), 1), sky);
     sp.position.set(-(HALF + 6), 1.2, (zA + zB) / 2); sp.rotation.y = Math.PI / 2; sp.renderOrder = -1; group.add(sp);
   }
-  for (const r of rooms) mergeStatic(r.group); // one draw call per material per room
+  for (const r of rooms) {
+    for (const p of r.props) { mergeStatic(p); p.traverse((o) => { o.userData.keep = true; }); } // each prop becomes 1-3 meshes
+    mergeStatic(r.group); // one draw call per material per room
+  }
   group.traverse((o) => { if (!o.userData.dyn) { o.updateMatrix(); o.matrixAutoUpdate = false; } });
 
   let ft = 0;
@@ -134,9 +137,14 @@ function buildRoom(c) {
     const m = new THREE.Mesh(geo, mat);
     m.position.set(x, y, z); m.rotation.y = ry; parent.add(m); return m;
   };
+  // destructible / knockable props: a group tagged with its kind (see PROPS in game.js)
+  const prop = (parent, kind, x = 0, y = 0, z = 0, ry = 0) => {
+    const p = new THREE.Group(); p.position.set(x, y, z); p.rotation.y = ry; parent.add(p);
+    p.userData.prop = { kind }; room.props.push(p); return p;
+  };
   const piece = (x, z, ry = 0, y = 0) => { const p = new THREE.Group(); p.position.set(x, y, z); p.rotation.y = ry; g.add(p); return p; };
 
-  const room = { type, z0, zf, group: g, stand: new THREE.Vector3(0, EYE, z0 - 1.0), spots: [], lightPos: [], doorSpawns: [], elevators: [], emitters: [] };
+  const room = { type, z0, zf, group: g, stand: new THREE.Vector3(0, EYE, z0 - 1.0), spots: [], lightPos: [], doorSpawns: [], elevators: [], emitters: [], props: [], glass: [] };
   // tall cover (pillars, shelves) hides the whole body, so those spots get a sideways "peek" offset
   const spot = (x, d, cover = false, extra = {}) => room.spots.push({ x, z: Z(d), cover, ...extra,
     ...(cover && (extra.coverH || 0) >= 1.2 ? { peek: (x > 0 ? -1 : 1) * 0.95 } : {}) });
@@ -171,7 +179,8 @@ function buildRoom(c) {
       for (let k = 0; k <= 6; k++) add(g, box(0.12, 1.55, 0.1), M.metalDark, x + 0.04, 1.675, z0 - k * 2);
       add(g, box(0.3, 0.06, RD), M.metalDark, x + 0.1, 0.92, zc);
       room.windows = true; // the skyline behind the glass is one long backdrop per floor (see buildFloor)
-      add(g, plane(RD, 1.55), M.glass, x + 0.02, 1.675, zc, Math.PI / 2);
+      // separate panes between the mullions so each can be shot out
+      for (let k = 0; k < 6; k++) { const pane = add(g, plane(2, 1.55), M.glass, x + 0.02, 1.675, z0 - 1 - k * 2, Math.PI / 2); pane.userData.glass = true; room.glass.push(pane); }
     } else {
       add(g, box(0.2, RH, RD, 2), M.wall, x, RH / 2, zc);
       // posters
@@ -233,16 +242,17 @@ function buildRoom(c) {
       add(p, box(0.04, 0.73, 0.78), M.metal, 0.78, 0.365, 0);
       const scr = pick(rng, M.screens);
       const mats = [M.beige, M.beige, M.beige, M.beige, screenFront ? scr : M.vents, screenFront ? M.vents : scr];
-      add(p, box(0.44, 0.36, 0.38), mats, rand(rng, -0.3, 0.3), 0.98, -0.05);
-      add(p, box(0.14, 0.06, 0.14), M.beige, 0, 0.8, -0.05);
-      add(p, box(0.42, 0.03, 0.14), M.beige, 0, 0.79, screenFront ? 0.25 : -0.27);
+      const mon = prop(p, 'monitor', rand(rng, -0.3, 0.3), 0, -0.05);
+      add(mon, box(0.44, 0.36, 0.38), mats, 0, 0.98, 0);
+      add(mon, box(0.14, 0.06, 0.14), M.beige, 0, 0.8, 0);
+      add(prop(p, 'keyboard', 0, 0, screenFront ? 0.25 : -0.27), box(0.42, 0.03, 0.14), M.beige, 0, 0.79, 0);
       if (rng() < 0.7) add(p, box(0.22, 0.012, 0.3), M.white, rand(rng, -0.65, -0.4), 0.78, rand(rng, -0.2, 0.2), rand(rng, -0.4, 0.4));
-      if (rng() < 0.5) add(p, box(0.08, 0.1, 0.08), M.white, 0.6, 0.83, 0.1);
+      if (rng() < 0.5) add(prop(p, 'mug', 0.6, 0, 0.1), box(0.08, 0.1, 0.08), M.white, 0, 0.83, 0);
       K.chair(p, 0, screenFront ? 0.75 : -0.75, screenFront ? Math.PI : 0);
       return p;
     },
     chair(parent, x, z, ry) {
-      const p = new THREE.Group(); p.position.set(x, 0, z); p.rotation.y = ry; parent.add(p);
+      const p = prop(parent, 'chair', x, 0, z, ry);
       add(p, box(0.5, 0.08, 0.5), M.fabricDark, 0, 0.46, 0);
       add(p, box(0.5, 0.6, 0.07), M.fabricDark, 0, 0.8, -0.26);
       add(p, box(0.06, 0.42, 0.06), M.metalDark, 0, 0.22, 0);
@@ -266,17 +276,18 @@ function buildRoom(c) {
       if (rng() < 0.4) add(p, box(0.3, 0.12, 0.4), M.cardboard, 0, 1.36, 0, rand(rng, -0.3, 0.3));
     },
     plant(x, d) {
-      add(g, box(0.4, 0.4, 0.4), M.metalDark, x, 0.2, Z(d));
-      const p = piece(x, Z(d), rand(rng, 0, 3));
+      const p = prop(g, 'plant', x, 0, Z(d), rand(rng, 0, 3));
+      add(p, box(0.4, 0.4, 0.4), M.metalDark, 0, 0.2, 0);
       add(p, plane(0.9, 1.1), M.plant, 0, 0.95, 0);
       add(p, plane(0.9, 1.1), M.plant, 0, 0.95, 0, Math.PI / 2);
     },
     cooler(x, d) {
-      add(g, box(0.36, 0.95, 0.36), M.white, x, 0.475, Z(d));
-      add(g, box(0.28, 0.42, 0.28), M.blueWater, x, 1.16, Z(d));
+      const p = prop(g, 'cooler', x, 0, Z(d));
+      add(p, box(0.36, 0.95, 0.36), M.white, 0, 0.475, 0);
+      add(p, box(0.28, 0.42, 0.28), M.blueWater, 0, 1.16, 0);
     },
     copier(x, d, ry) {
-      const p = piece(x, Z(d), ry);
+      const p = prop(g, 'copier', x, 0, Z(d), ry);
       add(p, box(1.0, 0.95, 0.7), M.beige, 0, 0.475, 0);
       add(p, box(0.9, 0.08, 0.6), M.metalDark, 0, 1.0, 0);
       add(p, box(0.3, 0.06, 0.2), M.screens[0], 0.25, 1.06, 0.2);
@@ -284,7 +295,7 @@ function buildRoom(c) {
     boxes(x, d, n) {
       for (let k = 0; k < n; k++) {
         const s = rand(rng, 0.45, 0.6);
-        add(g, box(s, s * 0.8, s), M.cardboard, x + rand(rng, -0.3, 0.3), s * 0.4 + Math.floor(k / 2) * s * 0.8, Z(d + rand(rng, -0.3, 0.3)), rand(rng, -0.4, 0.4));
+        add(prop(g, 'box', x + rand(rng, -0.3, 0.3), s * 0.4 + Math.floor(k / 2) * s * 0.8, Z(d + rand(rng, -0.3, 0.3)), rand(rng, -0.4, 0.4)), box(s, s * 0.8, s), M.cardboard, 0, 0, 0);
       }
     },
     pillar(x, d) { add(g, box(0.6, RH, 0.6, 1), M.concrete, x, RH / 2, Z(d)); },
@@ -297,7 +308,7 @@ function buildRoom(c) {
       }
     },
     vending(x, d, ry) {
-      const p = piece(x, Z(d), ry);
+      const p = prop(g, 'vending', x, 0, Z(d), ry);
       add(p, box(1.0, 1.9, 0.8), [M.metalDark, M.metalDark, M.metalDark, M.metalDark, M.vending, M.metalDark], 0, 0.95, 0);
     },
     table(x, d) {

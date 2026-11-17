@@ -255,3 +255,5 @@ body.pc #dmgDir i { top: -210px; transform-origin: 70px 210px; }
 }
 .logo span { animation: neon 4.3s steps(1) infinite; }
 @keyframes neon { 0%, 37%, 39%, 100% { opacity: 1; } 38% { opacity: .35; } }
+#statusbar .duck { flex: 0 0 14%; }
+#statusbar .duck .wname { color: #80c0ff; }

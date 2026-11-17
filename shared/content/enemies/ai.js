@@ -150,7 +150,7 @@ export class Enemy {
   }
 
   place() {
-    const cam = this.game.camPos;
+    const cam = this.game.playerPos || this.game.camPos;
     if (this.flyer || this.hover) this.root.position.set(this.pos.x, this.pos.y + this.yOff + Math.sin(this.bob) * 0.08, this.pos.z);
     else this.root.position.copy(this.pos);
     this.body.position.z = -(this.kick || 0) / this.scale; // hit knockback (visual)
@@ -287,7 +287,37 @@ export class Enemy {
     if (!this.game.combatActive) return false;
     if (this.cloak && this.cloak.on) return false;
     if (this.burrow && this.burrow.phase !== 'up') return false;
+    // don't shoot through a teammate: hold fire and step aside for a clear line
+    const atk = this.curAtk && this.curAtk();
+    if (atk && DIRECT.has(atk.type) && !this.ally && this.lineBlocked()) {
+      this.blockedT = (this.blockedT || 0) + 0.5;
+      if (this.blockedT < 5) { // after ~5s of waiting they lose patience and fire anyway
+        this.atkT = 0.5;
+        if (this.def.move !== 'turret' && !(this.spot && this.spot.cover && this.def.move === 'stand')) {
+          const side = this.pos.x > (this.game.camPos.x) ? 1 : -1;
+          this.goal.set(clamp(this.pos.x + side * rand(Math.random, 0.8, 1.6), -2.8, 2.8), this.goal.y, this.goal.z);
+          if (this.def.move === 'stand') { this.spot = { ...this.spot, x: this.goal.x }; }
+        }
+        return false;
+      }
+    }
+    this.blockedT = 0;
     return true;
+  }
+
+  // is another enemy standing between this one and the player?
+  lineBlocked() {
+    const g = this.game, from = this.muzzle(new THREE.Vector3()), to = (g.playerPos || g.camPos);
+    const seg = tmpV.subVectors(to, from), len = seg.length(); seg.normalize();
+    for (const o of g.enemies) {
+      if (o === this || !o.alive || o.state === 'dormant' || o.off) continue;
+      const c = o.centerWorld(new THREE.Vector3());
+      const t = c.clone().sub(from).dot(seg);
+      if (t < 0.3 || t > len - 0.6) continue;
+      const d = c.distanceTo(from.clone().addScaledVector(seg, t));
+      if (d < 0.38 * o.scale + 0.15) return true;
+    }
+    return false;
   }
 
   updateAttack(dt) {
@@ -380,7 +410,7 @@ export class Enemy {
       case 'sonic': { const n = atk.n || 5; for (let k = 0; k < n; k++) this.shoot('sonic', (k - (n - 1) / 2) * 0.13, atk); g.sfx.rail(); break; }
       case 'laser': {
         g.fx.beam(this.muzzle(new THREE.Vector3()), g.camPos.clone().add(new THREE.Vector3(0, -0.15, 0)), 0xff3020, 0.09, 0.22);
-        g.sfx.rail(); g.hurtPlayer(this.dmg * 0.75, this); // can't be shot down, so lasers hit a bit softer
+        g.sfx.rail(); if (!(g.duck > 0.5)) g.hurtPlayer(this.dmg * 0.75, this); // ducking under a laser dodges it // can't be shot down, so lasers hit a bit softer
         break;
       }
       case 'summon': {
@@ -426,7 +456,7 @@ export class Enemy {
     const g = this.game;
     if (!this.alive) return;
     const from = this.muzzle(new THREE.Vector3());
-    const target = g.camPos.clone();
+    const target = (g.playerPos || g.camPos).clone(); // aims where you are now (ducking after the shot is fired dodges it)
     const miss = 0.4;
     target.x += rand(Math.random, -miss, miss); target.y += rand(Math.random, -miss * 0.6, miss * 0.4);
     if (spread) { const dir = target.clone().sub(from); dir.applyAxisAngle(UP, spread); target.copy(from).add(dir); }
@@ -560,13 +590,14 @@ export class Enemy {
   deathStyle(headshot) {
     const mk = this.def.model.kind;
     if (this.def.boss) return 'boss';
+    // most enemies burst apart (the classic look); a few fall, flip, crash or wreck for variety
     if (this.gore === 'goo' || mk === 'swarm' || mk === 'blob') return 'gib';
-    if ((this.lastAmt || 0) >= Math.max(4, this.maxHp * 0.9) || Math.random() < 0.12) return 'gib';
-    if (this.flyer) return 'crash';
-    if (mk === 'human') return 'fall';
-    if (mk === 'mech') return headshot ? 'gib' : 'fall';
-    if (mk === 'spider' || mk === 'quad') return 'flip';
-    return 'wreck';
+    if ((this.lastAmt || 0) >= Math.max(4, this.maxHp * 0.9)) return 'gib';
+    if (this.flyer) return Math.random() < 0.6 ? 'crash' : 'gib';
+    if (mk === 'human') return Math.random() < 0.25 ? 'fall' : 'gib';
+    if (mk === 'mech') return Math.random() < 0.3 ? 'fall' : 'gib';
+    if (mk === 'spider' || mk === 'quad') return Math.random() < 0.3 ? 'flip' : 'gib';
+    return Math.random() < 0.5 ? 'wreck' : 'gib';
   }
 
   // blow the model apart into tumbling pieces
@@ -580,9 +611,10 @@ export class Enemy {
       vel.y = rand(Math.random, 2, 4.5);
       vel.add(tmpV.subVectors(center, g.camPos).setY(0).normalize().multiplyScalar(1.5));
       if (headshot && m === this.head) vel.y += 3;
-      g.fx.debris(m, vel);
+      g.fx.debris(m, vel, this.gore);
     }
     g.scene.remove(this.root);
+    g.splatter(center, this.gore, 5);
   }
 
   remove() { this.game.scene.remove(this.root); for (const m of this.meshes) if (m.parent) m.parent.remove(m); }
@@ -598,6 +630,7 @@ const G_MISSILE = new THREE.BoxGeometry(0.09, 0.09, 0.32);
 const G_SONIC = new THREE.BoxGeometry(0.5, 0.08, 0.06);
 const B = (c) => new THREE.MeshBasicMaterial({ color: c });
 const CORE = B(0xfff0a0);
+const DIRECT = new Set(['shot', 'burst', 'rapid', 'spread', 'laser', 'homing', 'sonic', 'boss']);
 const PKINDS = {
   orb: { geo: G_ORB, mat: B(0xff8a1a), core: true },
   big: { geo: G_BIG, mat: B(0xd030ff), core: true },
@@ -669,7 +702,7 @@ export class Projectile {
   update(dt) {
     if (this.delay > 0) { this.delay -= dt; if (this.delay <= 0) this.mesh.visible = true; return; }
     this.life += dt;
-    const cam = this.game.camPos;
+    const cam = this.game.playerPos || this.game.camPos;
     if (this.mineT != null) {
       // mines drift to a parking spot, hover and blink, then dart straight at the player
       this.mineT -= dt;
@@ -699,10 +732,27 @@ export class Projectile {
       if (p.y < 0.15 || p.distanceTo(cam) < 0.7) {
         this.game.fx.explosion(p.clone().setY(Math.max(0.3, p.y)), 1.4); this.game.sfx.explode(); this.game.shakeCam(0.5);
         if (Math.hypot(p.x - cam.x, p.z - cam.z) < 2.3) this.game.hurtPlayer(this.dmg, null, this);
+        if (this.game.splashEnemies) this.game.splashEnemies(p, 1.8, this.dmg * 0.5, this.owner);
         this.kill(); return;
       }
     }
     if (this.mesh.position.distanceTo(cam) < 0.45) { this.game.hurtPlayer(this.dmg, null, this); this.kill(); return; }
+    // friendly fire: enemy shots hurt any enemy they run into (not the shooter right after firing)
+    if (this.mineT == null && !this.bomb) {
+      const p = this.mesh.position;
+      for (const o of this.game.enemies) {
+        if (!o.alive || o.off || o.state === 'dormant' || (o === this.owner && this.life < 0.6)) continue;
+        if (Math.abs(o.pos.z - p.z) > 1.5 || Math.abs(o.pos.x - p.x) > 1.5) continue;
+        const c = o.centerWorld(tmpV);
+        const r = 0.33 * o.scale * (o.def.boss ? 1.3 : 1);
+        if (Math.abs(p.x - c.x) < r && Math.abs(p.z - c.z) < r + 0.1 && Math.abs(p.y - c.y) < (o.centerY || 0.9) * o.scale + 0.1) {
+          const r2 = o.damage(this.dmg * 0.45, 'body', p.clone());
+          if (r2 && r2 !== 'immune' && this.game.onFriendlyFire) this.game.onFriendlyFire(o, p.clone());
+          if (this.k.explode || this.kind === 'grenade' || this.kind === 'missile') this.game.fx.explosion(p.clone(), 0.6);
+          this.kill(); return;
+        }
+      }
+    }
     if (this.mesh.position.z > cam.z + 0.5 || this.life > 8 || this.mesh.position.y < -0.5) this.kill();
   }
   kill() { this.alive = false; this.game.scene.remove(this.mesh); }
