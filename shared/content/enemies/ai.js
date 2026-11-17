@@ -433,6 +433,7 @@ export class Enemy {
     const speed = this.pspeed * (atk.speed || 1) * (kind === 'shard' ? 1.2 : kind === 'sonic' ? 0.8 : 1);
     const dmg = this.dmg * (atk.dmg || 1);
     g.spawnProjectile(from, target, speed, dmg, kind, { lob: atk.lob || kind === 'grenade', homing: atk.homing });
+    const pk = PKINDS[kind]; if (pk && !NO_HALO.has(kind)) g.fx.glowAt(from, pk.mat.color.getHex(), 0.4, 0.07); // muzzle flash
     g.sfx.enemyShot();
   }
 

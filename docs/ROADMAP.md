@@ -45,11 +45,16 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 
 **🏁 MILESTONE: ALPHA** (reached once the last two items are confirmed by your playtests). Full game loop, saves, progression, balanced. Ready for friends to test.
 
-## Phase 5: Visual polish (2–3 sessions · weeks 5–6)
-- [ ] Better lighting, muzzle flashes, impact and explosion effects
-- [ ] Enemy hit reactions and death animations
-- [ ] UI art pass: title screen, HUD, menus, transitions, floor-intro cards
-- [ ] Visual identity per zone (decals, props, lighting accents)
+## Phase 5: Visual polish ✅ DONE (v0.11) · the big one
+- [x] **Post-processing:** bloom glow on lights, flashes, fire and plasma; colour grading per lighting mood; vignette; retro filter (dithering, colour crunch, scanlines on FULL); red damage pulse, chromatic aberration on big hits, low-health heartbeat; pixel-dissolve transitions
+- [x] **Dynamic lighting:** explosions, sparks and muzzle flashes light up the room; flashlight on night/blackout floors that follows your aim; pulsing alarm lights on lockdown floors; lightning through the windows on night floors
+- [x] **Weapon feel:** brass casings, muzzle smoke and glow, per-gun coloured flashes that light up your hands, camera kick
+- [x] **Hits & deaths:** knockback, blood/oil/goo splatter on walls and floors, pools under bodies; humans fall backward (headshots pop the head off), critters flip over, flyers crash and explode, machines spark and blow, bosses die in a chain of explosions; overkill still blows enemies apart; headshot freeze-frame
+- [x] **Explosions:** flash light, shockwave ring, smoke columns, embers, scorch marks
+- [x] **Projectiles** glow, enemies show muzzle flashes, weapon drops glow in their rarity colour
+- [x] **Atmosphere:** floating dust in the light, sparking broken fixtures, steam vents, bubbling lab vapour, scrolling monitors, zone grime (coffee, oil, slime, blood) and wall cracks that get worse higher up
+- [x] **Presentation:** floor intro cards, boss intro with letterbox and slow-motion, damage direction arcs, HUD hit/low-health/low-ammo reactions, glitching title logo
+- [x] New settings: EFFECTS on/off, RETRO FILTER off/soft/full (graphics LOW turns off bloom, flash lights and ambient particles)
 
 ## Phase 6: Modes & content (2 sessions · weeks 6–7)
 - [ ] **Endless mode** after floor 50

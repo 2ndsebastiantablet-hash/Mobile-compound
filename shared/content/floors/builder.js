@@ -5,6 +5,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import * as TX from '../../engine/textures.js';
 import { mulberry32, rand, pick, shuffle } from '../../engine/util.js';
 import { box, plane, mergeStatic } from '../../engine/geometry.js';
+const DECAL_G = new THREE.PlaneGeometry(1, 1);
 import { RD, RW, RH, HALF, EYE, MOODS } from './zones.js';
 export { RD, RW, RH, HALF, EYE, TOP_FLOOR, ZONES, MOODS, zoneFor, floorPlan, themeFor } from './zones.js';
 export { box } from '../../engine/geometry.js';
@@ -59,6 +60,10 @@ function themeMats(th, mood) {
     vending: basic('vending', TX.vending()),
     whiteboard: lam('whiteboard', TX.whiteboard()),
     screens: [0, 1, 2].map((v) => basic('screen' + v, TX.screen(v))),
+    // grime decals (zone identity): coffee, oil, slime, old blood, scuffs; wall cracks
+    grime: Object.fromEntries(Object.entries({ coffee: 0x3a2412, oil: 0x0c0c0e, slime: 0x2c6a12, blood: 0x4a0606, scuff: 0x282420 }).map(([k, c]) =>
+      [k, [0, 1, 2].map((v) => new THREE.MeshLambertMaterial({ map: TX.splat(v), color: c, transparent: true, opacity: k === 'scuff' ? 0.45 : 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }))])),
+    crack: [0, 1].map((v) => new THREE.MeshLambertMaterial({ map: TX.crack(v), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })),
     lightOn: basic('lightOn' + k + (mood.light || mood.tint || ''), TX.lightPanel(true), { color: new THREE.Color(mood.light || th.light).lerp(new THREE.Color(mood.tint || mood.light || th.light), 0.5) }),
     lightOff: lam('lightOff', TX.lightPanel(false)),
     exit: basic('exit', TX.exitSign()),
@@ -86,7 +91,7 @@ export function buildFloor(floor, plan) {
   const sign = basic('sign' + floor, TX.floorSign(floor));
   const flicker = [];
   const elevators = [];
-  const rooms = types.map((type, i) => buildRoom({ i, type, floor, th, M, rng, group, sky, sign, flicker, elevators, mood, last: i === types.length - 1, isBoss }));
+  const rooms = types.map((type, i) => buildRoom({ i, type, floor, th, M, rng, group, sky, sign, flicker, elevators, mood, focus: plan.focus, last: i === types.length - 1, isBoss }));
 
   // one continuous skyline outside the windows: per-room backdrops overlapped and z-fought (flickering moon)
   if (rooms.some((r) => r.windows)) {
@@ -139,6 +144,22 @@ function buildRoom(c) {
   // floor / ceiling
   add(g, box(RW, 0.1, RD, 2), type === 'breakroom' && !th.floorStyle ? M.lino : M.floor, 0, -0.05, zc);
   add(g, box(RW, 0.1, RD, 1.2), M.ceiling, 0, RH + 0.05, zc);
+
+  // grime that fits the zone, plus the odd wall crack (more of both higher up the tower)
+  {
+    const focus = c.focus || 'office';
+    const kinds = focus === 'robot' ? ['oil', 'oil', 'scuff'] : focus === 'mutant' ? ['slime', 'blood', 'slime'] : focus === 'security' ? ['scuff', 'blood', 'coffee'] : ['coffee', 'scuff', 'coffee'];
+    const n = 2 + Math.floor(rng() * 3) + (floor > 25 ? 2 : 0);
+    for (let k = 0; k < n; k++) {
+      const m = add(g, DECAL_G, pick(rng, M.grime[pick(rng, kinds)]), rand(rng, -2.8, 2.8), 0.006, Z(rand(rng, 1.5, RD - 1)));
+      m.rotation.set(-Math.PI / 2, 0, rng() * 6.28); m.scale.setScalar(rand(rng, 0.5, 1.3)); m.userData.keep = true;
+    }
+    for (let k = 0; k < (floor > 15 ? 3 : 1); k++) {
+      const sd = rng() < 0.5 ? -1 : 1;
+      const m = add(g, DECAL_G, pick(rng, M.crack), sd * (HALF - 0.005), sd < 0 ? rand(rng, 0.3, 0.7) : rand(rng, 0.4, 2.4), Z(rand(rng, 1.5, RD - 1.5)), -sd * Math.PI / 2);
+      m.scale.setScalar(rand(rng, 0.5, 1.1)); m.userData.keep = true;
+    }
+  }
 
   // side walls (left may have windows)
   const windows = !['servers', 'mailroom', 'archive', 'reactor', 'factory'].includes(type) && rng() < (type === 'garden' ? 0.9 : 0.55);

@@ -70,6 +70,7 @@ const gunScene = new THREE.Scene();
 const gunCam = new THREE.PerspectiveCamera(55, 0.5, 0.01, 10);
 gunScene.add(new THREE.AmbientLight(0xffffff, 0.9));
 const gunSun = new THREE.DirectionalLight(0xffffff, 1.6); gunSun.position.set(-1, 2, 1.5); gunScene.add(gunSun);
+const gunFlash = new THREE.PointLight(0xffc070, 0, 2.5, 2); gunScene.add(gunFlash); // muzzle flash lights up your gun and hands
 const gunRoot = new THREE.Group(); gunRoot.scale.setScalar(0.62); gunScene.add(gunRoot);
 // melee swings pivot at the shoulder (behind and below the hand), not at the fist
 const SHOULDER = new THREE.Vector3(0.28, -0.5, 0.55), ELBOW = new THREE.Vector3(0.04, -0.2, 0.3);
@@ -87,7 +88,11 @@ const models = {};
 function viewModel(id) {
   if (!models[id]) {
     const md = buildGunModel(GUN[id], true);
-    md.flash = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), FLASH_MAT);
+    const def = GUN[id];
+    // energy weapons get a flash in their own colour; heavy guns a bigger one
+    const fm = def.tracer ? FLASH_MAT.clone() : FLASH_MAT; if (def.tracer) fm.color.set(def.tracer);
+    const fs = 0.22 * (0.8 + Math.min(1.2, (def.kick || 0.5) * 0.35));
+    md.flash = new THREE.Mesh(new THREE.PlaneGeometry(fs, fs), fm);
     md.flash.position.copy(md.tip); md.flash.visible = false; md.g.add(md.flash);
     if (md.pump) md.pumpZ = md.pump.position.z;
     md.g.visible = false; swingInner.add(md.g);
@@ -473,6 +478,7 @@ G.hurtPlayer = (dmg, src, proj) => {
 
 G.onEnemyKilled = (e, head, noScore) => {
   if (noScore) return;
+  if (head) hitStop = 0.05; // tiny freeze-frame sells a headshot
   stats.kills++; if (head) stats.heads++;
   combo = now - lastKill < M.comboWindow ? Math.min(M.comboMax, combo + 1) : 1;
   lastKill = now;
@@ -535,6 +541,8 @@ function dropGun(pos, id) {
   const p = addPickup('gun', pos, md.g, { id });
   if (!beamCache[def.rarity]) beamCache[def.rarity] = new THREE.MeshBasicMaterial({ color: r.hex, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
   const beam = new THREE.Mesh(box(0.08, 2.4, 0.08), beamCache[def.rarity]); beam.position.y = 1.2; p.mesh.add(beam);
+  const hal = new THREE.Sprite(new THREE.SpriteMaterial({ map: TX.glow(), color: r.hex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.7 }));
+  hal.scale.setScalar(0.9); hal.position.y = 0.3; p.mesh.add(hal);
   popText(new THREE.Vector3(pos.x, 1.2, pos.z), def.short, r.color);
   sfx.gunPickup();
   return p;
@@ -917,7 +925,7 @@ function floorCard(n, zone, mood, bk) {
   const chip = bk === 'boss' ? '<span class="chip" style="color:#ff5040">BOSS FLOOR</span>' : bk === 'mini' ? '<span class="chip" style="color:#ff9040">MINI BOSS</span>' : mood ? `<span class="chip" style="color:#80c0ff">${mood}</span>` : '';
   showCard(`<div class="stripe"></div><div class="row"><div class="lbl">FLOOR</div><div class="num${bk === 'boss' ? ' boss' : ''}">${String(n).padStart(2, '0')}</div><div class="zone">${zone}</div>${chip}</div><div class="stripe"></div>`, '', 2.6);
 }
-let slowT = 0;
+let slowT = 0, hitStop = 0;
 function bossCard(def, hint) {
   $('letterbox').classList.add('on');
   showCard(`<div class="row"><div class="lbl">${def.mini ? 'MINI BOSS' : 'BOSS'}</div><div class="num boss">${def.name}</div><div class="zone">${hint}</div></div>`, 'bossCard', 2.8);
@@ -1633,6 +1641,8 @@ function updateGun(dt) {
   if (md.flash.visible) { md.flash.rotation.z = Math.random() * 6; md.flash.scale.setScalar(rand(Math.random, 0.8, 1.4)); }
   if (P.pump > 0) { P.pump = Math.max(0, P.pump - dt * 2.2); if (md.pump) md.pump.position.z = md.pumpZ + Math.sin(P.pump * Math.PI) * 0.1; }
   muzzleLight.intensity = Math.max(0, muzzleLight.intensity - dt * 80);
+  if (md.flash.visible) { md.flash.updateMatrixWorld(); md.flash.getWorldPosition(gunFlash.position); gunFlash.color.copy(md.flash.material.color.getHex() === 0xffffff ? new THREE.Color(0xffc070) : md.flash.material.color); gunFlash.intensity = 4; }
+  else gunFlash.intensity = Math.max(0, gunFlash.intensity - dt * 60);
 }
 
 function update(dt) {
@@ -1758,9 +1768,10 @@ function update(dt) {
 
 let last = performance.now();
 function frame(t) {
-  const dt = Math.min(0.05, (t - last) / 1000); last = t;
+  let dt = Math.min(0.05, (t - last) / 1000); last = t;
   if (PC && locked() && !inPlay()) document.exitPointerLock(); // menus need the real cursor
   // dev GAME SPEED runs several fixed updates per rendered frame; G.bot is the balance-test autoplayer
+  if (hitStop > 0) { hitStop -= dt; dt = 0; }
   if (slowT > 0 && !paused) slowT -= dt;
   const sdt = slowT > 0 ? dt * 0.35 : dt; // boss intro slow-motion
   for (let k = 0; k < (G.timeScale || 1); k++) if (!paused) { if (G.bot) G.bot(sdt); update(sdt); }

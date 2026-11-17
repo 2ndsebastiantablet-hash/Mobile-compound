@@ -455,6 +455,13 @@ export const splat = (seed = 0) => tex('splat' + seed, 32, 32, (p, r) => {
   }
 }, { mip: false });
 
+// wall crack
+export const crack = (seed = 0) => tex('crack' + seed, 32, 32, (p, r) => {
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) p.set(x, y, [0, 0, 0], 0);
+  const walk = (x, y, a, n, w) => { for (let i = 0; i < n; i++) { p.set(x, y, [18, 16, 14], 220); if (w > 1) p.set(x + 1, y, [40, 36, 30], 160); x += Math.cos(a); y += Math.sin(a); a += (r() - 0.5) * 0.9; if (r() < 0.08 && n - i > 4) walk(x, y, a + (r() < 0.5 ? 0.9 : -0.9), (n - i) * 0.6, 1); } };
+  for (let k = 0; k < 3; k++) walk(16, 16, r() * 6.28, 10 + r() * 8, 2);
+}, { mip: false });
+
 // ---------------------------------------------------------------- characters
 export const SKINS = [[226, 180, 140], [196, 146, 108], [150, 100, 70], [110, 72, 50], [236, 196, 160], [170, 190, 150]];
 export const HAIRS = [[40, 28, 20], [90, 60, 30], [20, 20, 22], [160, 130, 70], [120, 120, 120], [130, 50, 24]];
