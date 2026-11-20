@@ -102,5 +102,9 @@ ACHIEVEMENTS.push(
   ...tiers('dk', S('ducks'), [[25, 'DUCK AND COVER', 'Duck 25 times', 100], [250, 'LIMBO CHAMPION', 'Duck 250 times', 500]]),
   ...tiers('rm', S('remoteUses'), [[10, 'CHANNEL SURFER', 'Use The Remote 10 times', 300], [100, 'COUCH POTATO', 'Use The Remote 100 times', 1000]]),
   ...tiers('bh', S('blackholes'), [[10, 'EVENT HORIZON', 'Open 10 black holes', 600]]),
+  ...tiers('rq', S('requiemKills'), [[1, 'REQUIEM', 'Kill a Requiem enemy (Extra Hard)', 1000], [25, 'SILENCE THE CHOIR', 'Kill 25 Requiem enemies', 3000], [100, 'FINAL REQUIEM', 'Kill 100 Requiem enemies', 8000]]),
+  ...tiers('mu', S('mutations'), [[1, 'SIDE EFFECTS', 'Take a mutation (Extra Hard)', 300], [25, 'NOT QUITE HUMAN', 'Take 25 mutations', 1500], [100, 'THE SUPPLEMENT WINS', 'Take 100 mutations', 4000]]),
+  { id: 'mutfull', name: 'ABOMINATION', desc: 'Have 15 mutations in one run', reward: 2500, test: (p, r) => r && r.mutCount >= 15 },
+  { id: 'mutwin', name: 'EVOLVED', desc: 'Beat floor 50 on Extra Hard', reward: 6000, test: (p, r) => r && r.won && r.diff >= 3 },
   ...tiers('mdk', S('medkits'), [[25, 'BAND-AID', 'Pick up 25 medkits', 200], [100, 'FREQUENT FLYER', 'Pick up 100 medkits', 800]]),
 );

@@ -309,3 +309,7 @@ select.rp-in { width: auto; }
 .pips i.f { background: #e8e0c8; } .pips i.g { background: #ffd040; border-color: #a08020; }
 .pips i:nth-child(5) { margin-right: 4px; }
 .pips small { margin-left: 6px; color: #b8b0a0; }
+.mutCard { border-color: #8040c0 !important; background: linear-gradient(#1c1224, #120c18) !important; }
+.mut-up { color: #70ff90 !important; } .mut-down { color: #ff7070 !important; margin-top: 4px; }
+.mutList { color: #d080ff; margin-bottom: 4px; }
+.req-btn { border-color: #a040e0 !important; color: #e0a0ff !important; }

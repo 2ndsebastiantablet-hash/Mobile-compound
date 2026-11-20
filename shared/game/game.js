@@ -1,6 +1,6 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { buildFloor, floorPlan, MOODS, box, EYE, RD, TOP_FLOOR } from '../content/floors/builder.js';
-import { Enemy, Projectile } from '../content/enemies/ai.js';
+import { Enemy, Projectile, REQUIEM_ABILITIES } from '../content/enemies/ai.js';
 import { DEFS, rosterFor, isFlyer, isMelee } from '../content/enemies/roster.js';
 import { bossFor, bossKindFor, BOSS_LIST } from '../content/bosses/bosses.js';
 import { initDev, devOn, devTick, devOpen, refreshDevUi } from './dev.js';
@@ -13,6 +13,7 @@ import { SCHEMA, DEV_BUILD, settings, setSetting, onSettingsChange, AIM_MULT, SE
 import { saveRun, loadRun, clearRun } from './save.js';
 import { Tutorial } from './tutorial.js';
 import { PERKS, PERK, PERK_RARITY, rollPerks, mods } from '../content/perks/perks.js';
+import { MUTATIONS, MUTATION, applyMutations, rollMutations, mutationTint } from '../content/perks/mutations.js';
 import { profile, addCash, stat, statMax, touch, flushProfile } from './profile.js';
 import { applyUpgrades, weaponBonus } from '../content/meta/upgrades.js';
 import { CHAR } from '../content/meta/characters.js';
@@ -22,7 +23,7 @@ import { LORE, LORE_BY_ID } from '../content/meta/lore.js';
 import { ACHIEVEMENTS } from '../content/meta/achievements.js';
 import { initHQ, bindHQ, openHQ, closeHQ, openCharSelect, openDiffSelect, unlockedCount, allUnlocked, money } from './hq.js';
 import { setMusic } from '../audio/music.js';
-import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine, setSleeve, aimSpeed, goldPlate } from '../content/weapons/weapons.js';
+import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine, setSleeve, aimSpeed, goldPlate, setMutationTint } from '../content/weapons/weapons.js';
 import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet, mulberry32 } from '../engine/util.js';
 
 // ------------------------------------------------------------------ DOM
@@ -148,6 +149,9 @@ const recalc = () => {
     if (T.cash) M.cash *= T.cash;
     if (T.gold) M.goldChance = (M.goldChance || 1) * T.gold;
   }
+  if (mutLv && Object.keys(mutLv).length) applyMutations(M, mutLv);
+  G.mutHp = M.enemyHpMul || 1;
+  setMutationTint(mutationTint(mutLv));
 };
 const wlv = (id) => weaponBonus(profile.weapons[id] || 0); // Armory upgrade level
 const magOf = (def) => (def.melee ? 0 : Math.max(1, Math.round(def.mag * M.mag * wlv(def.id).mag)));
@@ -161,7 +165,10 @@ let runMode = 'story', runId = 0, daily = null, rushIdx = 0, rushTime = 0, noteT
 const layoutOf = (n) => (n > TOP_FLOOR ? 26 + ((n - TOP_FLOOR - 1) % 25) : n);
 function setDiff(i) { runDiff = DIFFS[i] ? i : 1; D = diffOf(runDiff); G.dd = D; }
 setDiff(1);
-const healP = (n) => { if (n > 0) P.hp = Math.min(M.maxHp, P.hp + n); };
+const healP = (n) => { if (n > 0) P.hp = Math.min(M.maxHp, P.hp + n * (M.healMul || 1)); };
+// Extra Hard: mutations instead of perks
+let mutLv = {};
+const mutating = () => runDiff === 3;
 const seenTypes = new Set(storeGet('overtime.seen', []));
 let pendingIntro = [], introT = 0;
 
@@ -340,9 +347,22 @@ function introduce(type) {
   pendingIntro.push(DEFS[type].name);
 }
 
+// Extra Hard: now and then an enemy arrives as its REQUIEM version
+function requiemRoll(type) {
+  const d = DEFS[type];
+  if (runDiff !== 3 || d.boss || d.minion || mode === 'title') return null;
+  return Math.random() < 0.04 + Math.min(0.1, G.floorNum * 0.002) ? { requiem: true } : null;
+}
+function announceRequiem(e) {
+  if (!e.requiem) return;
+  const names = e.abilities.map((id) => REQUIEM_ABILITIES.find((a) => a.id === id).name).join(' · ');
+  toast(`⚠ ${e.displayName}: ${names}`, '#d070ff'); sfx.rail();
+  post.u.flash.value = Math.max(post.u.flash.value, 0.25); post.u.flashCol.value.set(0x8020c0);
+}
 function spawnAt(type) {
   const s = freeSpot(type);
-  const e = new Enemy(G, type, s);
+  const e = new Enemy(G, type, s, requiemRoll(type) || {});
+  announceRequiem(e);
   s.taken = e;
   G.enemies.push(e);
   introduce(type);
@@ -355,13 +375,13 @@ function spawnReinforcement(type) {
   if (d.move === 'turret' || d.move === 'burrow') {
     // stationary things and burrowers just pop up out of the floor
     const s = freeSpot(type);
-    const e = new Enemy(G, type, s, { active: true });
+    const e = new Enemy(G, type, s, { active: true, ...(requiemRoll(type) || {}) }); announceRequiem(e);
     s.taken = e; G.enemies.push(e); effects.dust(e.pos.clone().setY(0.1), 12); introduce(type);
     return e;
   }
   const entry = pick(Math.random, room.doorSpawns).clone();
   const s = isMelee(type) ? { x: entry.x, z: entry.z + 1.6, cover: false } : freeSpot(type);
-  const e = new Enemy(G, type, s, { enter: entry });
+  const e = new Enemy(G, type, s, { enter: entry, ...(requiemRoll(type) || {}) }); announceRequiem(e);
   s.taken = e;
   G.enemies.push(e);
   introduce(type);
@@ -684,13 +704,16 @@ const PNAME = { orb: 'FIREBALL', big: 'PLASMA ORB', bolt: 'ENERGY BOLT', shard: 
 let deathCause = '';
 function causeOf(src, proj) {
   const who = src || (proj && proj.owner);
-  const name = who && who.def ? who.def.name : null;
+  const name = who && who.def ? who.displayName || who.def.name : null;
   if (proj) return `${name ? name + "'S " : 'A '}${PNAME[proj.kind] || 'PROJECTILE'}`;
   return name || 'THE BUILDING';
 }
 G.hurtPlayer = (dmg, src, proj) => {
   if (!G.combatActive || mode !== 'combat') return;
   if (devOn('god')) { sfx.hurt(); return; }
+  if (M.dodge && Math.random() < M.dodge) { popText(G.camPos.clone().add(new THREE.Vector3(0, -0.2, -1.2)), 'PHASED', '#a0b0ff'); return; } // Phase Skin
+  if (M.thorns && src && !proj && src.alive && src.damage) src.damage(M.thorns, 'body', src.centerWorld(new THREE.Vector3())); // Spines
+  if (M.acidBlood) G.splashEnemies(G.camPos, 2.6, M.acidBlood); // Acid Blood
   dmg *= D.dmg * Math.min(1, 0.8 + G.floorNum * 0.02) * (G.twist && G.twist.dmgIn || 1); // gentler first floors while players learn
   if (tutorial && !tutorial.done) dmg *= 0.5;
   if (!src && M.deflect && Math.random() < M.deflect) { popText(G.camPos.clone().add(new THREE.Vector3(0, -0.2, -1.2)), 'DEFLECTED', '#80e0ff'); sfx.zap(); return; }
@@ -715,17 +738,17 @@ G.onEnemyKilled = (e, head, noScore) => {
   // enemy log: first kill adds the entry, every skin you kill is recorded
   const bl = profile.bestiary || (profile.bestiary = {});
   const be = bl[e.type] || (bl[e.type] = { k: 0, s: {} });
-  be.k++; be.s[e.skinIdx || 0] = 1; touch();
+  be.k++; be.s[e.skinIdx || 0] = 1; if (e.requiem) { be.rq = 1; stat('requiemKills'); } touch();
   if (be.k === 1 && !e.def.boss) toast(`NEW LOG ENTRY: ${e.def.name}`, '#80c0ff');
   if (e.skin && e.skin.rare) { stat('goldKills'); popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, 0.8, 0)), 'GOLDEN! x5 CASH', '#ffd040'); }
   if (head) hitStop = 0.05; // tiny freeze-frame sells a headshot
   stats.kills++; if (head) stats.heads++;
   combo = now - lastKill < M.comboWindow ? Math.min(M.comboMax, combo + 1) : 1;
   lastKill = now;
-  const pts = Math.round((e.st.score + (head ? 50 : 0)) * combo * M.score * D.score);
+  const pts = Math.round((e.st.score + (head ? 50 : 0)) * combo * M.score * D.score * (e.requiem ? 3 : 1));
   runMaxCombo = Math.max(runMaxCombo, combo);
   const f = G.floorNum;
-  const cash = addCash((e.def.boss ? (e.def.mini ? 60 + f * 6 : 150 + f * 12) : Math.max(1, Math.round(e.st.score / 40))) * M.cash * D.cash * (e.skin && e.skin.rare ? 5 : 1));
+  const cash = addCash((e.def.boss ? (e.def.mini ? 60 + f * 6 : 150 + f * 12) : Math.max(1, Math.round(e.st.score / 40))) * M.cash * D.cash * (e.skin && e.skin.rare ? 5 : 1) * (e.requiem ? 4 : 1));
   runCash += cash;
   popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, -0.35, 0)), `$${cash}`, '#ffd040');
   stat('kills'); if (head) stat('heads'); if (cur().melee) stat('meleeKills');
@@ -904,7 +927,7 @@ function continueRun(sv, fullHp = false) {
   initAudio();
   hideScreens();
   score = sv.score || 0; floorStartScore = score;
-  perkLv = { ...(sv.perks || {}) }; rerolls = sv.rerolls ?? 1; recalc();
+  perkLv = { ...(sv.perks || {}) }; mutLv = { ...(sv.mut || {}) }; rerolls = sv.rerolls ?? 1; recalc();
   P.revives = sv.revives ?? M.revives; runCash = sv.cash || 0; runChar = sv.char || 'temp'; setDiff(sv.diff ?? 1); setRunMode(sv.rmode || 'story', sv.dailyKey); runId = sv.runId || Date.now(); rushIdx = sv.rushIdx || 0; rushTime = sv.rushTime || 0; setSleeve(CHAR[runChar]?.sleeve ?? 0xd2d2cc);
   P.hp = fullHp ? M.maxHp : Math.max(1, Math.min(M.maxHp, sv.hp || M.maxHp));
   P.inv = sv.inv.filter((s) => GUN[s.id]).map((s) => ({ ...s }));
@@ -924,7 +947,7 @@ function startGame(floor = 1, keepScore = false) {
     const ch = CHAR[profile.char] || CHAR.temp;
     runChar = ch.id; setSleeve(ch.sleeve); setDiff(profile.diff ?? 1);
     score = 0; perkLv = { ...ch.perks }; recalc(); rerolls = 1 + M.extraRerolls; P.revives = M.revives; runCash = 0;
-    stat('runs'); runId = Date.now(); rushIdx = 0; rushTime = 0;
+    stat('runs'); runId = Date.now(); rushIdx = 0; rushTime = 0; mutLv = {};
     for (let k = 0; k < (M.startPerks || 0); k++) { const o = rollPerks(perkLv, 1); if (o[0]) perkLv[o[0]] = (perkLv[o[0]] || 0) + 1; } recalc(); // Orientation upgrade
     if (runMode === 'daily') {
       stat('dailyRuns');
@@ -968,7 +991,7 @@ function startFloor(n, sameVariant = false) {
   gunsThisFloor = 0;
   equip(P.slot, true);
   // autosave: a run can always be continued from the start of this floor
-  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls, revives: P.revives, cash: runCash, char: runChar, diff: runDiff, rmode: runMode, runId, rushIdx, rushTime, dailyKey: daily && daily.key });
+  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls, revives: P.revives, cash: runCash, char: runChar, diff: runDiff, rmode: runMode, runId, rushIdx, rushTime, dailyKey: daily && daily.key, mut: mutLv });
   statMax('maxFloor', n); checkAch();
   P.windUsed = false;
   tutorialPending = n === 1 && !tutorialDone();
@@ -1127,13 +1150,13 @@ function floorComplete() {
     `ACCURACY    ${acc}%`, `TIME        ${fmtTime(stats.t)}`, `SCORE       ${score}`,
     `CASH        +${money(bonus)} BONUS`, `WALLET      ${money(profile.cash)}`,
   ].join('\n');
-  const heal = G.twist && G.twist.noCoffee ? 0 : Math.max(0, Math.min(M.maxHp - P.hp, Math.round((30 + M.coffee) * D.heal)));
+  const heal = G.twist && G.twist.noCoffee ? 0 : Math.max(0, Math.min(M.maxHp - P.hp, Math.round((30 + M.coffee) * D.heal * (M.coffeeMul ?? 1))));
   P.hp += heal;
   let unlock = heal > 0 ? `+${heal} HP COFFEE BREAK` : '';
   unlock += (unlock ? '\n' : '') + 'LOADOUT: ' + P.inv.map((s) => GUN[s.id].short).join(' / ');
   $('fcUnlock').textContent = unlock;
-  perkOffer = rollPerks(perkLv, M.perkChoices, Math.random, n % 5 === 0 || n % 5 === 3);
-  $('nextBtn').textContent = perkOffer.length ? 'CHOOSE A PERK' : 'GOING UP';
+  perkOffer = mutating() ? rollMutations(mutLv, M.perkChoices) : rollPerks(perkLv, M.perkChoices, Math.random, n % 5 === 0 || n % 5 === 3);
+  $('nextBtn').textContent = perkOffer.length ? (mutating() ? 'MUTATE' : 'CHOOSE A PERK') : 'GOING UP';
   showScreen(ui.floorClear);
 }
 
@@ -1479,6 +1502,8 @@ function applyHit(e, part, point, w, sound, dir) {
   if (e.hp >= e.maxHp) amt *= M.firstStrike;
   else if (e.hp < e.maxHp * 0.3) amt *= M.exec;
   if (e.def.boss) amt *= M.boss;
+  if (M.lowHpDmg && P.hp < M.maxHp / 2) amt *= 1 + M.lowHpDmg; // Bloodlust
+  if (M.crit && Math.random() < M.crit) { amt *= 2; popText(point.clone().add(new THREE.Vector3(0, 0.3, 0)), 'CRIT!', '#ffe040'); } // Eyestalks
   const TW = G.twist;
   if (TW && TW.headOnly) amt *= head ? 1.5 : 0.25;
   if (TW && TW.meleeOnly && !w.melee) amt *= 0.5;
@@ -1707,7 +1732,7 @@ onBtn('pauseBtn', togglePause);
 onBtn('resumeBtn', togglePause);
 onBtn('quitBtn', () => { paused = false; toTitle(); }); // the run stays saved at the start of this floor
 onBtn('nextBtn', () => { sfx.tap(); if (perkOffer && perkOffer.length) openPerks(); else nextFloor(); });
-onBtn('perkReroll', () => { if (rerolls <= 0) return; rerolls--; sfx.reload(); perkOffer = rollPerks(perkLv, M.perkChoices); openPerks(); });
+onBtn('perkReroll', () => { if (rerolls <= 0) return; rerolls--; sfx.reload(); perkOffer = mutating() ? rollMutations(mutLv, M.perkChoices) : rollPerks(perkLv, M.perkChoices); openPerks(); });
 onBtn('retryBtn', () => restartFloor());
 onBtn('menuBtn', toTitle);
 onBtn('gcLeave', () => { sfx.tap(); openChoice(); });
@@ -1716,7 +1741,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && mod
 
 // duck: a quick crouch that lets shots fly over your head (S / down arrow / DUCK button)
 function duck() {
-  if (P.duckCd > 0 || mode !== 'combat' || paused) return;
+  if (P.duckCd > 0 || mode !== 'combat' || paused || M.noDuck) return;
   stat('ducks'); P.duckT = 0.75; P.duckCd = 1.1 * (M.duckCd || 1); sfx.swing && sfx.swing();
 }
 
@@ -1733,7 +1758,7 @@ function togglePause() {
 let flushT = 2, achT = 0;
 const achQueue = [];
 function checkAch(extra = {}) {
-  const run = { maxCombo: runMaxCombo, perkCount: Object.values(perkLv).reduce((a, b) => a + b, 0), diff: runDiff, floor: G.floorNum, ...extra };
+  const run = { maxCombo: runMaxCombo, perkCount: Object.values(perkLv).reduce((a, b) => a + b, 0), mutCount: Object.values(mutLv || {}).reduce((a, b) => a + b, 0), diff: runDiff, floor: G.floorNum, ...extra };
   for (const a of ACHIEVEMENTS) {
     if (profile.ach[a.id]) continue;
     let ok = false;
@@ -1752,13 +1777,28 @@ function showAch(a) {
 // ------------------------------------------------------------------ perks
 function perkSummary() {
   const ids = Object.keys(perkLv).filter((k) => perkLv[k] > 0);
-  if (!ids.length) return '';
-  return 'PERKS: ' + ids.map((k) => `<span style="color:${PERK_RARITY[PERK[k].rarity].color}">${PERK[k].name}${perkLv[k] > 1 ? ' x' + perkLv[k] : ''}</span>`).join(' · ');
+  const mids = Object.keys(mutLv).filter((k) => mutLv[k] > 0 && MUTATION[k]);
+  const mt = mids.length ? '<div class="mutList">MUTATIONS: ' + mids.map((k) => `<span title="${MUTATION[k].up} / ${MUTATION[k].down}">${MUTATION[k].name}${mutLv[k] > 1 ? ' x' + mutLv[k] : ''}</span>`).join(' · ') + '</div>' : '';
+  if (!ids.length) return mt;
+  return mt + 'PERKS: ' + ids.map((k) => `<span style="color:${PERK_RARITY[PERK[k].rarity].color}">${PERK[k].name}${perkLv[k] > 1 ? ' x' + perkLv[k] : ''}</span>`).join(' · ');
 }
 function openPerks() {
   ui.floorClear.classList.add('hidden');
   const box = $('perkCards'); box.innerHTML = '';
+  const mut = mutating();
+  $('perkTitle').textContent = mut ? 'CHOOSE A MUTATION' : 'CHOOSE A PERK';
+  $('perkTag').textContent = mut ? 'THE SUPPLEMENT IS CHANGING YOU. EVERY GIFT HAS A PRICE.' : 'IT LASTS FOR THE REST OF THE RUN';
   for (const id of perkOffer) {
+    if (mut) {
+      const m = MUTATION[id], lv = (mutLv[id] || 0) + 1;
+      const b = document.createElement('button');
+      b.className = 'perkCard mutCard';
+      b.innerHTML = `<div class="pk-top"><span class="pk-cat">MUTATION</span><span class="pk-rar" style="color:#c060ff">${m.max > 1 ? lv + '/' + m.max : 'ONCE'}</span></div>`
+        + `<div class="pk-name" style="color:#d080ff">${m.name}</div><div class="pk-desc mut-up">+ ${m.up}</div><div class="pk-desc mut-down">− ${m.down}</div>`;
+      b.addEventListener('click', (e) => { e.stopPropagation(); takePerk(id); });
+      box.append(b);
+      continue;
+    }
     const p = PERK[id], lv = (perkLv[id] || 0) + 1, r = PERK_RARITY[p.rarity];
     const b = document.createElement('button');
     b.className = 'perkCard'; b.style.borderColor = r.color;
@@ -1774,13 +1814,14 @@ function openPerks() {
 }
 function takePerk(id) {
   const before = M.maxHp;
-  perkLv[id] = (perkLv[id] || 0) + 1;
+  if (mutating() && MUTATION[id]) { mutLv[id] = (mutLv[id] || 0) + 1; stat('mutations'); post.u.flash.value = 0.4; post.u.flashCol.value.set(0xa040ff); }
+  else perkLv[id] = (perkLv[id] || 0) + 1;
   recalc(); stat('perksTaken'); checkAch();
   if (M.maxHp > before) P.hp += M.maxHp - before; // new max health arrives filled
   P.hp = Math.min(P.hp, M.maxHp);
   for (const s2 of P.inv) s2.ammo = magOf(GUN[s2.id]);
   sfx.unlock();
-  toast(PERK[id].name, PERK_RARITY[PERK[id].rarity].color);
+  toast(MUTATION[id] && mutating() ? 'MUTATED: ' + MUTATION[id].name : PERK[id].name, MUTATION[id] && mutating() ? '#d080ff' : PERK_RARITY[PERK[id].rarity].color);
   perkOffer = null;
   ui.perks.classList.add('hidden');
   nextFloor();
@@ -2033,6 +2074,7 @@ function update(dt) {
     }
   }
   if (G.twist && G.twist.regen && mode === 'combat' && P.hp > 0) healP(G.twist.regen * dt);
+  if (M.regen && mode === 'combat' && P.hp > 0) healP(M.regen * dt); // Gills
   P.duckT = Math.max(0, P.duckT - dt); P.duckCd = Math.max(0, P.duckCd - dt);
   G.duck += ((P.duckT > 0 ? 1 : 0) - G.duck) * Math.min(1, dt * 16);
   G.playerPos.copy(G.camPos); G.playerPos.y -= G.duck * 0.65;
@@ -2230,11 +2272,11 @@ initDev({
   clearPerks: () => { perkLv = {}; recalc(); P.hp = Math.min(P.hp, M.maxHp); },
   enemies: () => Object.entries(DEFS).filter(([, d]) => !d.boss && !d.minion && d.floors && d.floors[1] > 0).map(([id, d]) => [id, d.name]),
   bosses: () => BOSS_LIST.map((b) => [b.id, `F${b.floor} ${b.mini ? 'MINI · ' : ''}${b.name}`]),
-  spawn: (t) => { if (!area) return; const e = spawnAt(t); if (G.combatActive) e.activate(); },
+  spawn: (t, rq) => { if (!area) return; let e; if (rq) { const s2 = freeSpot(t); e = new Enemy(G, t, s2, { requiem: true }); s2.taken = e; G.enemies.push(e); announceRequiem(e); } else e = spawnAt(t); if (G.combatActive) e.activate(); },
   spawnBoss: (id) => { if (!area) return; const b = new Enemy(G, id, { x: 0, y: 1.9, z: area.room.z0 - 8.2, cover: false }); b.activate(); G.enemies.push(b); if (!area.boss) area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; },
 });
 
-window.__game = { get draws() { return drawCalls; }, forceTwist(id) { setRunMode("daily"); const t = DAILY_MODS_REF.find((x) => x.id === id); daily.mod = t; G.twist = t; G.mod = id; recalc(); }, get run() { return { runMode, daily, rushIdx, rushTime, layout: G.layout, mod: G.mod }; }, goto(n) { hideScreens(); G.floorNum = n; startFloor(n); }, spawnNote: () => spawnNote(G.room), nextFloor: () => nextFloor(), cards: { floorCard, bossCard, dmgDir }, post, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
+window.__game = { get draws() { return drawCalls; }, get mut() { return mutLv; }, forceTwist(id) { setRunMode("daily"); const t = DAILY_MODS_REF.find((x) => x.id === id); daily.mod = t; G.twist = t; G.mod = id; recalc(); }, get run() { return { runMode, daily, rushIdx, rushTime, layout: G.layout, mod: G.mod }; }, goto(n) { hideScreens(); G.floorNum = n; startFloor(n); }, spawnNote: () => spawnNote(G.room), nextFloor: () => nextFloor(), cards: { floorCard, bossCard, dmgDir }, post, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);

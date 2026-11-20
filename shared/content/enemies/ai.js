@@ -29,6 +29,7 @@ export class Enemy {
     this.maxHp = this.hp = Math.round(this.hp * (dd.hp || 1) * (def.brain ? 1 + late * 0.012 : 1 + late * 0.03) * 10) / 10;
     const TW = game.twist; // daily challenge knobs
     if (TW && TW.enemyHp) this.maxHp = this.hp = Math.round(this.hp * TW.enemyHp * 10) / 10;
+    if (game.mutHp && game.mutHp !== 1 && !def.boss) this.maxHp = this.hp = Math.round(this.hp * game.mutHp * 10) / 10; // Hive Mind mutation
     if (TW && TW.oneHit) this.maxHp = this.hp = def.boss ? Math.round(this.hp * 0.25) : 0.1;
     if (opts.decoy) this.maxHp = this.hp = 1;
     this.decoy = !!opts.decoy; this.yawExtra = 0;
@@ -51,7 +52,7 @@ export class Enemy {
     this.centerY = 1.15; this.shoulderY = 1.42;
     BUILDERS[mk](this, def.model);
     // skin: alternate colours (golden ones are tougher and pay more)
-    this.skinIdx = opts.skin ?? rollSkin(def, Math.random, game.goldChance ? game.goldChance() : 1);
+    this.skinIdx = opts.requiem ? 0 : opts.skin ?? rollSkin(def, Math.random, game.goldChance ? game.goldChance() : 1);
     this.skin = skinsFor(def)[this.skinIdx];
     applySkin(this, this.skin);
     if (this.skin && this.skin.rare) { this.maxHp *= 1.5; this.hp = this.maxHp; }
@@ -74,8 +75,31 @@ export class Enemy {
     this.peekGoal = new THREE.Vector3();
     if (def.move === 'stand' && spot.cover && !def.nocover && !spot.peek) this.crouch = this.crouchTarget = 1;
     if (def.brain && !opts.decoy) this.brain = new BossBrain(this);
+    if (opts.requiem && !def.boss) this.makeRequiem(opts.requiemAbilities);
     this.place();
     game.scene.add(this.root);
+  }
+
+  makeRequiem(fixed) {
+    const def = this.def;
+    this.requiem = true; this.traits = { ...this.traits };
+    this.maxHp = this.hp = Math.round(this.maxHp * 2.4 * 10) / 10;
+    this.dmg *= 1.35; this.fireMul *= 0.82;
+    this.scale *= 1.12; this.root.scale.setScalar(this.scale);
+    const ranged = !!def.atk;
+    const pool = REQUIEM_ABILITIES.filter((a) => !a.ranged || ranged);
+    this.abilities = fixed || [];
+    while (!fixed && this.abilities.length < 2) { const a = pool[Math.floor(Math.random() * pool.length)]; if (!this.abilities.includes(a.id)) this.abilities.push(a.id); }
+    for (const id of this.abilities) REQUIEM_ABILITIES.find((a) => a.id === id).apply(this);
+    applySkin(this, REQ_SKIN);
+    this.displayName = 'REQUIEM ' + def.name;
+    REQ_HALO.map = REQ_HALO.map || TX.ring(); REQ_AURA.map = REQ_AURA.map || TX.glow();
+    // crown of light just above the model's real top
+    this.root.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(this.body);
+    const top = (bb.max.y - this.root.position.y) / this.scale + 0.18;
+    this.halo = new THREE.Sprite(REQ_HALO); this.halo.scale.set(0.42, 0.42, 1); this.halo.position.y = top; this.root.add(this.halo);
+    this.aura = new THREE.Sprite(REQ_AURA); this.aura.scale.setScalar(2.2); this.aura.position.y = this.centerY || 1; this.root.add(this.aura);
   }
 
   part(parent, geo, mat, x, y, z, kind = 'body') {
@@ -113,6 +137,13 @@ export class Enemy {
     if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) this.applyMats(); }
     this.stagger = Math.max(0, this.stagger - dt * 4);
     this.kick = Math.max(0, (this.kick || 0) - dt * 1.6);
+    if (this.requiem) {
+      this.aura.material.opacity = 0.4 + Math.sin(this.phase * 4) * 0.15; this.halo.material.rotation += dt * 2;
+      if (Math.random() < dt * 10) g.fx.emit(this.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(rand(Math.random, -0.4, 0.4), rand(Math.random, -0.6, 0.6), rand(Math.random, -0.2, 0.2))), 1, 'pop', 0.4, -1.5, 0.5);
+      if (this.echoQ && this.echoQ.t > 0) { this.echoQ.t -= dt; if (this.echoQ.t <= 0) { const q = this.echoQ; this.echoQ = null; this.shoot(q.kind, q.spread + 0.08, { ...q.atk, _echo: true }); } }
+      if (this.warcry && this.state === 'active') { this.cryT = (this.cryT || 1) - dt; if (this.cryT <= 0) { this.cryT = 1; for (const o of g.enemies) if (o !== this && o.alive && o.hp < o.maxHp && o.pos.distanceTo(this.pos) < 5) { o.hp = Math.min(o.maxHp, o.hp + o.maxHp * 0.06); g.fx.emit(o.centerWorld(new THREE.Vector3()), 2, 'goo', 0.6, -2, 0.4); } } }
+      if (this.brood && this.state === 'active') { this.brood -= dt; if (this.brood <= 0) { this.brood = 8; g.spawnMinion('larva', this.pos, 2); } }
+    }
     if (this.skin && this.skin.rare && Math.random() < dt * 8) g.fx.sparks(this.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(rand(Math.random, -0.3, 0.3), rand(Math.random, -0.5, 0.5), 0)), 1); // golden glitter
     this.swingT = Math.max(0, this.swingT - dt);
     if (this.burnT > 0) {
@@ -210,7 +241,7 @@ export class Enemy {
   }
 
   updateMove(dt) {
-    const g = this.game, def = this.def, sp = def.speed * (1 + (g.diff || g.floorNum) * 0.015) * (g.twist && g.twist.enemySpeed || 1);
+    const g = this.game, def = this.def, sp = def.speed * (1 + (g.diff || g.floorNum) * 0.015) * (g.twist && g.twist.enemySpeed || 1) * (this.speedMul || 1);
     const planted = this.atkState === 'wind' || this.atkState === 'burst';
     switch (def.move) {
       case 'stand':
@@ -485,6 +516,7 @@ export class Enemy {
     const speed = this.pspeed * (atk.speed || 1) * (kind === 'shard' ? 1.2 : kind === 'sonic' ? 0.8 : 1);
     const dmg = this.dmg * (atk.dmg || 1);
     g.spawnProjectile(from, target, speed, dmg, kind, { lob: atk.lob || kind === 'grenade', homing: atk.homing });
+    if (this.echo && !atk._echo && !this.echoQ) this.echoQ = { t: 0.2, kind, spread, atk }; // Requiem ECHO SHOTS
     const pk = PKINDS[kind]; if (pk && !NO_HALO.has(kind)) g.fx.glowAt(from, pk.mat.color.getHex(), 0.4, 0.07); // muzzle flash
     g.sfx.enemyShot();
   }
@@ -653,6 +685,27 @@ const G_MISSILE = new THREE.BoxGeometry(0.09, 0.09, 0.32);
 const G_SONIC = new THREE.BoxGeometry(0.5, 0.08, 0.06);
 const B = (c) => new THREE.MeshBasicMaterial({ color: c });
 const CORE = B(0xfff0a0);
+// ---------------------------------------------------------------- Requiem enemies
+// Extra Hard only: rare, much stronger versions of normal enemies with two extra abilities
+// and a dark violet look with a crown of light.
+export const REQUIEM_ABILITIES = [
+  { id: 'blink', name: 'BLINK', desc: 'Teleports away when hit', apply: (e) => { e.traits.teleportOnHit = true; } },
+  { id: 'regen', name: 'REGENERATION', desc: 'Heals quickly when left alone', apply: (e) => { e.traits.regen = Math.max(e.traits.regen || 0, e.maxHp * 0.08); } },
+  { id: 'mirror', name: 'MIRROR', desc: 'Sometimes reflects shots back at you', apply: (e) => { e.traits.reflect = true; } },
+  { id: 'fury', name: 'FURY', desc: 'Attacks much faster when hurt', apply: (e) => { e.traits.enrage = true; } },
+  { id: 'legion', name: 'LEGION', desc: 'Splits into two copies when killed', apply: (e) => { e.traits.split = { type: e.type, n: 2 }; } },
+  { id: 'nova', name: 'DEATH NOVA', desc: 'Explodes violently when killed', apply: (e) => { e.traits.deathBlast = 3.2; } },
+  { id: 'echo', name: 'ECHO SHOTS', desc: 'Every attack fires twice', ranged: true, apply: (e) => { e.echo = true; } },
+  { id: 'haste', name: 'HASTE', desc: 'Moves 60% faster and attacks more often', apply: (e) => { e.speedMul = 1.6; e.fireMul *= 0.75; } },
+  { id: 'phase', name: 'PHASING', desc: 'Slips out of reality now and then', apply: (e) => { e.traits.phase = true; } },
+  { id: 'warcry', name: 'WAR CRY', desc: 'Heals enemies around it', apply: (e) => { e.warcry = true; } },
+  { id: 'barbed', name: 'IRONCLAD', desc: 'Body shots do 40% less (aim for the head)', apply: (e) => { e.traits.armor = Math.min(e.traits.armor || 1, 0.6); } },
+  { id: 'brood', name: 'BROODMOTHER', desc: 'Keeps spawning larvae', apply: (e) => { e.brood = 6; } },
+];
+const REQ_SKIN = { id: 'requiem', name: 'REQUIEM', tint: [0.42, 0.26, 0.6], emissive: 0x24001a };
+const REQ_HALO = new THREE.SpriteMaterial({ color: 0xc040ff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+const REQ_AURA = new THREE.SpriteMaterial({ color: 0x9020c0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.55 });
+
 const DIRECT = new Set(['shot', 'burst', 'rapid', 'spread', 'laser', 'homing', 'sonic', 'boss']);
 const PKINDS = {
   orb: { geo: G_ORB, mat: B(0xff8a1a), core: true },

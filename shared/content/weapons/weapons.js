@@ -218,6 +218,15 @@ export function goldPlate(group) {
   group.traverse((o) => { if (o.isMesh && !keep.has(o.material) && !o.material.isMeshBasicMaterial && !o.material.transparent) o.material = M.gold; });
 }
 
+// mutations (Extra Hard) slowly recolour your hands
+let skinBase = null;
+export function setMutationTint(t) {
+  const sk = mats().skin.color;
+  if (!skinBase) skinBase = sk.clone();
+  sk.copy(skinBase);
+  if (t) sk.lerp(new THREE.Color(t.r, t.g, t.b), t.amount);
+}
+
 // tint the player's sleeve (each employee has their own colour)
 export function setSleeve(hex) { mats().sleeve.color.set(hex).multiplyScalar(1 / 0.82); }
 

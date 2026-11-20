@@ -159,6 +159,11 @@ function renderEntry(box, id) {
     bt.addEventListener('click', (e) => { e.stopPropagation(); if (!got) { hooks.sfx.empty(); return; } hooks.sfx.tap(); cur = i; for (const x of sk.children) x.classList.remove('on'); bt.classList.add('on'); startPreview(cv, id, i); });
     sk.append(bt);
   });
+  if (!d.boss && b.rq) {
+    const bt = el('button', 'hq-buy req-btn', 'REQUIEM');
+    bt.addEventListener('click', (e) => { e.stopPropagation(); hooks.sfx.tap(); for (const x of sk.children) x.classList.remove('on'); bt.classList.add('on'); startPreview(cv, id, 0, true); });
+    sk.append(bt);
+  }
   if (!d.boss) box.append(sk);
   const atks = d.atk ? (Array.isArray(d.atk) ? d.atk : [d.atk]) : [];
   const stats = d.boss
@@ -169,11 +174,12 @@ function renderEntry(box, id) {
   box.append(el('div', 'hq-note', `<b style="color:#ff9070">HOW IT FIGHTS</b><br>${ft.filter(Boolean).join('<br>')}${atks.length && !d.boss ? '' : ''}`));
   const lore = ENEMY_LORE[id] || (d.boss ? `A ${d.mini ? 'mini boss' : 'boss'} of Halvorsen-Pike Holdings. The building made it what it is.` : '');
   box.append(el('div', 'hq-note', `<b style="color:#fff0a0">FILE</b><br>${lore}`));
+  if (!d.boss) box.append(el('div', 'hq-note', b.rq ? '<b style="color:#d070ff">REQUIEM VERSION DEFEATED</b><br>On Extra Hard this enemy can arrive as a Requiem: 2.4x health, harder hits, and two extra abilities.' : '<span style="color:#7a6a8a">REQUIEM VERSION: NOT YET DEFEATED (EXTRA HARD ONLY)</span>'));
   startPreview(cv, id, 0);
 }
 function stopPreview() { if (prev) { cancelAnimationFrame(prev.raf); prev.scene.remove(prev.model); prev = null; } }
 let pr = null;
-function startPreview(canvas, id, skin) {
+function startPreview(canvas, id, skin, requiem = false) {
   stopPreview();
   if (!pr) {
     pr = { renderer: new THREE.WebGLRenderer({ antialias: false, alpha: true }) };
@@ -185,7 +191,7 @@ function startPreview(canvas, id, skin) {
   }
   const fake = { scene: pr.scene, camPos: new THREE.Vector3(0, 1.4, 6), floorNum: 1, diff: 1, dd: {}, mod: null, room: null, enemies: [] };
   let e;
-  try { e = new Enemy(fake, id, { x: 0, z: 0, y: 0, cover: false }, { decoy: !!DEFS[id].boss, skin }); } catch (err) { return; }
+  try { e = new Enemy(fake, id, { x: 0, z: 0, y: 0, cover: false }, { decoy: !!DEFS[id].boss, skin, requiem, requiemAbilities: requiem ? ['haste', 'nova'] : undefined }); } catch (err) { return; }
   const model = e.root; model.position.set(0, 0, 0); model.rotation.set(0, 0, 0);
   for (const m of e.meshes) m.material = m.userData.mat;
   const bb = new THREE.Box3().setFromObject(model), size = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());

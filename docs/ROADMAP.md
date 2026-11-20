@@ -74,7 +74,8 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 - [x] **124 new achievements** (161 total) with new tracked stats
 - [x] **50 new memos** (80 total)
 - [ ] **Stand weapon** (golden tier): a fighting spirit that cancels enemy attacks with a finger laser, lucky, rapid punches, super speed
-- [ ] **Requiem enemies:** rare, stronger versions with new abilities, only in a new Ultra Hard mode
+- [x] **Requiem enemies** (Extra Hard only): rare, 2.4x health, harder hits, dark violet with a crown of light, two of 12 extra abilities (Blink, Regeneration, Mirror, Fury, Legion, Death Nova, Echo Shots, Haste, Phasing, War Cry, Ironclad, Broodmother); 4x cash, 3x score
+- [x] **Mutations** (Extra Hard only): 30 mutations replace perks between floors; each has an upside and a listed downside and recolours your arms
 - [ ] **Time weapon** replacing The Remote: rewinds time on demand and rearranges the whole room each time
 
 **🏁 MILESTONE: BETA.** Gameplay feature complete (audio still to come). Wider testing and store preparation start.
