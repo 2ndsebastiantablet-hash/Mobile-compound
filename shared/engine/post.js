@@ -99,7 +99,7 @@ export class Post {
     this.quad.frustumCulled = false;
     this.qs = new THREE.Scene(); this.qs.add(this.quad);
     const mk = (frag, uniforms) => new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: frag, uniforms, depthTest: false, depthWrite: false });
-    this.mBright = mk(BRIGHT, { tSrc: { value: null }, threshold: { value: 0.72 } });
+    this.mBright = mk(BRIGHT, { tSrc: { value: null }, threshold: { value: 0.82 } });
     this.mBlur = mk(BLUR, { tSrc: { value: null }, dir: { value: new THREE.Vector2() } });
     this.u = {
       tScene: { value: this.rt.texture }, tBloom: { value: this.rtA.texture }, res: { value: new THREE.Vector2() }, time: { value: 0 },

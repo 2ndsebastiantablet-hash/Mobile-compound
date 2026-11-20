@@ -6,6 +6,11 @@ import { CHARACTERS, isUnlocked } from '../content/meta/characters.js';
 import { ACHIEVEMENTS } from '../content/meta/achievements.js';
 import { GUNS, GUN, RARITY } from '../content/weapons/weapons.js';
 import { LORE } from '../content/meta/lore.js';
+import * as THREE from '../vendor/three.module.min.js';
+import { Enemy, DEFS } from '../content/enemies/ai.js';
+import { BOSS_LIST } from '../content/bosses/bosses.js';
+import { skinsFor } from '../content/enemies/skins.js';
+import { ENEMY_LORE, fightText } from '../content/enemies/lore.js';
 import { DIFFS } from './difficulty.js';
 import { CHAR } from '../content/meta/characters.js';
 
@@ -24,7 +29,7 @@ function buyBtn(price, can, onBuy, label) {
 }
 
 export function openHQ(t = tab) { tab = t; render(); $('hq').classList.remove('hidden'); }
-export function closeHQ() { $('hq').classList.add('hidden'); flushProfile(true); }
+export function closeHQ() { stopPreview(); logSel = null; $('hq').classList.add('hidden'); flushProfile(true); }
 
 function render() {
   $('hqCash').textContent = money(profile.cash);
@@ -55,6 +60,8 @@ function render() {
   } else if (tab === 'employees') {
     box.append(el('div', 'hq-note', 'Pick who starts the next run. Each employee brings their own weapon and perks.'));
     for (const c of CHARACTERS) box.append(charRow(c, false));
+  } else if (tab === 'log') {
+    renderLog(box);
   } else if (tab === 'files') {
     const lore = profile.lore || {};
     box.append(el('div', 'hq-note', `${Object.keys(lore).length} / ${LORE.length} memos found. They turn up lying around the tower in Story and Endless runs.`));
@@ -98,6 +105,87 @@ function render() {
       box.append(row);
     }
   }
+}
+
+// ---------------------------------------------------------------- enemy log
+let logSel = null, prev = null;
+const LOG_ENEMIES = () => Object.entries(DEFS).filter(([id, d]) => !d.boss && id !== 'pylon' && d.floors && d.model).sort((a, b) => a[1].floors[0] - b[1].floors[0]);
+function renderLog(box) {
+  stopPreview();
+  const bl = profile.bestiary || {};
+  if (logSel) { renderEntry(box, logSel); return; }
+  const list = LOG_ENEMIES();
+  const known = list.filter(([id]) => bl[id]).length, bossKnown = BOSS_LIST.filter((b) => bl[b.id]).length;
+  box.append(el('div', 'hq-note', `ENEMIES ${known} / ${list.length} · BOSSES ${bossKnown} / ${BOSS_LIST.length}. Kill an enemy to add it to the log; every skin you kill is recorded.`));
+  const row = (id, d, sub) => {
+    const got = !!bl[id], skins = got ? Object.keys(bl[id].s).length : 0, total = skinsFor(d).length;
+    const r = el('div', 'hq-row' + (got ? '' : ' dim'));
+    r.append(el('div', 'hq-info', got ? `<b>${d.name}</b><span>${sub}</span><small>KILLED ${bl[id].k} · SKINS ${skins}/${total}</small>` : `<b>???</b><span>${sub}</span>`));
+    r.append(el('div', 'hq-done', got ? 'VIEW' : 'UNKNOWN'));
+    if (got) { r.style.cursor = 'pointer'; r.addEventListener('click', (e) => { e.stopPropagation(); hooks.sfx.tap(); logSel = id; render(); }); }
+    box.append(r);
+  };
+  for (const [id, d] of list) row(id, d, d.minion ? 'SUMMONED' : `FLOORS ${d.floors[0]}-${d.floors[1]}`);
+  box.append(el('div', 'hq-note', '<b style="color:#ff6040">BOSSES</b>'));
+  for (const b of BOSS_LIST) row(b.id, DEFS[b.id], `${b.mini ? 'MINI BOSS' : 'BOSS'} · FLOOR ${b.floor}`);
+}
+function renderEntry(box, id) {
+  const d = DEFS[id], b = (profile.bestiary || {})[id], skins = skinsFor(d);
+  const back = el('button', 'hq-buy', '◀ BACK TO LOG');
+  back.addEventListener('click', (e) => { e.stopPropagation(); hooks.sfx.tap(); logSel = null; render(); });
+  box.append(back);
+  box.append(el('div', 'log-name', d.name));
+  const cv = document.createElement('canvas'); cv.className = 'log-view'; cv.width = 220; cv.height = 220; box.append(cv);
+  const sk = el('div', 'log-skins');
+  let cur = 0;
+  skins.forEach((s, i) => {
+    const got = d.boss ? i === 0 : !!b.s[i];
+    const bt = el('button', 'hq-buy' + (i === cur ? ' on' : '') + (got ? '' : ' off'), got ? s.name : '???');
+    bt.addEventListener('click', (e) => { e.stopPropagation(); if (!got) { hooks.sfx.empty(); return; } hooks.sfx.tap(); cur = i; for (const x of sk.children) x.classList.remove('on'); bt.classList.add('on'); startPreview(cv, id, i); });
+    sk.append(bt);
+  });
+  if (!d.boss) box.append(sk);
+  const atks = d.atk ? (Array.isArray(d.atk) ? d.atk : [d.atk]) : [];
+  const stats = d.boss
+    ? `HEALTH ${Math.round(d.hp)} (+ per floor) · DAMAGE ${d.dmg} · KILLED ${b.k}`
+    : `HEALTH ${d.hp} · DAMAGE ${d.dmg} · SPEED ${d.speed ?? '-'} · FLOORS ${d.floors[0]}-${d.floors[1]} · KILLED ${b.k}`;
+  box.append(el('div', 'hq-note', `<b style="color:#f0c860">STATS</b><br>${stats}`));
+  const ft = d.boss ? [d.brain && d.brain.hint ? d.brain.hint + '.' : '', 'Moves: ' + (d.brain ? d.brain.moves.map((m) => m.t.toUpperCase()).join(', ') : '-') + '.'] : fightText(d);
+  box.append(el('div', 'hq-note', `<b style="color:#ff9070">HOW IT FIGHTS</b><br>${ft.filter(Boolean).join('<br>')}${atks.length && !d.boss ? '' : ''}`));
+  const lore = ENEMY_LORE[id] || (d.boss ? `A ${d.mini ? 'mini boss' : 'boss'} of Halvorsen-Pike Holdings. The building made it what it is.` : '');
+  box.append(el('div', 'hq-note', `<b style="color:#fff0a0">FILE</b><br>${lore}`));
+  startPreview(cv, id, 0);
+}
+function stopPreview() { if (prev) { cancelAnimationFrame(prev.raf); prev.scene.remove(prev.model); prev = null; } }
+let pr = null;
+function startPreview(canvas, id, skin) {
+  stopPreview();
+  if (!pr) {
+    pr = { renderer: new THREE.WebGLRenderer({ antialias: false, alpha: true }) };
+    pr.renderer.setPixelRatio(1); pr.renderer.setSize(110, 110, false);
+    pr.scene = new THREE.Scene();
+    pr.scene.add(new THREE.HemisphereLight(0xffffff, 0x404050, 1.4));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.2); dl.position.set(1, 2, 3); pr.scene.add(dl);
+    pr.cam = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
+  }
+  const fake = { scene: pr.scene, camPos: new THREE.Vector3(0, 1.4, 6), floorNum: 1, diff: 1, dd: {}, mod: null, room: null, enemies: [] };
+  let e;
+  try { e = new Enemy(fake, id, { x: 0, z: 0, y: 0, cover: false }, { decoy: !!DEFS[id].boss, skin }); } catch (err) { return; }
+  const model = e.root; model.position.set(0, 0, 0); model.rotation.set(0, 0, 0);
+  for (const m of e.meshes) m.material = m.userData.mat;
+  const bb = new THREE.Box3().setFromObject(model), size = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+  const r = Math.max(size.x, size.y, size.z) || 1;
+  pr.cam.position.set(0, c.y + r * 0.15, c.z + r * 2.3); pr.cam.lookAt(c);
+  const ctx = canvas.getContext('2d'); ctx.imageSmoothingEnabled = false;
+  prev = { scene: pr.scene, model, raf: 0 };
+  const tick = () => {
+    if (!prev || prev.model !== model || !canvas.isConnected) { if (prev && prev.model === model) stopPreview(); return; }
+    model.rotation.y += 0.012;
+    pr.renderer.render(pr.scene, pr.cam);
+    ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(pr.renderer.domElement, 0, 0, canvas.width, canvas.height);
+    prev.raf = requestAnimationFrame(tick);
+  };
+  tick();
 }
 
 const zoneFloors = (z) => ['1-4', '5-9', '10-14', '15-20', '21-25', '26-30', '31-35', '36-40', '41-45', '46-50'][z];

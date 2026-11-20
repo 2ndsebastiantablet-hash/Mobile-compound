@@ -204,9 +204,11 @@ function loadFloor(n, variant) {
   scene.background = new THREE.Color(fogCol);
   renderer.setClearColor(fogCol);
   hemi.color.set(th.hemi[0]); hemi.groundColor.set(th.hemi[1]);
-  hemi.intensity = hemiBase = 1.5 * (md.hemi || 1); amb.intensity = 0.35 * (md.hemi || 1);
+  // bright themes (white tile, marble, gold) get duller lights so enemy heads don't wash out
+  const wb = th.wall ? (th.wall[0] + th.wall[1] + th.wall[2]) / 3 : 150, bright = wb > 165 ? 0.62 : wb > 140 ? 0.78 : 0.9;
+  hemi.intensity = hemiBase = 1.25 * (md.hemi || 1) * (bright < 0.7 ? 0.85 : 1); amb.intensity = 0.35 * (md.hemi || 1);
   const lc = new THREE.Color(md.light || th.light); if (md.tint) lc.lerp(new THREE.Color(md.tint), 0.4);
-  roomBase = 9 * (md.room || 1); moodNow = plan.mood;
+  roomBase = 7.5 * (md.room || 1) * bright; moodNow = plan.mood;
   for (const l of roomLights) { l.color.copy(lc); l.intensity = roomBase; }
   flashlight.intensity = plan.mood === 'blackout' ? 11 : plan.mood === 'night' ? 5 : 0;
   gunScene.children[0].color.copy(lc); gunScene.children[0].intensity = 0.9 * Math.max(0.5, md.hemi || 1);
@@ -695,6 +697,12 @@ G.hurtPlayer = (dmg, src, proj) => {
 
 G.onEnemyKilled = (e, head, noScore) => {
   if (noScore) return;
+  // enemy log: first kill adds the entry, every skin you kill is recorded
+  const bl = profile.bestiary || (profile.bestiary = {});
+  const be = bl[e.type] || (bl[e.type] = { k: 0, s: {} });
+  be.k++; be.s[e.skinIdx || 0] = 1; touch();
+  if (be.k === 1 && !e.def.boss) toast(`NEW LOG ENTRY: ${e.def.name}`, '#80c0ff');
+  if (e.skin && e.skin.rare) { stat('goldKills'); popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, 0.8, 0)), 'GOLDEN! x5 CASH', '#ffd040'); }
   if (head) hitStop = 0.05; // tiny freeze-frame sells a headshot
   stats.kills++; if (head) stats.heads++;
   combo = now - lastKill < M.comboWindow ? Math.min(M.comboMax, combo + 1) : 1;
@@ -702,7 +710,7 @@ G.onEnemyKilled = (e, head, noScore) => {
   const pts = Math.round((e.st.score + (head ? 50 : 0)) * combo * M.score * D.score);
   runMaxCombo = Math.max(runMaxCombo, combo);
   const f = G.floorNum;
-  const cash = addCash((e.def.boss ? (e.def.mini ? 60 + f * 6 : 150 + f * 12) : Math.max(1, Math.round(e.st.score / 40))) * M.cash * D.cash);
+  const cash = addCash((e.def.boss ? (e.def.mini ? 60 + f * 6 : 150 + f * 12) : Math.max(1, Math.round(e.st.score / 40))) * M.cash * D.cash * (e.skin && e.skin.rare ? 5 : 1));
   runCash += cash;
   popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, -0.35, 0)), `$${cash}`, '#ffd040');
   stat('kills'); if (head) stat('heads'); if (cur().melee) stat('meleeKills');

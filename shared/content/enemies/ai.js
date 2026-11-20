@@ -5,6 +5,7 @@ import { BUILDERS } from './models.js';
 import { BossBrain } from '../bosses/bosses.js';
 import { rand, clamp, pick } from '../../engine/util.js';
 import * as TX from '../../engine/textures.js';
+import { skinsFor, rollSkin, applySkin } from './skins.js';
 
 const FLASH = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const CLOAK = new THREE.MeshBasicMaterial({ color: 0x8090a0, transparent: true, opacity: 0.12, depthWrite: false });
@@ -48,6 +49,11 @@ export class Enemy {
     this.flashT = 0; this.stagger = 0; this.aimAmt = 0; this.swingT = 0; this.crouch = 0; this.crouchTarget = 0;
     this.centerY = 1.15; this.shoulderY = 1.42;
     BUILDERS[mk](this, def.model);
+    // skin: alternate colours (golden ones are tougher and pay more)
+    this.skinIdx = opts.skin ?? rollSkin(def);
+    this.skin = skinsFor(def)[this.skinIdx];
+    applySkin(this, this.skin);
+    if (this.skin && this.skin.rare) { this.maxHp *= 1.5; this.hp = this.maxHp; }
     if (game.mod === 'bigheads' && this.head && this.head.userData.part === 'head') this.head.scale.multiplyScalar(1.9); // daily twist
     this.hover = this.traits.hover || 0;
     this.yOff = this.flyer && mk === 'human' ? -1.3 : 0; // jetpack humans: flight height is measured at the chest
