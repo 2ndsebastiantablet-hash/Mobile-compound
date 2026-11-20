@@ -38,7 +38,7 @@ export const PERKS = [
   { id: 'slowmo', name: 'BULLET TIME', cat: 'DEFENSE', rarity: 'rare', max: 2, desc: (l) => `Enemy projectiles move ${15 * l}% slower` },
   // ---- utility
   { id: 'reloadkill', name: 'RELOAD ON KILL', cat: 'UTILITY', rarity: 'common', max: 3, desc: (l) => `Kills put ${2 * l} rounds back in your gun` },
-  { id: 'combo', name: 'COMBO KING', cat: 'UTILITY', rarity: 'common', max: 2, desc: (l) => `Combo window +${1.5 * l}s, max combo +${4 * l}` },
+  { id: 'combo', name: 'COMBO KING', cat: 'UTILITY', rarity: 'common', max: 3, desc: (l) => `Combo window +${1.5 * l}s, max combo +${4 * l}` },
   { id: 'lucky', name: 'LUCKY CHARM', cat: 'UTILITY', rarity: 'rare', max: 2, desc: (l) => `Better weapon drops (${30 * l}% chance to upgrade rarity)` },
   { id: 'scavenger', name: 'SCAVENGER', cat: 'UTILITY', rarity: 'common', max: 2, desc: (l) => `Weapon drops ${60 * l}% more often` },
   { id: 'autoloader', name: 'AUTO-LOADER', cat: 'UTILITY', rarity: 'rare', max: 1, desc: () => 'Guns you are not holding reload themselves' },

@@ -1,6 +1,6 @@
 {
   "name": "overtime",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "private": true,
   "description": "OVERTIME: a retro on-rails office-tower shooter (mobile, PC, and PC free-roam versions).",
   "type": "module",

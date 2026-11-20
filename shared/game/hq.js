@@ -16,7 +16,7 @@ import { CHAR } from '../content/meta/characters.js';
 
 const $ = (id) => document.getElementById(id);
 const money = (n) => '$' + Math.round(n).toLocaleString('en-US');
-let tab = 'upgrades', hooks = {};
+let tab = 'upgrades', hooks = {}, awFilter = 'all';
 
 export function initHQ(h) { hooks = h; }
 export { money };
@@ -51,9 +51,10 @@ function render() {
     for (const g of found) {
       const lv = profile.weapons[g.id] || 0, maxed = lv >= WEAPON_MAX, price = weaponCost(g.rarity, lv), r = RARITY[g.rarity];
       const row = el('div', 'hq-row');
-      const pips = '■'.repeat(Math.min(lv, 5)) + '□'.repeat(Math.max(0, 5 - lv)) + ' ' + '<span style="color:#ffd040">' + '■'.repeat(Math.max(0, lv - 5)) + '</span>' + '□'.repeat(Math.min(5, WEAPON_MAX - Math.max(lv, 5)));
-      row.append(el('div', 'hq-info', `<b style="color:${r.color}">${g.name}</b> <small class="pips">${pips}</small><span>${g.desc}</span>`));
-      row.append(maxed ? el('div', 'hq-done', '★ LEGEND') : buyBtn(price, profile.cash >= price, () => { profile.weapons[g.id] = lv + 1; touch(); }));
+      const pips = Array.from({ length: WEAPON_MAX }, (_, i) => `<i class="${i < lv ? (i >= 5 ? 'g' : 'f') : ''}"></i>`).join('');
+      const tag = lv >= 10 ? ' <small style="color:#ffd860">★ LEGEND</small>' : lv >= 5 ? ' <small style="color:#9ad0ff">MASTERED</small>' : '';
+      row.append(el('div', 'hq-info', `<b style="color:${r.color}">${g.name}</b>${tag}<div class="pips">${pips}<small>LV ${lv}</small></div><span>${g.desc}</span>`));
+      row.append(maxed ? el('div', 'hq-done', 'MAXED') : buyBtn(price, profile.cash >= price, () => { profile.weapons[g.id] = lv + 1; touch(); }));
       box.append(row);
     }
     box.append(el('div', 'hq-note', `${found.length} / ${GUNS.length} weapons found`));
@@ -96,11 +97,25 @@ function render() {
     box.append(el('div', 'hq-note', 'Records are kept on this device. Online leaderboards come with the app store release.'));
   } else if (tab === 'achievements') {
     const got = ACHIEVEMENTS.filter((a) => profile.ach[a.id]).length;
-    box.append(el('div', 'hq-note', `${got} / ${ACHIEVEMENTS.length} unlocked`));
-    for (const a of ACHIEVEMENTS) {
+    const earned = ACHIEVEMENTS.filter((a) => profile.ach[a.id]).reduce((t, a) => t + a.reward, 0);
+    box.append(el('div', 'hq-note', `<b style="color:#f0c860">${got} / ${ACHIEVEMENTS.length} UNLOCKED</b> · ${money(earned)} EARNED FROM AWARDS`));
+    const bar = el('div', 'aw-bar'); bar.append(el('i')); bar.firstChild.style.width = `${(got / ACHIEVEMENTS.length) * 100}%`; box.append(bar);
+    const fl = el('div', 'aw-filter');
+    for (const [k, label] of [['all', 'ALL'], ['todo', 'IN PROGRESS'], ['done', 'UNLOCKED']]) {
+      const b = el('button', 'hq-buy' + (awFilter === k ? ' on' : ''), label);
+      b.addEventListener('click', (e) => { e.stopPropagation(); hooks.sfx.tap(); awFilter = k; render(); });
+      fl.append(b);
+    }
+    box.append(fl);
+    // in progress: closest to done first
+    let list = ACHIEVEMENTS.filter((a) => awFilter === 'all' || (awFilter === 'done') === !!profile.ach[a.id]);
+    if (awFilter === 'todo') list = list.slice().sort((a, b) => (b.prog ? b.prog(profile) / b.goal : 0) - (a.prog ? a.prog(profile) / a.goal : 0));
+    for (const a of list) {
       const done = !!profile.ach[a.id];
-      const row = el('div', 'hq-row' + (done ? '' : ' dim'));
-      row.append(el('div', 'hq-info', `<b>${done ? '★ ' : ''}${a.name}</b><span>${a.desc}</span>`));
+      const row = el('div', 'hq-row' + (done ? ' got' : ' dim'));
+      const p = !done && a.prog ? a.prog(profile) : null;
+      const pr = p != null ? `<small class="aw-prog">${p.toLocaleString('en-US')} / ${a.goal.toLocaleString('en-US')}</small><div class="aw-mini"><i style="width:${(p / a.goal) * 100}%"></i></div>` : '';
+      row.append(el('div', 'hq-info', `<b>${done ? '★ ' : ''}${a.name}</b><span>${a.desc}</span>${pr}`));
       row.append(el('div', 'hq-done', done ? 'DONE' : money(a.reward)));
       box.append(row);
     }

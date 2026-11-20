@@ -1,4 +1,7 @@
 // Achievements: test(profile, run) is checked after game events; reward is cash.
+// cat groups them in the AWARDS tab; prog(profile) (on the tiered ones) shows progress.
+import { DEFS } from '../enemies/roster.js';
+import { DAILY_MODS } from '../../game/modes.js';
 // profile.stats holds lifetime totals; run holds the current run/floor numbers.
 
 export const ACHIEVEMENTS = [
@@ -51,7 +54,9 @@ export const ACHIEVEMENTS = [
 const S = (k) => (p) => p.stats[k] || 0;
 const count = (o) => Object.keys(o || {}).length;
 const sumVals = (o) => Object.values(o || {}).reduce((a, b) => a + (b || 0), 0);
-const tiers = (prefix, get, rows) => rows.map(([n, name, desc, reward]) => ({ id: `${prefix}${n}`, name, desc, reward, test: (p, r, all) => get(p, r, all) >= n }));
+const tiers = (prefix, get, rows, perRun = false) => rows.map(([n, name, desc, reward]) => ({ id: `${prefix}${n}`, name, desc, reward, goal: n,
+  prog: perRun ? null : (p) => Math.min(n, Math.floor(get(p) || 0)), test: (p, r, all) => get(p, r, all) >= n }));
+const LOG_COUNT = Object.entries(DEFS).filter(([id, d]) => !d.boss && id !== 'pylon' && d.floors && d.model).length;
 
 ACHIEVEMENTS.push(
   ...tiers('k', S('kills'), [[500, 'HEADCOUNT REDUCTION', 'Kill 500 enemies', 250], [1000, 'MASS LAYOFFS', 'Kill 1,000 enemies', 400], [5000, 'HOSTILE WORKPLACE', 'Kill 5,000 enemies', 1200], [10000, 'DOWNSIZING EXPERT', 'Kill 10,000 enemies', 2500], [25000, 'THE AXE', 'Kill 25,000 enemies', 6000]]),
@@ -74,7 +79,7 @@ ACHIEVEMENTS.push(
   ...tiers('lr', (p) => count(p.lore), [[5, 'SNOOP', 'Find 5 memos', 150], [50, 'FILING CABINET', 'Find 50 memos', 1500], [80, 'THE WHOLE STORY', 'Find all 80 memos', 4000]]),
   ...tiers('dr', S('dailyRuns'), [[1, 'DAILY GRIND', 'Play a daily challenge', 100], [7, 'WEEKLY REPORT', 'Play 7 daily challenges', 500], [30, 'MONTHLY REVIEW', 'Play 30 daily challenges', 2000]]),
   ...tiers('dd', S('dailyDone'), [[1, 'DAILY DONE', 'Finish a daily challenge', 300], [10, 'ROUTINE', 'Finish 10 daily challenges', 1500]]),
-  ...tiers('tw', (p) => count(p.twists), [[5, 'FLEXIBLE', 'Finish 5 different daily twists', 500], [15, 'ADAPTABLE', 'Finish 15 different daily twists', 1500], [36, 'SEEN EVERY TWIST', 'Finish all 36 daily twists', 5000]]),
+  ...tiers('tw', (p) => count(p.twists), [[5, 'FLEXIBLE', 'Finish 5 different daily twists', 500], [15, 'ADAPTABLE', 'Finish 15 different daily twists', 1500], [DAILY_MODS.length, 'SEEN EVERY TWIST', `Finish all ${DAILY_MODS.length} daily twists`, 5000]]),
   ...tiers('rd', S('rushDone'), [[1, 'BACK TO BACK', 'Finish a boss rush', 1000], [5, 'RUSH HOUR', 'Finish 5 boss rushes', 3000]]),
   { id: 'rush15', name: 'EXPRESS ELEVATOR', desc: 'Finish a boss rush in under 15 minutes', reward: 1500, test: (p) => (p.stats.rushBest || 1e9) < 900 },
   { id: 'rush8', name: 'SPEEDRUNNER', desc: 'Finish a boss rush in under 8 minutes', reward: 4000, test: (p) => (p.stats.rushBest || 1e9) < 480 },
@@ -88,10 +93,10 @@ ACHIEVEMENTS.push(
   ...tiers('up', (p) => sumVals(p.upgrades), [[10, 'SELF IMPROVEMENT', 'Buy 10 upgrade levels', 300], [30, 'CONTINUING EDUCATION', 'Buy 30 upgrade levels', 1000], [55, 'OVERQUALIFIED', 'Buy 55 upgrade levels', 3000]]),
   ...tiers('lg', (p) => Object.values(p.weapons || {}).filter((l) => l >= 10).length, [[1, 'GOLD PLATED', 'Upgrade a weapon to level 10', 1000], [5, 'GOLDEN ARSENAL', 'Upgrade 5 weapons to level 10', 4000]]),
   ...tiers('al', (p) => sumVals(p.weapons), [[25, 'GUNSMITH', 'Buy 25 armory levels', 500], [100, 'MASTER ARMORER', 'Buy 100 armory levels', 2500]]),
-  ...tiers('lgb', (p) => count(p.bestiary), [[10, 'FIELD NOTES', 'Log 10 enemies', 200], [40, 'NATURALIST', 'Log 40 enemies', 800], [84, 'COMPLETE LOG', 'Log every enemy', 3000]]),
+  ...tiers('lgb', (p) => count(p.bestiary), [[10, 'FIELD NOTES', 'Log 10 enemies', 200], [40, 'NATURALIST', 'Log 40 enemies', 800], [LOG_COUNT, 'COMPLETE LOG', `Log all ${LOG_COUNT} enemies`, 3000]]),
   ...tiers('sk', (p) => Object.values(p.bestiary || {}).reduce((a, b) => a + count(b.s), 0), [[25, 'FASHION WEEK', 'Collect 25 enemy skins', 500], [100, 'WARDROBE', 'Collect 100 enemy skins', 2000]]),
-  ...tiers('cb', (p, r) => (r && r.maxCombo) || 0, [[12, 'ON A ROLL', 'Reach an x12 combo', 300], [16, 'UNSTOPPABLE', 'Reach an x16 combo', 600], [20, 'COMBO KING', 'Reach an x20 combo', 1200]]),
-  ...tiers('pr', (p, r) => (r && r.perkCount) || 0, [[12, 'PERKY', 'Have 12 perks in one run', 500], [16, 'LOADED', 'Have 16 perks in one run', 1000]]),
+  ...tiers('cb', (p, r) => (r && r.maxCombo) || 0, [[12, 'ON A ROLL', 'Reach an x12 combo', 300], [16, 'UNSTOPPABLE', 'Reach an x16 combo', 600], [20, 'COMBO KING', 'Reach an x20 combo (needs Combo King perk x3)', 1200]], true),
+  ...tiers('pr', (p, r) => (r && r.perkCount) || 0, [[12, 'PERKY', 'Have 12 perks in one run', 500], [16, 'LOADED', 'Have 16 perks in one run', 1000]], true),
   ...tiers('nd', S('noDmgFloors'), [[5, 'TEFLON', 'Clear 5 floors without taking damage', 600], [25, 'UNTOUCHABLE TEMP', 'Clear 25 floors without taking damage', 2500]]),
   ...tiers('fc', S('floors'), [[50, 'FIFTY FLIGHTS', 'Clear 50 floors in total', 300], [250, 'STAIRMASTER', 'Clear 250 floors in total', 1200], [1000, 'SKYSCRAPER', 'Clear 1,000 floors in total', 4000]]),
   ...tiers('dk', S('ducks'), [[25, 'DUCK AND COVER', 'Duck 25 times', 100], [250, 'LIMBO CHAMPION', 'Duck 250 times', 500]]),

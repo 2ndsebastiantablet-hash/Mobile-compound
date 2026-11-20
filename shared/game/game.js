@@ -1725,7 +1725,7 @@ function togglePause() {
   if (mode === 'title' || mode === 'floorclear' || mode === 'dead') return;
   paused = !paused;
   ui.pause.classList.toggle('hidden', !paused);
-  if (paused) $('pausePerks').innerHTML = `<div class="diffTag">DIFFICULTY: <span style="color:${D.color}">${D.name}</span></div>` + perkSummary();
+  if (paused) $('pausePerks').innerHTML = `<div class="diffTag">${MODE[runMode].name} · DIFFICULTY: <span style="color:${D.color}">${D.name}</span></div>` + (runMode === 'daily' && daily ? `<div class="diffTag" style="color:#60ff80">TODAY: ${daily.mod.name} · ${daily.mod.desc}</div>` : '') + perkSummary();
   setMusic(paused ? 'off' : mode === 'combat' ? 'combat' : 'calm');
 }
 
@@ -1900,7 +1900,7 @@ function setText(el, key, v) { if (hudCache[key] !== v) { hudCache[key] = v; el.
 function updateHud(force) {
   if (force) for (const k in hudCache) delete hudCache[k];
   setText(ui.floor, 'f', `FLOOR ${String(G.floorNum).padStart(2, '0')}`);
-  if (G.floor) setText(ui.area, 'a', runMode === 'rush' ? `BOSS ${rushIdx + 1}/10 · ${fmtTime(rushTime)}` : runMode === 'daily' && daily ? `DAILY ${G.floorNum - daily.start + 1}/8 · ${daily.mod.name}` : `AREA ${Math.min(G.roomIdx + 1, G.floor.rooms.length)}/${G.floor.rooms.length}`);
+  if (G.floor) setText(ui.area, 'a', runMode === 'rush' ? `BOSS ${rushIdx + 1}/10 · ${fmtTime(rushTime)}` : runMode === 'daily' && daily ? `DAILY ${G.floorNum - daily.start + 1}/8` : `AREA ${Math.min(G.roomIdx + 1, G.floor.rooms.length)}/${G.floor.rooms.length}`);
   setText(ui.score, 's', String(score).padStart(6, '0'));
   setText(ui.cash, 'cash', money(profile.cash));
   setText(ui.combo, 'c', combo > 1 && now - lastKill < M.comboWindow ? `x${combo} COMBO` : '');
@@ -2066,7 +2066,12 @@ function update(dt) {
   effects.updateMotes(G.camPos, dt, settings.gfx > 0);
   bossMsgT -= dt; immuneT -= dt;
   flushT -= dt; if (flushT <= 0) { flushT = 2; flushProfile(); }
-  achT -= dt; if (achT <= 0 && achQueue.length) showAch(achQueue.shift());
+  achT -= dt;
+  if (achT <= 0 && achQueue.length) {
+    // lots at once (e.g. an old profile meeting new achievements): one combined banner
+    if (achQueue.length > 3) { const n = achQueue.length, cash = achQueue.reduce((t, a) => t + a.reward, 0); achQueue.length = 0; showAch({ name: `${n} ACHIEVEMENTS`, desc: 'See them all at HQ > AWARDS', reward: cash }); }
+    else showAch(achQueue.shift());
+  }
   if (tutorial && !tutorial.done && mode === 'combat') tutorial.update(dt);
   if (PC && mouse) crosshair.style.transform = `translate(${mouse.x}px, ${mouse.y}px)`;
   if (PC && mouse && G.floor) {

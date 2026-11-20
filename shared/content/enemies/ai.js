@@ -113,6 +113,7 @@ export class Enemy {
     if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) this.applyMats(); }
     this.stagger = Math.max(0, this.stagger - dt * 4);
     this.kick = Math.max(0, (this.kick || 0) - dt * 1.6);
+    if (this.skin && this.skin.rare && Math.random() < dt * 8) g.fx.sparks(this.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(rand(Math.random, -0.3, 0.3), rand(Math.random, -0.5, 0.5), 0)), 1); // golden glitter
     this.swingT = Math.max(0, this.swingT - dt);
     if (this.burnT > 0) {
       this.burnT -= dt; this.burnTick = (this.burnTick || 0) - dt;

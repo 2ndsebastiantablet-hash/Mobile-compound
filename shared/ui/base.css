@@ -298,3 +298,14 @@ select.rp-in { width: auto; }
 .log-view { display: block; margin: 0 auto; width: 220px; height: 220px; image-rendering: pixelated; background: radial-gradient(circle, #2a2620, #12100c 70%); border: 3px solid #3a362e; }
 .log-skins { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin: 6px 0; }
 .log-skins .hq-buy { font-size: 15px; padding: 3px 8px; }
+.aw-bar { height: 10px; border: 2px solid #000; background: #2a2620; box-shadow: 0 0 0 2px #5a5446; margin: 2px 0 6px; }
+.aw-bar i { display: block; height: 100%; background: linear-gradient(#ffd860, #c89020); }
+.aw-filter { display: flex; gap: 4px; margin-bottom: 4px; } .aw-filter .hq-buy { flex: 1; font-size: 15px; padding: 3px 4px; }
+.aw-prog { color: #b8b0a0; }
+.aw-mini { height: 5px; background: #2a2620; margin-top: 2px; width: 100%; max-width: 220px; } .aw-mini i { display: block; height: 100%; background: #c89020; }
+.hq-row.got b { color: #ffd860; }
+.pips { display: flex; gap: 2px; align-items: center; margin: 2px 0; }
+.pips i { width: 9px; height: 9px; border: 1px solid #6a6458; background: #1a1814; }
+.pips i.f { background: #e8e0c8; } .pips i.g { background: #ffd040; border-color: #a08020; }
+.pips i:nth-child(5) { margin-right: 4px; }
+.pips small { margin-left: 6px; color: #b8b0a0; }

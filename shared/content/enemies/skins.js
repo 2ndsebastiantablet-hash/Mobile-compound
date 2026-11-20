@@ -5,22 +5,22 @@ import * as THREE from '../../vendor/three.module.min.js';
 
 const FAMILY_SKINS = {
   human: [
-    { id: 'night', name: 'NIGHT SHIFT', tint: [0.55, 0.62, 0.95] },
-    { id: 'friday', name: 'CASUAL FRIDAY', tint: [1.18, 0.92, 0.7] },
-    { id: 'burnout', name: 'BURNOUT', tint: [0.72, 0.72, 0.68], desat: 0.7 },
+    { id: 'night', name: 'NIGHT SHIFT', tint: [0.42, 0.52, 1.1] },
+    { id: 'friday', name: 'CASUAL FRIDAY', tint: [1.35, 0.85, 0.5] },
+    { id: 'burnout', name: 'BURNOUT', tint: [0.85, 0.82, 0.74], desat: 0.95 },
   ],
   robot: [
-    { id: 'rust', name: 'RUSTED', tint: [1.05, 0.66, 0.45] },
-    { id: 'arctic', name: 'ARCTIC', tint: [0.78, 0.97, 1.22] },
-    { id: 'stealth', name: 'STEALTH', tint: [0.36, 0.36, 0.42] },
+    { id: 'rust', name: 'RUSTED', tint: [1.2, 0.6, 0.32] },
+    { id: 'arctic', name: 'ARCTIC', tint: [0.75, 1.02, 1.45], desat: 0.4 },
+    { id: 'stealth', name: 'STEALTH', tint: [0.3, 0.3, 0.36] },
   ],
   mutant: [
-    { id: 'toxic', name: 'TOXIC', tint: [0.72, 1.25, 0.5] },
-    { id: 'pale', name: 'PALE', tint: [1.22, 1.16, 1.1], desat: 0.5 },
-    { id: 'bloody', name: 'BLOODY', tint: [1.22, 0.5, 0.48] },
+    { id: 'toxic', name: 'TOXIC', tint: [0.6, 1.4, 0.38] },
+    { id: 'pale', name: 'PALE', tint: [1.35, 1.3, 1.25], desat: 0.75 },
+    { id: 'bloody', name: 'BLOODY', tint: [1.4, 0.4, 0.36] },
   ],
 };
-export const GOLDEN = { id: 'golden', name: 'GOLDEN', tint: [1.45, 1.12, 0.38], emissive: 0x2a1800, rare: true };
+export const GOLDEN = { id: 'golden', name: 'GOLDEN', tint: [1.0, 0.8, 0.3], gold: true, emissive: 0x6a4a08, rare: true };
 
 export function familyOf(def) {
   const k = def.model.kind, st = def.model.style;
@@ -35,7 +35,7 @@ export function skinsFor(def) { return [{ id: 'std', name: 'STANDARD', tint: nul
 export function rollSkin(def, rng = Math.random, gold = 1) {
   if (def.boss || def.minion) return 0;
   const r = rng();
-  if (r < 0.02 * gold) return 4;
+  if (r < Math.min(0.45, 0.02 * gold)) return 4;
   if (r < 0.24) return 1 + Math.floor(rng() * 3);
   return 0;
 }
@@ -48,6 +48,7 @@ function skinMat(mat, skin) {
   const m = mat.clone();
   const c = m.color.clone();
   if (skin.desat) { const l = (c.r + c.g + c.b) / 3; c.lerp(new THREE.Color(l, l, l), skin.desat); }
+  if (skin.gold) { const l = Math.max(0.55, (c.r + c.g + c.b) / 3 + 0.35); c.setRGB(l, l, l); } // golden: brighten dark parts first so it reads as gold
   c.r *= skin.tint[0]; c.g *= skin.tint[1]; c.b *= skin.tint[2];
   m.color.copy(c);
   if (skin.emissive && m.emissive) m.emissive.set(skin.emissive);
