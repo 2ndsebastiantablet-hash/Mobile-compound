@@ -13,16 +13,35 @@ export const UPGRADES = [
   { id: 'backpack', name: 'BACKPACK', max: 1, base: 2500, grow: 1, desc: () => 'Carry 4 weapons instead of 3' },
   { id: 'luckystart', name: 'SIGNING BONUS', max: 1, base: 800, grow: 1, desc: () => 'Start every run with a random uncommon-or-better weapon' },
   { id: 'insurance', name: 'LIFE INSURANCE', max: 2, base: 1200, grow: 2.5, desc: (l) => `Revive ${l === 1 ? 'once' : 'twice'} per run with half health` },
+  { id: 'sharp', name: 'SHARPSHOOTER', max: 5, base: 160, grow: 1.6, desc: (l) => `Headshots deal +${10 * l}% damage` },
+  { id: 'trigger', name: 'TRIGGER DISCIPLINE', max: 5, base: 180, grow: 1.6, desc: (l) => `Fire ${4 * l}% faster with every weapon` },
+  { id: 'mags', name: 'BIGGER MAGS', max: 5, base: 140, grow: 1.55, desc: (l) => `+${8 * l}% magazine size` },
+  { id: 'coffee', name: 'BETTER COFFEE', max: 3, base: 200, grow: 1.8, desc: (l) => `Coffee breaks heal ${10 * l} more HP` },
+  { id: 'responder', name: 'FIRST RESPONDER', max: 3, base: 180, grow: 1.8, desc: (l) => `Medkits heal ${20 * l}% more` },
+  { id: 'scrapper', name: 'SCRAPPER', max: 3, base: 220, grow: 1.8, desc: (l) => `Enemies drop weapons ${15 * l}% more often` },
+  { id: 'reflexes', name: 'REFLEXES', max: 3, base: 200, grow: 1.8, desc: (l) => `Duck recovers ${15 * l}% faster` },
+  { id: 'momentum', name: 'MOMENTUM', max: 3, base: 220, grow: 1.8, desc: (l) => `Combos last ${0.5 * l}s longer` },
+  { id: 'orientation', name: 'ORIENTATION', max: 2, base: 900, grow: 2.2, desc: (l) => `Start every run with ${l} random perk${l > 1 ? 's' : ''}` },
+  { id: 'clover', name: 'FOUR-LEAF CLOVER', max: 3, base: 300, grow: 1.9, desc: (l) => `Luckier weapon drops (+${10 * l}% luck)` },
+  { id: 'goldmagnet', name: 'GOLD MAGNET', max: 3, base: 400, grow: 2, desc: (l) => `Golden enemies (5x cash) appear ${l + 1}x as often` },
 ];
 export const UPGRADE = Object.fromEntries(UPGRADES.map((u) => [u.id, u]));
 export const upgradeCost = (u, level) => Math.round(u.base * Math.pow(u.grow, level) / 10) * 10;
 
-// Weapon mastery bought in the Armory: +12% damage and +10% magazine per level,
-// level 5 also reloads 20% faster. Price scales with the weapon's rarity.
-export const WEAPON_MAX = 5;
+// Weapon mastery bought in the Armory, levels 1-10:
+//   1-5: +12% damage and +10% magazine each, level 5 reloads 20% faster ("MASTERED")
+//   6-10: +8% damage and +10% magazine each, level 8 reloads 30% faster,
+//   level 10 fires 10% faster and is gold plated ("LEGEND"). Price scales with rarity.
+export const WEAPON_MAX = 10;
+export const WEAPON_MASTER = 5;
 const RARITY_PRICE = { common: 80, uncommon: 120, rare: 180, epic: 260, legendary: 400 };
-export const weaponCost = (rarity, level) => Math.round(RARITY_PRICE[rarity] * Math.pow(1.7, level) / 10) * 10;
-export const weaponBonus = (level) => ({ dmg: 1 + 0.12 * level, mag: 1 + 0.1 * level, reload: level >= WEAPON_MAX ? 0.8 : 1 });
+export const weaponCost = (rarity, level) => Math.round(RARITY_PRICE[rarity] * Math.pow(1.7, Math.min(level, 5)) * Math.pow(1.35, Math.max(0, level - 5)) / 10) * 10;
+export const weaponBonus = (level) => ({
+  dmg: 1 + 0.12 * Math.min(level, 5) + 0.08 * Math.max(0, level - 5),
+  mag: 1 + 0.1 * level,
+  reload: level >= 8 ? 0.7 : level >= 5 ? 0.8 : 1,
+  cd: level >= 10 ? 0.9 : 1,
+});
 
 // Fold permanent upgrades into the run's modifier object (from perks.mods()).
 export function applyUpgrades(M, up) {
@@ -38,5 +57,16 @@ export function applyUpgrades(M, up) {
   M.maxGuns = 3 + L('backpack');
   M.luckyStart = L('luckystart') > 0;
   M.revives = L('insurance');
+  M.head *= 1 + 0.1 * L('sharp');
+  M.cd /= 1 + 0.04 * L('trigger');
+  M.mag *= 1 + 0.08 * L('mags');
+  M.coffee += 10 * L('coffee');
+  M.medkit *= 1 + 0.2 * L('responder');
+  M.scavenge *= 1 + 0.15 * L('scrapper');
+  M.duckCd = 1 - 0.15 * L('reflexes');
+  M.comboWindow += 0.5 * L('momentum');
+  M.startPerks = L('orientation');
+  M.luck += 0.1 * L('clover');
+  M.goldChance = 1 + L('goldmagnet');
   return M;
 }

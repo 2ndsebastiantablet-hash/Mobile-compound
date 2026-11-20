@@ -65,6 +65,18 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 - [x] **Records:** local leaderboards per mode at HQ > RECORDS
 - [ ] Online leaderboards: need a small server or service; planned with the store release (Phase 8)
 
+## Phase 6.5: Collection & extras (in progress, split over several prompts)
+- [x] Duller lights on bright floors (washed-out enemy heads)
+- [x] **Enemy skins:** 3 themed variants per enemy family + a rare GOLDEN skin (tougher, 5x cash)
+- [x] **Enemy log** (HQ > LOG): unlocked on first kill; lore, how it fights, stats, rotating 3D model with every skin you've killed; bosses too
+- [x] **11 new HQ upgrades** (22 total) and **Armory levels 6-10** (level 10 = gold plated LEGEND)
+- [x] **36 daily twists** (30 new), built from a knob system
+- [x] **124 new achievements** (161 total) with new tracked stats
+- [x] **50 new memos** (80 total)
+- [ ] **Stand weapon** (golden tier): a fighting spirit that cancels enemy attacks with a finger laser, lucky, rapid punches, super speed
+- [ ] **Requiem enemies:** rare, stronger versions with new abilities, only in a new Ultra Hard mode
+- [ ] **Time weapon** replacing The Remote: rewinds time on demand and rearranges the whole room each time
+
 **🏁 MILESTONE: BETA.** Gameplay feature complete (audio still to come). Wider testing and store preparation start.
 
 ## Phase 7: PC Free Roam (3–5 sessions · weeks 7–10)

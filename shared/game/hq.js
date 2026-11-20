@@ -45,15 +45,15 @@ function render() {
       box.append(row);
     }
   } else if (tab === 'armory') {
-    box.append(el('div', 'hq-note', 'Upgrade weapons you have found: +12% damage and +10% magazine per level. Level 5 also reloads 20% faster.'));
+    box.append(el('div', 'hq-note', 'Upgrade weapons you have found, up to level 10. Levels 1-5: +12% damage and +10% magazine each, level 5 reloads 20% faster (MASTERED). Levels 6-10: +8% damage and +10% magazine each, level 8 reloads 30% faster, level 10 fires 10% faster and is GOLD PLATED (LEGEND).'));
     const found = GUNS.filter((g) => profile.found[g.id]);
     if (!found.length) box.append(el('div', 'hq-note', 'Find weapons during runs to upgrade them here.'));
     for (const g of found) {
       const lv = profile.weapons[g.id] || 0, maxed = lv >= WEAPON_MAX, price = weaponCost(g.rarity, lv), r = RARITY[g.rarity];
       const row = el('div', 'hq-row');
-      const pips = '■'.repeat(lv) + '□'.repeat(WEAPON_MAX - lv);
+      const pips = '■'.repeat(Math.min(lv, 5)) + '□'.repeat(Math.max(0, 5 - lv)) + ' ' + '<span style="color:#ffd040">' + '■'.repeat(Math.max(0, lv - 5)) + '</span>' + '□'.repeat(Math.min(5, WEAPON_MAX - Math.max(lv, 5)));
       row.append(el('div', 'hq-info', `<b style="color:${r.color}">${g.name}</b> <small class="pips">${pips}</small><span>${g.desc}</span>`));
-      row.append(maxed ? el('div', 'hq-done', 'MASTERED') : buyBtn(price, profile.cash >= price, () => { profile.weapons[g.id] = lv + 1; touch(); }));
+      row.append(maxed ? el('div', 'hq-done', '★ LEGEND') : buyBtn(price, profile.cash >= price, () => { profile.weapons[g.id] = lv + 1; touch(); }));
       box.append(row);
     }
     box.append(el('div', 'hq-note', `${found.length} / ${GUNS.length} weapons found`));

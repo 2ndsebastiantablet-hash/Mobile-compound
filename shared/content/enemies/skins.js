@@ -32,10 +32,10 @@ export function familyOf(def) {
 export function skinsFor(def) { return [{ id: 'std', name: 'STANDARD', tint: null }, ...FAMILY_SKINS[familyOf(def)], GOLDEN]; }
 
 // which skin a newly spawned enemy wears (76% standard, 22% one of the three variants, 2% golden)
-export function rollSkin(def, rng = Math.random) {
+export function rollSkin(def, rng = Math.random, gold = 1) {
   if (def.boss || def.minion) return 0;
   const r = rng();
-  if (r < 0.02) return 4;
+  if (r < 0.02 * gold) return 4;
   if (r < 0.24) return 1 + Math.floor(rng() * 3);
   return 0;
 }

@@ -211,6 +211,13 @@ function buildMelee(def, withArm) {
   return { g, tip, melee: true, style };
 }
 
+// level-10 armory weapons are gold plated: swap every gun material (not hands/sleeves) for gold
+export function goldPlate(group) {
+  const M = mats();
+  const keep = new Set([M.skin, M.sleeve, M.cuff]);
+  group.traverse((o) => { if (o.isMesh && !keep.has(o.material) && !o.material.isMeshBasicMaterial && !o.material.transparent) o.material = M.gold; });
+}
+
 // tint the player's sleeve (each employee has their own colour)
 export function setSleeve(hex) { mats().sleeve.color.set(hex).multiplyScalar(1 / 0.82); }
 

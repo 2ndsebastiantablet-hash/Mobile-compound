@@ -36,12 +36,66 @@ export const ACHIEVEMENTS = [
   // collecting
   { id: 'perks8', name: 'FULL BENEFITS', desc: 'Have 8 perks in one run', reward: 300, test: (p, r) => r && r.perkCount >= 8 },
   { id: 'guns10', name: 'COLLECTOR', desc: 'Find 10 different weapons', reward: 200, test: (p) => Object.keys(p.found).length >= 10 },
-  { id: 'guns40', name: 'ARMORY', desc: 'Find all 40 weapons', reward: 1500, test: (p) => Object.keys(p.found).length >= 40 },
+  { id: 'guns40', name: 'ARMORY', desc: 'Find all 41 weapons', reward: 1500, test: (p) => Object.keys(p.found).length >= 41 },
   { id: 'golden', name: 'GOLDEN TICKET', desc: 'Find the Golden Gun', reward: 300, test: (p) => !!p.found.golden },
   { id: 'master', name: 'MASTERY', desc: 'Upgrade a weapon to level 5', reward: 300, test: (p) => Object.values(p.weapons).some((l) => l >= 5) },
   { id: 'bestiary', name: 'FIELD GUIDE', desc: 'Encounter 50 enemy types', reward: 400, test: (p) => p.stats.typesSeen >= 50 },
   { id: 'lore1', name: 'READING MATERIAL', desc: 'Find a memo', reward: 50, test: (p) => Object.keys(p.lore || {}).length >= 1 },
   { id: 'lore15', name: 'OFFICE GOSSIP', desc: 'Find 15 memos', reward: 600, test: (p) => Object.keys(p.lore || {}).length >= 15 },
-  { id: 'lore30', name: 'WHISTLEBLOWER', desc: 'Find all 30 memos', reward: 2000, test: (p) => Object.keys(p.lore || {}).length >= 30 },
+  { id: 'lore30', name: 'WHISTLEBLOWER', desc: 'Find 30 memos', reward: 2000, test: (p) => Object.keys(p.lore || {}).length >= 30 },
   { id: 'staff', name: 'FULL STAFF', desc: 'Unlock every employee', reward: 1000, test: (p, r, allChars) => allChars && allChars() },
 ];
+
+// ---------------------------------------------------------------- the big list (phase 6.5)
+// Tiered achievements generated from tables: [id, name, desc, threshold, reward]
+const S = (k) => (p) => p.stats[k] || 0;
+const count = (o) => Object.keys(o || {}).length;
+const sumVals = (o) => Object.values(o || {}).reduce((a, b) => a + (b || 0), 0);
+const tiers = (prefix, get, rows) => rows.map(([n, name, desc, reward]) => ({ id: `${prefix}${n}`, name, desc, reward, test: (p, r, all) => get(p, r, all) >= n }));
+
+ACHIEVEMENTS.push(
+  ...tiers('k', S('kills'), [[500, 'HEADCOUNT REDUCTION', 'Kill 500 enemies', 250], [1000, 'MASS LAYOFFS', 'Kill 1,000 enemies', 400], [5000, 'HOSTILE WORKPLACE', 'Kill 5,000 enemies', 1200], [10000, 'DOWNSIZING EXPERT', 'Kill 10,000 enemies', 2500], [25000, 'THE AXE', 'Kill 25,000 enemies', 6000]]),
+  ...tiers('hs', S('heads'), [[25, 'NOGGIN', 'Land 25 headshot kills', 100], [250, 'DOME INSPECTOR', 'Land 250 headshot kills', 400], [500, 'HEAD OF DEPARTMENT', 'Land 500 headshot kills', 800], [1000, 'BRAIN DRAIN', 'Land 1,000 headshot kills', 1500], [2500, 'HEADHUNTER LEGEND', 'Land 2,500 headshot kills', 3500]]),
+  ...tiers('or', S('orbs'), [[25, 'SPAM FILTER', 'Shoot down 25 projectiles', 100], [250, 'REPLY ALL: NO', 'Shoot down 250 projectiles', 400], [500, 'UNSUBSCRIBE', 'Shoot down 500 projectiles', 800], [1000, 'INBOX INFINITY', 'Shoot down 1,000 projectiles', 1500]]),
+  ...tiers('ml', S('meleeKills'), [[10, 'PERSONAL TOUCH', 'Get 10 melee kills', 100], [250, 'FACE TO FACE', 'Get 250 melee kills', 600], [500, 'HANDS-ON MANAGER', 'Get 500 melee kills', 1200], [1000, 'CLOSE PERSONAL FRIEND', 'Get 1,000 melee kills', 2500]]),
+  ...tiers('bk', S('bossKills'), [[10, 'BOARD SHAKEUP', 'Defeat 10 bosses', 1000], [25, 'C-SUITE CLEANER', 'Defeat 25 bosses', 2500], [50, 'BOSS OF BOSSES', 'Defeat 50 bosses', 5000]]),
+  ...tiers('mk', S('miniKills'), [[5, 'MIDDLE OUT', 'Defeat 5 mini bosses', 300], [25, 'SUPERVISOR SLAYER', 'Defeat 25 mini bosses', 1200], [50, 'MANAGEMENT REMOVED', 'Defeat 50 mini bosses', 2500]]),
+  ...tiers('fl', S('maxFloor'), [[15, 'HALFWAY TO HALFWAY', 'Reach floor 15', 300], [25, 'HALFWAY THERE', 'Reach floor 25', 500], [35, 'THIN AIR', 'Reach floor 35', 900], [45, 'PENTHOUSE VIEW', 'Reach floor 45', 1400]]),
+  ...tiers('rn', S('runs'), [[5, 'REGULAR', 'Start 5 runs', 100], [10, 'COMMITTED', 'Start 10 runs', 200], [25, 'LIFER', 'Start 25 runs', 500], [50, 'CAREER EMPLOYEE', 'Start 50 runs', 1000], [100, 'EMPLOYEE OF THE CENTURY', 'Start 100 runs', 2500]]),
+  ...tiers('er', S('earned'), [[1000, 'FIRST PAYCHECK', 'Earn $1,000 in total', 100], [10000, 'RAISE', 'Earn $10,000 in total', 400], [50000, 'BONUS SEASON', 'Earn $50,000 in total', 1000], [100000, 'SIX FIGURES', 'Earn $100,000 in total', 2000], [250000, 'GOLDEN PARACHUTE', 'Earn $250,000 in total', 4000], [1000000, 'MILLIONAIRE TEMP', 'Earn $1,000,000 in total', 10000]]),
+  ...tiers('sp', S('spent'), [[1000, 'COMPANY CARD', 'Spend $1,000 at HQ', 100], [10000, 'EXPENSE REPORT', 'Spend $10,000 at HQ', 500], [50000, 'BUDGET OVERRUN', 'Spend $50,000 at HQ', 1500], [100000, 'CORPORATE WASTE', 'Spend $100,000 at HQ', 3000]]),
+  ...tiers('pk', S('perksTaken'), [[25, 'BENEFITS PACKAGE', 'Take 25 perks', 200], [100, 'PERK HOARDER', 'Take 100 perks', 600], [250, 'TOTAL COMPENSATION', 'Take 250 perks', 1500]]),
+  ...tiers('gf', (p) => count(p.found), [[5, 'SAMPLER', 'Find 5 different weapons', 100], [20, 'GUN NUT', 'Find 20 different weapons', 500], [30, 'QUARTERMASTER', 'Find 30 different weapons', 1000]]),
+  ...tiers('ts', S('typesSeen'), [[10, 'NEW FACES', 'Encounter 10 enemy types', 100], [25, 'NETWORKING', 'Encounter 25 enemy types', 300], [75, 'SEEN IT ALL', 'Encounter 75 enemy types', 1200]]),
+  ...tiers('pb', S('propsBroken'), [[10, 'CLUMSY', 'Break 10 props', 100], [100, 'BULL IN AN OFFICE', 'Break 100 props', 400], [500, 'RENOVATION', 'Break 500 props', 1200], [1000, 'DEMOLITION CREW', 'Break 1,000 props', 2500]]),
+  ...tiers('wb', S('windowsBroken'), [[5, 'FRESH AIR', 'Shatter 5 windows', 100], [50, 'DRAFTY', 'Shatter 50 windows', 400], [200, 'OPEN PLAN', 'Shatter 200 windows', 1000]]),
+  ...tiers('ff', S('friendlyKills'), [[1, 'OOPS', 'Make an enemy kill another enemy', 150], [25, 'OFFICE POLITICS', 'Make enemies kill each other 25 times', 600], [100, 'DIVIDE AND CONQUER', 'Make enemies kill each other 100 times', 1500]]),
+  ...tiers('gk', S('goldKills'), [[1, 'STRUCK GOLD', 'Kill a golden enemy', 200], [10, 'PROSPECTOR', 'Kill 10 golden enemies', 800], [50, 'GOLD STANDARD', 'Kill 50 golden enemies', 2500]]),
+  ...tiers('lr', (p) => count(p.lore), [[5, 'SNOOP', 'Find 5 memos', 150], [50, 'FILING CABINET', 'Find 50 memos', 1500], [80, 'THE WHOLE STORY', 'Find all 80 memos', 4000]]),
+  ...tiers('dr', S('dailyRuns'), [[1, 'DAILY GRIND', 'Play a daily challenge', 100], [7, 'WEEKLY REPORT', 'Play 7 daily challenges', 500], [30, 'MONTHLY REVIEW', 'Play 30 daily challenges', 2000]]),
+  ...tiers('dd', S('dailyDone'), [[1, 'DAILY DONE', 'Finish a daily challenge', 300], [10, 'ROUTINE', 'Finish 10 daily challenges', 1500]]),
+  ...tiers('tw', (p) => count(p.twists), [[5, 'FLEXIBLE', 'Finish 5 different daily twists', 500], [15, 'ADAPTABLE', 'Finish 15 different daily twists', 1500], [36, 'SEEN EVERY TWIST', 'Finish all 36 daily twists', 5000]]),
+  ...tiers('rd', S('rushDone'), [[1, 'BACK TO BACK', 'Finish a boss rush', 1000], [5, 'RUSH HOUR', 'Finish 5 boss rushes', 3000]]),
+  { id: 'rush15', name: 'EXPRESS ELEVATOR', desc: 'Finish a boss rush in under 15 minutes', reward: 1500, test: (p) => (p.stats.rushBest || 1e9) < 900 },
+  { id: 'rush8', name: 'SPEEDRUNNER', desc: 'Finish a boss rush in under 8 minutes', reward: 4000, test: (p) => (p.stats.rushBest || 1e9) < 480 },
+  ...tiers('en', S('endlessFloor'), [[60, 'OVERTIME AFTER OVERTIME', 'Reach floor 60 in endless', 1500], [75, 'NO WAY DOWN', 'Reach floor 75 in endless', 3000], [100, 'FLOOR 100', 'Reach floor 100 in endless', 8000]]),
+  { id: 'wineasy', name: 'TRAINEE', desc: 'Beat floor 50 on Easy', reward: 1000, test: (p) => (p.stats.wind_0 || 0) >= 1 },
+  { id: 'winmed', name: 'FULL-TIME', desc: 'Beat floor 50 on Medium', reward: 2000, test: (p) => (p.stats.wind_1 || 0) >= 1 },
+  { id: 'winhard', name: 'SENIOR PARTNER', desc: 'Beat floor 50 on Hard', reward: 4000, test: (p) => (p.stats.wind_2 || 0) >= 1 },
+  { id: 'winxhard', name: 'LEGENDARY TEMP', desc: 'Beat floor 50 on Extra Hard', reward: 10000, test: (p) => (p.stats.wind_3 || 0) >= 1 },
+  ...[['temp', 'TEMP TO PERM'], ['guard', 'NIGHT WATCH'], ['intern', 'EXCEEDS EXPECTATIONS'], ['janitor', 'CLEAN SWEEP'], ['ittech', 'TURNED IT OFF'], ['exec', 'FAST TRACK'], ['contractor', 'CONTRACT COMPLETE'], ['heir', 'INHERITANCE']]
+    .map(([c, name]) => ({ id: 'win_' + c, name, desc: `Beat floor 50 as ${c === 'temp' ? 'The Temp' : c === 'guard' ? 'the Night Guard' : c === 'intern' ? 'The Intern' : c === 'janitor' ? 'The Janitor' : c === 'ittech' ? 'the IT Technician' : c === 'exec' ? 'the Junior Executive' : c === 'contractor' ? 'The Contractor' : "the Chairman's Heir"}`, reward: 1500, test: (p) => (p.stats['win_' + c] || 0) >= 1 })),
+  ...tiers('up', (p) => sumVals(p.upgrades), [[10, 'SELF IMPROVEMENT', 'Buy 10 upgrade levels', 300], [30, 'CONTINUING EDUCATION', 'Buy 30 upgrade levels', 1000], [55, 'OVERQUALIFIED', 'Buy 55 upgrade levels', 3000]]),
+  ...tiers('lg', (p) => Object.values(p.weapons || {}).filter((l) => l >= 10).length, [[1, 'GOLD PLATED', 'Upgrade a weapon to level 10', 1000], [5, 'GOLDEN ARSENAL', 'Upgrade 5 weapons to level 10', 4000]]),
+  ...tiers('al', (p) => sumVals(p.weapons), [[25, 'GUNSMITH', 'Buy 25 armory levels', 500], [100, 'MASTER ARMORER', 'Buy 100 armory levels', 2500]]),
+  ...tiers('lgb', (p) => count(p.bestiary), [[10, 'FIELD NOTES', 'Log 10 enemies', 200], [40, 'NATURALIST', 'Log 40 enemies', 800], [84, 'COMPLETE LOG', 'Log every enemy', 3000]]),
+  ...tiers('sk', (p) => Object.values(p.bestiary || {}).reduce((a, b) => a + count(b.s), 0), [[25, 'FASHION WEEK', 'Collect 25 enemy skins', 500], [100, 'WARDROBE', 'Collect 100 enemy skins', 2000]]),
+  ...tiers('cb', (p, r) => (r && r.maxCombo) || 0, [[12, 'ON A ROLL', 'Reach an x12 combo', 300], [16, 'UNSTOPPABLE', 'Reach an x16 combo', 600], [20, 'COMBO KING', 'Reach an x20 combo', 1200]]),
+  ...tiers('pr', (p, r) => (r && r.perkCount) || 0, [[12, 'PERKY', 'Have 12 perks in one run', 500], [16, 'LOADED', 'Have 16 perks in one run', 1000]]),
+  ...tiers('nd', S('noDmgFloors'), [[5, 'TEFLON', 'Clear 5 floors without taking damage', 600], [25, 'UNTOUCHABLE TEMP', 'Clear 25 floors without taking damage', 2500]]),
+  ...tiers('fc', S('floors'), [[50, 'FIFTY FLIGHTS', 'Clear 50 floors in total', 300], [250, 'STAIRMASTER', 'Clear 250 floors in total', 1200], [1000, 'SKYSCRAPER', 'Clear 1,000 floors in total', 4000]]),
+  ...tiers('dk', S('ducks'), [[25, 'DUCK AND COVER', 'Duck 25 times', 100], [250, 'LIMBO CHAMPION', 'Duck 250 times', 500]]),
+  ...tiers('rm', S('remoteUses'), [[10, 'CHANNEL SURFER', 'Use The Remote 10 times', 300], [100, 'COUCH POTATO', 'Use The Remote 100 times', 1000]]),
+  ...tiers('bh', S('blackholes'), [[10, 'EVENT HORIZON', 'Open 10 black holes', 600]]),
+  ...tiers('mdk', S('medkits'), [[25, 'BAND-AID', 'Pick up 25 medkits', 200], [100, 'FREQUENT FLYER', 'Pick up 100 medkits', 800]]),
+);
