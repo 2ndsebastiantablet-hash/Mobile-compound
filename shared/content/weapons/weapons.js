@@ -101,9 +101,11 @@ export const GUNS = [
     m: { len: 0.3, h: 0.12, col: 'dark', blen: 0.16, bt: 0.08, tank: true } },
   { id: 'blackhole', name: 'BLACK HOLE GUN', short: 'BLACKHOLE', rarity: 'legendary', desc: 'Collapses a singularity that drags enemies in.', mag: 1, reload: 3, cd: 0.4, dmg: 16, explode: 2.8, pull: true, tracer: 0xa040ff, sound: 'rail', kick: 2.6,
     m: { len: 0.34, h: 0.14, col: 'dark', blen: 0.12, bt: 0.1, coil: 'purple', glow: 'purple', w: 0.12 } },
-  // not a gun: a remote control for reality (see shared/game/remote.js)
-  { id: 'remote', name: 'THE REMOTE', short: 'REMOTE', rarity: 'legendary', desc: 'Not a gun. Power things off, pause and rewind time, edit enemies.', remote: true, mag: 1, reload: 0, cd: 0.2, dmg: 0, sound: 'tap', kick: 0,
-    m: { remote: true } },
+  // not guns (see shared/game/spirit.js and the Golden Watch in game.js). The Remote (remote.js) is retired.
+  { id: 'spirit', name: 'GRAVEYARD SHIFT', short: 'SPIRIT', rarity: 'legendary', desc: 'A fighting spirit: punch barrages, a finger laser that cancels attacks, luck, and OVERDRIVE.', spirit: true, mag: 1, reload: 0, cd: 0.85, dmg: 0.75, sound: 'slash', kick: 0,
+    m: { spirit: true } },
+  { id: 'watch', name: 'THE GOLDEN WATCH', short: 'WATCH', rarity: 'legendary', desc: 'Turns time back a few seconds. The room never comes back the same.', watch: true, mag: 1, reload: 0, cd: 0.3, dmg: 0, sound: 'tap', kick: 0,
+    m: { watch: true } },
 ];
 export const GUN = Object.fromEntries(GUNS.map((g) => [g.id, g]));
 for (const g of GUNS) { if (g.melee) { g.mag = 0; g.reload = 0; } g.pellets ||= 1; g.spread ||= 0; g.pierce ||= 0; g.headMult ||= 3; g.short ||= g.name; }
@@ -232,6 +234,25 @@ export function setSleeve(hex) { mats().sleeve.color.set(hex).multiplyScalar(1 /
 
 export function buildGunModel(def, withArm = true) {
   if (def.melee) return buildMelee(def, withArm);
+  if (def.watch) {
+    // a gold pocket watch held up in the hand
+    const M = mats(), g = new THREE.Group();
+    part(g, 0.2, 0.2, 0.04, M.gold, 0, 0.1, -0.12);
+    part(g, 0.16, 0.16, 0.012, M.white, 0, 0.1, -0.096); // clock face, toward you
+    const hand1 = part(g, 0.012, 0.07, 0.006, M.dark, 0, 0.12, -0.088); const hand2 = part(g, 0.05, 0.01, 0.006, M.dark, 0.02, 0.1, -0.088);
+    for (let k = 0; k < 12; k++) { const a2 = (k / 12) * Math.PI * 2; part(g, 0.01, 0.01, 0.004, M.dark, Math.sin(a2) * 0.065, 0.1 + Math.cos(a2) * 0.065, -0.089); }
+    g.rotation.x = 0.35;
+    part(g, 0.04, 0.04, 0.04, M.gold, 0, 0.22, -0.12);
+    if (withArm) { part(g, 0.1, 0.1, 0.12, M.skin, 0, -0.02, -0.06); part(g, 0.13, 0.13, 0.5, M.sleeve, 0.02, -0.12, 0.26, -0.35); }
+    return { g, tip: new THREE.Vector3(0, 0.1, -0.2), hands: [hand1, hand2] };
+  }
+  if (def.spirit) {
+    // the player's own fist, glowing with the spirit's light (the spirit itself floats beside you)
+    const M = mats(), g = new THREE.Group();
+    part(g, 0.12, 0.12, 0.14, M.skin, 0, 0, -0.04); part(g, 0.13, 0.13, 0.04, M.gcyan, 0, 0, -0.12);
+    if (withArm) part(g, 0.13, 0.13, 0.5, M.sleeve, 0.02, -0.08, 0.28, -0.35);
+    return { g, tip: new THREE.Vector3(0, 0, -0.2) };
+  }
   if (def.remote) {
     // a chunky TV remote (the on-screen 2D remote is what you actually use)
     const M = mats(), g = new THREE.Group();
@@ -279,6 +300,7 @@ export function buildGunModel(def, withArm = true) {
 // How fast the aim moves with each weapon on PC (1 = normal). Heavy guns swing slower.
 const AIM_SPEED = {
   pistol: 1.12, stapler: 1.12, baton: 1.12, flaregun: 1.1, seeker: 1.1,
+  spirit: 1.25, watch: 1.1,
   revolver: 1, smg: 1, burst: 1, nailgun: 1, akimbo: 0.95, leech: 1, golden: 1, crossbow: 0.95, cryo: 0.95, plasmablade: 1, katana: 1, slugger: 0.95,
   shotgun: 0.85, dbarrel: 0.85, rifle: 0.88, tesla: 0.85, laserrifle: 0.88, shockgun: 0.85, blunderbuss: 0.82, shredgun: 0.85, coffeecannon: 0.85, fireaxe: 0.82, harpoon: 0.82, grenade: 0.82,
   sniper: 0.75, flamer: 0.72, cannon: 0.7, railgun: 0.72, plasmacannon: 0.7, rocketpod: 0.68, blackhole: 0.7, chainsaw: 0.68,

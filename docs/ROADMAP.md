@@ -65,7 +65,7 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 - [x] **Records:** local leaderboards per mode at HQ > RECORDS
 - [ ] Online leaderboards: need a small server or service; planned with the store release (Phase 8)
 
-## Phase 6.5: Collection & extras (in progress, split over several prompts)
+## Phase 6.5: Collection & extras ✅ DONE (v0.14–v0.16)
 - [x] Duller lights on bright floors (washed-out enemy heads)
 - [x] **Enemy skins:** 3 themed variants per enemy family + a rare GOLDEN skin (tougher, 5x cash)
 - [x] **Enemy log** (HQ > LOG): unlocked on first kill; lore, how it fights, stats, rotating 3D model with every skin you've killed; bosses too
@@ -73,10 +73,10 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 - [x] **36 daily twists** (30 new), built from a knob system
 - [x] **124 new achievements** (161 total) with new tracked stats
 - [x] **50 new memos** (80 total)
-- [ ] **Stand weapon** (golden tier): a fighting spirit that cancels enemy attacks with a finger laser, lucky, rapid punches, super speed
+- [x] **GRAVEYARD SHIFT** (golden tier fighting spirit): punch barrages, attack-cancelling finger laser, luck, OVERDRIVE ultimate
 - [x] **Requiem enemies** (Extra Hard only): rare, 2.4x health, harder hits, dark violet with a crown of light, two of 12 extra abilities (Blink, Regeneration, Mirror, Fury, Legion, Death Nova, Echo Shots, Haste, Phasing, War Cry, Ironclad, Broodmother); 4x cash, 3x score
 - [x] **Mutations** (Extra Hard only): 30 mutations replace perks between floors; each has an upside and a listed downside and recolours your arms
-- [ ] **Time weapon** replacing The Remote: rewinds time on demand and rearranges the whole room each time
+- [x] **THE GOLDEN WATCH** replaces The Remote: rewinds ~4s on demand and rebuilds the room as another version each time
 
 **🏁 MILESTONE: BETA.** Gameplay feature complete (audio still to come). Wider testing and store preparation start.
 

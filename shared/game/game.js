@@ -4,6 +4,7 @@ import { Enemy, Projectile, REQUIEM_ABILITIES } from '../content/enemies/ai.js';
 import { DEFS, rosterFor, isFlyer, isMelee } from '../content/enemies/roster.js';
 import { bossFor, bossKindFor, BOSS_LIST } from '../content/bosses/bosses.js';
 import { initDev, devOn, devTick, devOpen, refreshDevUi } from './dev.js';
+import { initSpirit, spiritUse, spiritUpdate, spiritOverdrive, spiritOverdriveStart, spiritGauge, spiritFill } from './spirit.js';
 import { initRemote, remoteUse, remoteUpdate, remoteSettle, showRemote, remoteFrozen, remoteRewinding, press as remotePress, remoteButtonAt } from './remote.js';
 import { Post } from '../engine/post.js';
 import { Effects } from '../engine/effects.js';
@@ -206,8 +207,9 @@ function clearFloor() {
   G.floor = null;
 }
 
-function loadFloor(n, variant) {
-  clearFloor();
+// keep = rebuild only the building (enemies, shots and pickups stay): used by The Golden Watch
+function loadFloor(n, variant, keep = false) {
+  if (keep) { if (G.floor) scene.remove(G.floor.group); flying.length = 0; } else clearFloor();
   G.floorNum = n;
   G.diff = n <= 20 ? n : 20 + (n - 20) * 0.85; // balance: late floors were too easy with a full perk set
   G.variant = variant;
@@ -231,6 +233,7 @@ function loadFloor(n, variant) {
   flashlight.intensity = plan.mood === 'blackout' ? 11 : plan.mood === 'night' ? 5 : 0;
   gunScene.children[0].color.copy(lc); gunScene.children[0].intensity = 0.9 * Math.max(0.5, md.hemi || 1);
   post.grade(GRADES[plan.mood] || GRADES.normal);
+  if (keep) return;
   setRoom(0);
   setLights(f.rooms[0], f.rooms[0], 0);
 }
@@ -711,6 +714,7 @@ function causeOf(src, proj) {
 G.hurtPlayer = (dmg, src, proj) => {
   if (!G.combatActive || mode !== 'combat') return;
   if (devOn('god')) { sfx.hurt(); return; }
+  if (cur().spirit && Math.random() < 0.15) { popText(G.camPos.clone().add(new THREE.Vector3(0, -0.2, -1.2)), 'LUCKY!', '#80ffff'); return; } // the spirit's luck
   if (M.dodge && Math.random() < M.dodge) { popText(G.camPos.clone().add(new THREE.Vector3(0, -0.2, -1.2)), 'PHASED', '#a0b0ff'); return; } // Phase Skin
   if (M.thorns && src && !proj && src.alive && src.damage) src.damage(M.thorns, 'body', src.centerWorld(new THREE.Vector3())); // Spines
   if (M.acidBlood) G.splashEnemies(G.camPos, 2.6, M.acidBlood); // Acid Blood
@@ -770,7 +774,7 @@ G.onEnemyKilled = (e, head, noScore) => {
   if (Math.random() < gunChance) {
     const minR = e.def.boss ? (e.def.mini ? 'uncommon' : 'rare') : null, have = P.inv.map((s) => s.id);
     let id = rollGun(G.floorNum, Math.random, have, minR);
-    if (id && Math.random() < M.luck) { // Lucky Charm: roll again, keep the rarer one
+    if (id && Math.random() < M.luck + (cur().spirit ? 0.4 : 0)) { // Lucky Charm: roll again, keep the rarer one
       const order = Object.keys(RARITY), id2 = rollGun(G.floorNum, Math.random, have, minR);
       if (id2 && order.indexOf(GUN[id2].rarity) > order.indexOf(GUN[id].rarity)) id = id2;
     }
@@ -1310,6 +1314,8 @@ function swapWeapon() {
 
 function startReload() {
   const w = cur();
+  if (w.spirit) { if (spiritOverdriveStart()) stat('overdrives'); else if (spiritGauge() < 1) toast(`OVERDRIVE ${Math.floor(spiritGauge() * 100)}%`, '#80ffff'); return; }
+  if (w.watch) { useWatch(); return; }
   if (w.melee || w.remote || P.reloadT > 0 || curSlot().ammo >= magOf(w)) return;
   P.reloadT = P.reloadDur = w.reload * M.reload * wlv(w.id).reload; P.burstLeft = 0;
   sfx.reload();
@@ -1319,6 +1325,8 @@ function tryFire(x, y) {
   if (!G.combatActive || mode !== 'combat' || paused) return;
   const w = cur();
   if (w.remote) { if (P.cd > 0) return; P.cd = w.cd; stat('remoteUses'); remoteUse(x, y); return; }
+  if (w.spirit) { if (P.cd > 0) return; if (spiritUse(x, y)) P.cd = w.cd * M.cd; return; }
+  if (w.watch) { if (P.cd > 0) return; P.cd = w.cd; useWatch(); return; }
   if (P.reloadT > 0 || P.cd > 0 || P.swapT > 0.3 || P.burstLeft > 0) return;
   if (!w.melee && curSlot().ammo <= 0) { sfx.empty(); startReload(); P.cd = 0.25; return; }
   P.cd = w.cd * M.cd * wlv(w.id).cd;
@@ -1946,10 +1954,10 @@ function updateHud(force) {
   setText(ui.cash, 'cash', money(profile.cash));
   setText(ui.combo, 'c', combo > 1 && now - lastKill < M.comboWindow ? `x${combo} COMBO` : '');
   setText(ui.hp, 'h', String(Math.ceil(P.hp)));
-  setText(ui.ammo, 'am', cur().melee || cur().remote ? '∞' : String(curSlot().ammo));
+  setText(ui.ammo, 'am', cur().spirit ? (spiritGauge() >= 1 ? 'READY' : `${Math.floor(spiritGauge() * 100)}%`) : cur().watch ? (watchCd > 0 ? `${Math.ceil(watchCd)}s` : 'READY') : cur().melee || cur().remote ? '∞' : String(curSlot().ammo));
+  setText(ui.reload, 'r', cur().spirit ? 'OVERDRIVE' : cur().watch ? 'REWIND' : P.reloadT > 0 ? 'RELOADING' : 'AMMO');
   ui.hp.classList.toggle('low', P.hp <= M.maxHp * 0.25);
-  ui.ammo.classList.toggle('low', !cur().melee && !cur().remote && curSlot().ammo <= Math.ceil(magOf(cur()) * 0.25));
-  setText(ui.reload, 'r', P.reloadT > 0 ? 'RELOADING' : 'AMMO');
+  ui.ammo.classList.toggle('low', !cur().melee && !cur().remote && !cur().spirit && !cur().watch && curSlot().ammo <= Math.ceil(magOf(cur()) * 0.25));
   ui.reload.classList.toggle('reloading', P.reloadT > 0);
   if (setText(ui.weapon, 'w', cur().short)) ui.weapon.style.color = RARITY[cur().rarity].color;
   setText(ui.slotLbl, 'sl', `SWAP ${P.slot + 1}/${P.inv.length}`);
@@ -2042,6 +2050,7 @@ function updateGun(dt) {
   P.flashT -= dt;
   md.flash.visible = P.flashT > 0;
   if (md.flash.visible) { md.flash.rotation.z = Math.random() * 6; md.flash.scale.setScalar(rand(Math.random, 0.8, 1.4)); }
+  if (md.hands) { md.hands[0].rotation.z = -now * 2; md.hands[1].rotation.z = -now * 0.3; } // the Golden Watch ticks
   if (P.pump > 0) { P.pump = Math.max(0, P.pump - dt * 2.2); if (md.pump) md.pump.position.z = md.pumpZ + Math.sin(P.pump * Math.PI) * 0.1; }
   muzzleLight.intensity = Math.max(0, muzzleLight.intensity - dt * 80);
   if (md.flash.visible) { md.flash.updateMatrixWorld(); md.flash.getWorldPosition(gunFlash.position); gunFlash.color.copy(md.flash.material.color.getHex() === 0xffffff ? new THREE.Color(0xffc070) : md.flash.material.color); gunFlash.intensity = 4; }
@@ -2191,7 +2200,8 @@ function frame(t) {
   // dev GAME SPEED runs several fixed updates per rendered frame; G.bot is the balance-test autoplayer
   if (hitStop > 0) { hitStop -= dt; dt = 0; }
   if (slowT > 0 && !paused) slowT -= dt;
-  const sdt = slowT > 0 ? dt * 0.35 : dt; // boss intro slow-motion
+  const sdt = (slowT > 0 ? dt * 0.35 : dt) * (spiritOverdrive() ? 0.18 : 1); // boss intro slow-motion / spirit OVERDRIVE
+  if (!paused) { spiritUpdate(dt, !!cur().spirit && mode !== 'title' && mode !== 'dead'); watchRecord(sdt); }
   for (let k = 0; k < (G.timeScale || 1); k++) if (!paused) { if (G.bot) G.bot(sdt); update(sdt); }
   post.update(dt);
   { const dv = post.u.dissolve; dv.value += clamp(dissolveGoal - dv.value, -dissolveRate * dt, dissolveRate * dt); }
@@ -2210,6 +2220,22 @@ toTitle();
 requestAnimationFrame(frame);
 
 // expose for debugging / automated checks
+// what's under the cursor for the special weapons: an enemy (incl. switched-off ones) or a projectile
+function pickTarget(x, y) {
+    const rect = canvasRect();
+    let bp = null, bd = PC ? 40 : 52;
+    for (const p of G.projectiles) { if (!p.alive) continue; const s2 = toScreen(p.mesh.position, rect); if (s2.behind) continue; const d = Math.hypot(s2.x - x, s2.y - y); if (d < bd) { bd = d; bp = p; } }
+    if (bp) return { p: bp };
+    raycaster.setFromCamera(new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1), camera);
+    const ms = []; for (const e of G.enemies) if (e.alive && e.state !== 'dormant') ms.push(...e.meshes);
+    const h = raycaster.intersectObjects(ms, false)[0];
+    if (h) return { e: h.object.userData.enemy };
+    // a little forgiveness
+    let be = null, bde = PC ? 30 : 46;
+    for (const e of G.enemies) { if (!e.alive || e.state === 'dormant') continue; const s2 = toScreen(e.centerWorld(new THREE.Vector3()), rect); if (s2.behind) continue; const d = Math.hypot(s2.x - x, s2.y - y); if (d < bde) { bde = d; be = e; } }
+    return be ? { e: be } : null;
+  }
+
 // ------------------------------------------------------------------ THE REMOTE
 let remWasPaused = false;
 initRemote({
@@ -2223,20 +2249,7 @@ initRemote({
   moodGrade: () => GRADES[moodNow] || GRADES.normal,
   applySettings: () => { post.u.scan.value = [0, 0, 1][settings.retro ?? 1]; post.u.chroma.value = 0; },
   // what's under the cursor: an enemy (incl. switched-off ones) or a projectile
-  pick: (x, y) => {
-    const rect = canvasRect();
-    let bp = null, bd = PC ? 40 : 52;
-    for (const p of G.projectiles) { if (!p.alive) continue; const s2 = toScreen(p.mesh.position, rect); if (s2.behind) continue; const d = Math.hypot(s2.x - x, s2.y - y); if (d < bd) { bd = d; bp = p; } }
-    if (bp) return { p: bp };
-    raycaster.setFromCamera(new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1), camera);
-    const ms = []; for (const e of G.enemies) if (e.alive && e.state !== 'dormant') ms.push(...e.meshes);
-    const h = raycaster.intersectObjects(ms, false)[0];
-    if (h) return { e: h.object.userData.enemy };
-    // a little forgiveness
-    let be = null, bde = PC ? 30 : 46;
-    for (const e of G.enemies) { if (!e.alive || e.state === 'dormant') continue; const s2 = toScreen(e.centerWorld(new THREE.Vector3()), rect); if (s2.behind) continue; const d = Math.hypot(s2.x - x, s2.y - y); if (d < bde) { bde = d; be = e; } }
-    return be ? { e: be } : null;
-  },
+  pick: (x, y) => pickTarget(x, y),
   clone: (e) => {
     const s2 = { x: clamp(e.pos.x + (e.pos.x > 0 ? -1 : 1), -2.8, 2.8), y: e.pos.y || 1.9, z: e.pos.z, cover: false };
     const c = new Enemy(G, e.type, s2, { active: true }); c.activate && c.activate();
@@ -2248,6 +2261,70 @@ initRemote({
   erase: (e, quiet) => { if (!quiet) { effects.pop(e.centerWorld(new THREE.Vector3())); effects.sparks(e.centerWorld(new THREE.Vector3()), 12); } e.remove(); e.state = 'dead'; },
   unspawn: (e) => { if (area && !area.boss) area.queue.unshift(e.type); e.remove(); e.state = 'dead'; },
 });
+
+// ------------------------------------------------------------------ GRAVEYARD SHIFT (spirit)
+initSpirit({
+  G, scene, camera, effects, sfx, post, PC, pick: (x, y) => pickTarget(x, y), marker: (x, y, c) => marker(x, y, c),
+  pop: (e, text, color) => popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, 0.55, 0)), text, color),
+  orb: () => { stats.orbs++; score += 25; healP(M.orbHeal); },
+  hit: (e, amt, p) => { const r = e.damage(amt, 'body', p); if (r && r !== 'immune') stats.hits++; },
+  punchDmg: () => GUN.spirit.dmg * M.dmg * wlv('spirit').dmg * M.meleeDmg,
+  yaw: () => yaw, banner: (a, b) => banner(a, b, 1.6), moodGrade: () => GRADES[moodNow] || GRADES.normal,
+});
+
+// ------------------------------------------------------------------ THE GOLDEN WATCH
+// Turns time back ~4 seconds (your health, enemies' health, shots in the air), but reality
+// reassembles differently: the floor is rebuilt as another of its versions, enemies end up in
+// new places and so do you. Recharges in 12 seconds.
+const watchSnaps = [];
+let watchSnapT = 0, watchCd = 0;
+function watchRecord(dt) {
+  watchCd = Math.max(0, watchCd - dt);
+  if (mode !== 'combat') { watchSnaps.length = 0; return; }
+  watchSnapT -= dt;
+  if (watchSnapT > 0) return;
+  watchSnapT = 0.1;
+  watchSnaps.push({ hp: P.hp, en: G.enemies.filter((e) => e.alive).map((e) => [e, e.hp]) });
+  if (watchSnaps.length > 50) watchSnaps.shift();
+}
+function useWatch() {
+  if (mode !== 'combat' || !G.combatActive) return;
+  if (watchCd > 0) { toast(`WATCH RECHARGING (${Math.ceil(watchCd)}s)`, '#c0a060'); sfx.empty(); return; }
+  watchCd = 12; stat('remoteUses');
+  const snap = watchSnaps[Math.max(0, watchSnaps.length - 40)];
+  if (snap) {
+    P.hp = Math.max(P.hp, snap.hp);
+    for (const [e, hp] of snap.en) if (e.alive) e.hp = Math.max(e.hp, hp);
+  }
+  for (const p of G.projectiles) p.kill();
+  G.projectiles = [];
+  watchSnaps.length = 0;
+  reshuffleRoom();
+  post.u.dissolve.value = 1; dissolveGoal = 0; dissolveRate = 2.5;
+  post.u.chroma.value = 1; post.u.flash.value = 0.5; post.u.flashCol.value.set(0xffd860);
+  banner('DÉJÀ VU', 'THE ROOM IS DIFFERENT', 1.4); sfx.unlock(); sfx.rail();
+}
+function reshuffleRoom() {
+  const idx = G.roomIdx;
+  const v = (G.variant + 1 + Math.floor(Math.random() * 2)) % 3;
+  effects.clearAll();
+  loadFloor(G.floorNum, v, true);
+  setRoom(idx); setLights(G.room, G.room, 0);
+  if (area) {
+    area.room = G.room;
+    G.room.spots.forEach((s2) => (s2.taken = null));
+    for (const e of G.enemies) {
+      if (!e.alive || e.def.boss) continue;
+      const s2 = freeSpot(e.type); s2.taken = e; e.spot = s2;
+      e.pos.set(s2.x, e.flyer ? (s2.y || e.pos.y) : e.hover || 0, s2.z);
+      if (e.goal) e.goal.copy(e.pos);
+      e.crouch = e.crouchTarget = 0; e.place && e.place();
+    }
+  }
+  // you get moved too
+  G.camPos.copy(G.room.stand); G.camPos.x = rand(Math.random, -1.1, 1.1); G.camPos.z -= rand(Math.random, 0, 0.4);
+  yaw = 0; applyCamera();
+}
 
 // ------------------------------------------------------------------ developer tools
 let devWasPaused = false;
@@ -2276,7 +2353,7 @@ initDev({
   spawnBoss: (id) => { if (!area) return; const b = new Enemy(G, id, { x: 0, y: 1.9, z: area.room.z0 - 8.2, cover: false }); b.activate(); G.enemies.push(b); if (!area.boss) area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; },
 });
 
-window.__game = { get draws() { return drawCalls; }, get mut() { return mutLv; }, forceTwist(id) { setRunMode("daily"); const t = DAILY_MODS_REF.find((x) => x.id === id); daily.mod = t; G.twist = t; G.mod = id; recalc(); }, get run() { return { runMode, daily, rushIdx, rushTime, layout: G.layout, mod: G.mod }; }, goto(n) { hideScreens(); G.floorNum = n; startFloor(n); }, spawnNote: () => spawnNote(G.room), nextFloor: () => nextFloor(), cards: { floorCard, bossCard, dmgDir }, post, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
+window.__game = { get draws() { return drawCalls; }, spiritFill, get overdrive() { return spiritOverdrive(); }, get mut() { return mutLv; }, forceTwist(id) { setRunMode("daily"); const t = DAILY_MODS_REF.find((x) => x.id === id); daily.mod = t; G.twist = t; G.mod = id; recalc(); }, get run() { return { runMode, daily, rushIdx, rushTime, layout: G.layout, mod: G.mod }; }, goto(n) { hideScreens(); G.floorNum = n; startFloor(n); }, spawnNote: () => spawnNote(G.room), nextFloor: () => nextFloor(), cards: { floorCard, bossCard, dmgDir }, post, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);

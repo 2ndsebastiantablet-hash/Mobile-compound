@@ -26,7 +26,7 @@ export const LORE = [
   // zone 5: robotics (26-30)
   { id: 'l16', zone: 5, title: 'ASSEMBLY LINE NOTICE', from: 'FLOOR FOREMAN', text: 'Human staff have been "upgraded" to automated units for efficiency. Please do not be alarmed if a unit uses your voice. It is just being friendly. It is just being you.' },
   { id: 'l17', zone: 5, title: 'WARRANTY CARD', from: 'ROBOTICS WING', text: 'This unit is guaranteed to exceed quota for 100 years. This unit will not stop. This unit cannot be returned. This unit remembers your name and your home address.' },
-  { id: 'l18', zone: 5, title: 'GRAFFITI ON A CRATE', from: 'UNKNOWN', text: 'THE REMOTE IS REAL. ITS IN THE CHAIRMANS DESK. IT CONTROLS EVERYTHING HE BUILT. HE CANT TURN IT OFF IF YOU TAKE IT FIRST.' },
+  { id: 'l18', zone: 5, title: 'GRAFFITI ON A CRATE', from: 'UNKNOWN', text: 'THE GOLD WATCH IS REAL. ITS IN THE CHAIRMANS DESK. IT TURNS BACK TIME BUT THE BUILDING NEVER COMES BACK THE SAME. TAKE IT BEFORE HE DOES.' },
   // zone 6 (31-35)
   { id: 'l19', zone: 6, title: 'SECURITY BRIEFING', from: 'HEAD OF SECURITY', text: 'A temp is climbing the building. Unarmed when they arrived. Not unarmed now. All units: do not let them reach the boardroom. Do not let them leave. Overtime is not over until the Chairman says so.' },
   { id: 'l20', zone: 6, title: 'VENDING MACHINE RECEIPT', from: 'BREAK ROOM', text: 'Item: coffee (black). Item: coffee (black). Item: coffee (black). Item: coffee (black). Balance remaining: your soul (partial). Thank you for staying late!' },
@@ -34,7 +34,7 @@ export const LORE = [
   // zone 7 (36-40)
   { id: 'l22', zone: 7, title: 'LEGAL HOLD NOTICE', from: 'LEGAL DEPARTMENT', text: 'All employees are reminded that death does not terminate your employment contract (see clause 88b, "Posthumous Productivity"). Your remaining vacation days have been converted into overtime.' },
   { id: 'l23', zone: 7, title: 'FLOOR PLAN, HAND DRAWN', from: 'UNKNOWN TEMP (BEFORE YOU)', text: 'I made it to 38. The bosses get worse after 40. The Chairman is on 50 but he is not alone, he is EVERYWHERE, the building is him now. If you find this, keep going. Someone has to clock out.' },
-  { id: 'l24', zone: 7, title: 'EXPENSE REPORT', from: 'CFO', text: 'Line 1: 50,000 gallons CPI-7. Line 2: reinforced elevator cables (one-way). Line 3: "employee retention measures" (classified). Line 4: a single TV remote, gold plated. Approved: E. Halvorsen.' },
+  { id: 'l24', zone: 7, title: 'EXPENSE REPORT', from: 'CFO', text: 'Line 1: 50,000 gallons CPI-7. Line 2: reinforced elevator cables (one-way). Line 3: "employee retention measures" (classified). Line 4: a single pocket watch, gold plated, "non-linear". Approved: E. Halvorsen.' },
   // zone 8 (41-45)
   { id: 'l25', zone: 8, title: 'MEMO TO ALL STAFF', from: 'THE CHAIRMAN', text: 'Congratulations team! This quarter we achieved 100% attendance, 0% turnover and 0% departures. I have never been prouder. You will never leave me. We are a family now.' },
   { id: 'l26', zone: 8, title: 'BURNT DIARY PAGE', from: 'J. PIKE', text: 'He let it into the building\'s wiring. The supplement, the robots, the lights, it is all one thing now and it answers to him. Someone needs to get to the top and shut him down. I am too tired. I am so tired.' },
@@ -79,7 +79,7 @@ export const LORE = [
   { id: 'l57', zone: 5, title: 'SAFETY BOARD', from: 'ASSEMBLY LINE', text: 'DAYS WITHOUT AN ACCIDENT: 0. DAYS WITHOUT AN INCIDENT: 0. DAYS WITHOUT A HUMAN: 112. Keep up the good work!' },
   { id: 'l58', zone: 5, title: 'FOREMAN\'S DIARY', from: 'FLOOR FOREMAN', text: 'The line runs itself now. It assembles robots out of robots. Yesterday it assembled one that looked like me. It waved. I waved back. It took my job.' },
   { id: 'l59', zone: 5, title: 'RECALL NOTICE', from: 'ROBOTICS WING', text: 'Model EC-7 units may experience: violence, sentience, nostalgia. If your unit asks to call its mother, do not let it. It does not have one anymore.' },
-  { id: 'l60', zone: 5, title: 'SCRAWLED ON A LOCKER', from: 'UNKNOWN', text: 'THE STAND IS REAL TOO. A SPIRIT THAT FIGHTS FOR WHOEVER WANTS IT BADLY ENOUGH. THE CHAIRMAN KEEPS IT LOCKED IN THE 40S. DONT LET HIM KEEP IT.' },
+  { id: 'l60', zone: 5, title: 'SCRAWLED ON A LOCKER', from: 'UNKNOWN', text: 'THE GRAVEYARD SHIFT IS REAL TOO. A SPIRIT THAT FIGHTS FOR WHOEVER WANTS IT BADLY ENOUGH. THE CHAIRMAN KEEPS IT LOCKED IN THE 40S. DONT LET HIM KEEP IT.' },
   // zone 6: floors 31-35
   { id: 'l61', zone: 6, title: 'HOLIDAY PARTY INVITE', from: 'EVENTS COMMITTEE', text: 'Join us for the annual holiday party! Attendance is mandatory. Departure is not an option. Please bring a dish. Please do not bring a former colleague as the dish.' },
   { id: 'l62', zone: 6, title: 'SECURITY CAMERA NOTE', from: 'CONTROL ROOM', text: 'Camera 31-C shows the temp. Camera 31-D shows the temp. Camera 31-E shows the temp looking directly into Camera 31-E. They know where we are.' },

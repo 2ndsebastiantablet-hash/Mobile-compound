@@ -288,16 +288,17 @@ Mini bosses always have a condition for when they can be hurt.
 | 50 | **BLACK SITE ABOMINATION** | Always | charge, sonic, summon, bombs |
 
 
-### THE REMOTE (legendary)
-Not a gun: a TV remote for reality. While it's equipped a remote appears on screen; click (PC) or tap (mobile) its buttons, then click things in the world:
-- **POWER:** switch an enemy, a shot or a bomb off (it freezes, grey). Switch it back on whenever you like: turn a bomb off before it lands and back on when it's over someone else. Enemies still off when the area ends count as killed. Bosses reboot after 6 seconds.
-- **INFO:** open the stat sheet of whatever you click and edit it: health, damage, move speed, attack delay, size; delete or add attacks; delete traits (armor, shield, regen...); switch sides (it fights for you), set on fire, freeze, heal, clone, full stop, delete. For a shot: change its damage or speed, or send it back at whoever fired it.
-- **PAUSE:** stop time for everything except you. Shoot, swap, reposition the fight, then resume.
-- **REWIND (hold):** time runs backwards at double speed, up to 15 seconds: enemies walk back, shots fly back into the guns, newly arrived enemies walk back out, your health returns. The dead stay dead.
-- **SKIP (fast-forward):** push something ahead in time: a bomb or grenade goes off right now where it is, a shot has already flown past, an enemy ages 30 years (half its health, slow and sluggish).
+### Golden-tier specials (legendary drops)
+**GRAVEYARD SHIFT** (a fighting spirit). While it's equipped, a glowing spirit floats beside you:
+- **Click/tap an enemy:** the spirit dashes over and unloads a blur of punches (14 hits), then snaps back. Click an incoming shot and it punches it out of the air.
+- **Finger laser** (automatic): every couple of seconds it shoots an enemy that's winding up an attack (**cancelling** it) or a shot about to hit you.
+- **Luck:** while it's out, 15% of hits on you are shrugged off ("LUCKY!") and weapon drops are luckier.
+- **OVERDRIVE:** punches fill a gauge (shown where ammo usually is). When it reads READY, press RELOAD (R / right click / RELOAD button): time slows to a crawl and the spirit punches its way through every enemy in the room.
+
+**THE GOLDEN WATCH** (replaces The Remote). Click/tap (or RELOAD) to turn time back about 4 seconds: your health and enemy health go back to what they were and every shot in the air is gone. But reality never reassembles the same way: **the floor is rebuilt as one of its other versions** (different room, props, lighting), enemies end up in new places and so do you. Recharges in 12 seconds.
 
 ### Weapons
-There are 41 weapons: 33 guns, 7 melee weapons and The Remote. You start with a pistol. Enemies randomly drop weapons, shown as a spinning model with a light beam in the gun's rarity color. Bosses always drop a rare or better gun. Tap a drop to grab it; anything left on the floor is collected automatically when the area is clear. You can carry **3 guns**, and **SWAP** cycles through them. If your hands are full when you pick one up, you choose which gun to drop, or leave the new one behind. Picking up a gun you already carry refills its ammo.
+There are 42 weapons: 33 guns, 7 melee weapons, the Graveyard Shift spirit and The Golden Watch. You start with a pistol. Enemies randomly drop weapons, shown as a spinning model with a light beam in the gun's rarity color. Bosses always drop a rare or better gun. Tap a drop to grab it; anything left on the floor is collected automatically when the area is clear. You can carry **3 guns**, and **SWAP** cycles through them. If your hands are full when you pick one up, you choose which gun to drop, or leave the new one behind. Picking up a gun you already carry refills its ammo.
 
 | Gun | Rarity | What it does |
 |---|---|---|
@@ -341,7 +342,8 @@ There are 41 weapons: 33 guns, 7 melee weapons and The Remote. You start with a 
 | Paper Shredder | Uncommon | Sprays razor paper |
 | Coffee Cannon | Common | Scalding splash that burns |
 | Black Hole Gun | Legendary | Opens a singularity where it hits: drags in enemies, their shots, gibs and props for a few seconds, then collapses in a blast |
-| The Remote | Legendary | Not a gun: power things off, pause and rewind time, edit enemies (see above) |
+| Graveyard Shift | Legendary | A fighting spirit: punch barrages, attack-cancelling finger laser, luck, OVERDRIVE (see above) |
+| The Golden Watch | Legendary | Rewinds ~4 seconds and rebuilds the room differently every time (see above) |
 
 **Melee weapons** need no ammo but only reach a few metres. Every swing also knocks nearby projectiles out of the air, so they double as a shield.
 

@@ -39,7 +39,7 @@ export const ACHIEVEMENTS = [
   // collecting
   { id: 'perks8', name: 'FULL BENEFITS', desc: 'Have 8 perks in one run', reward: 300, test: (p, r) => r && r.perkCount >= 8 },
   { id: 'guns10', name: 'COLLECTOR', desc: 'Find 10 different weapons', reward: 200, test: (p) => Object.keys(p.found).length >= 10 },
-  { id: 'guns40', name: 'ARMORY', desc: 'Find all 41 weapons', reward: 1500, test: (p) => Object.keys(p.found).length >= 41 },
+  { id: 'guns40', name: 'ARMORY', desc: 'Find all 42 weapons', reward: 1500, test: (p) => Object.keys(p.found).filter((k) => k !== 'remote').length >= 42 },
   { id: 'golden', name: 'GOLDEN TICKET', desc: 'Find the Golden Gun', reward: 300, test: (p) => !!p.found.golden },
   { id: 'master', name: 'MASTERY', desc: 'Upgrade a weapon to level 5', reward: 300, test: (p) => Object.values(p.weapons).some((l) => l >= 5) },
   { id: 'bestiary', name: 'FIELD GUIDE', desc: 'Encounter 50 enemy types', reward: 400, test: (p) => p.stats.typesSeen >= 50 },
@@ -100,7 +100,8 @@ ACHIEVEMENTS.push(
   ...tiers('nd', S('noDmgFloors'), [[5, 'TEFLON', 'Clear 5 floors without taking damage', 600], [25, 'UNTOUCHABLE TEMP', 'Clear 25 floors without taking damage', 2500]]),
   ...tiers('fc', S('floors'), [[50, 'FIFTY FLIGHTS', 'Clear 50 floors in total', 300], [250, 'STAIRMASTER', 'Clear 250 floors in total', 1200], [1000, 'SKYSCRAPER', 'Clear 1,000 floors in total', 4000]]),
   ...tiers('dk', S('ducks'), [[25, 'DUCK AND COVER', 'Duck 25 times', 100], [250, 'LIMBO CHAMPION', 'Duck 250 times', 500]]),
-  ...tiers('rm', S('remoteUses'), [[10, 'CHANNEL SURFER', 'Use The Remote 10 times', 300], [100, 'COUCH POTATO', 'Use The Remote 100 times', 1000]]),
+  ...tiers('rm', S('remoteUses'), [[10, 'DEJA VU', 'Use The Golden Watch 10 times', 300], [100, 'GROUNDHOG DAY', 'Use The Golden Watch 100 times', 1000]]),
+  ...tiers('od', S('overdrives'), [[1, 'SPIRIT AWAKENED', 'Trigger OVERDRIVE with Graveyard Shift', 500], [10, 'OVERTIME OVERDRIVE', 'Trigger OVERDRIVE 10 times', 1500]]),
   ...tiers('bh', S('blackholes'), [[10, 'EVENT HORIZON', 'Open 10 black holes', 600]]),
   ...tiers('rq', S('requiemKills'), [[1, 'REQUIEM', 'Kill a Requiem enemy (Extra Hard)', 1000], [25, 'SILENCE THE CHOIR', 'Kill 25 Requiem enemies', 3000], [100, 'FINAL REQUIEM', 'Kill 100 Requiem enemies', 8000]]),
   ...tiers('mu', S('mutations'), [[1, 'SIDE EFFECTS', 'Take a mutation (Extra Hard)', 300], [25, 'NOT QUITE HUMAN', 'Take 25 mutations', 1500], [100, 'THE SUPPLEMENT WINS', 'Take 100 mutations', 4000]]),
