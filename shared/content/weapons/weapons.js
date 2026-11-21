@@ -101,10 +101,10 @@ export const GUNS = [
     m: { len: 0.3, h: 0.12, col: 'dark', blen: 0.16, bt: 0.08, tank: true } },
   { id: 'blackhole', name: 'BLACK HOLE GUN', short: 'BLACKHOLE', rarity: 'legendary', desc: 'Collapses a singularity that drags enemies in.', mag: 1, reload: 3, cd: 0.4, dmg: 16, explode: 2.8, pull: true, tracer: 0xa040ff, sound: 'rail', kick: 2.6,
     m: { len: 0.34, h: 0.14, col: 'dark', blen: 0.12, bt: 0.1, coil: 'purple', glow: 'purple', w: 0.12 } },
-  // not guns (see shared/game/spirit.js and the Golden Watch in game.js). The Remote (remote.js) is retired.
+  // not guns (see shared/game/spirit.js and the Golden Watch in game.js).
   { id: 'spirit', name: 'GRAVEYARD SHIFT', short: 'SPIRIT', rarity: 'legendary', desc: 'A fighting spirit: punch barrages, a finger laser that cancels attacks, luck, and OVERDRIVE.', spirit: true, mag: 1, reload: 0, cd: 0.85, dmg: 0.75, sound: 'slash', kick: 0,
     m: { spirit: true } },
-  { id: 'watch', name: 'THE GOLDEN WATCH', short: 'WATCH', rarity: 'legendary', desc: 'Turns time back a few seconds. The room never comes back the same.', watch: true, mag: 1, reload: 0, cd: 0.3, dmg: 0, sound: 'tap', kick: 0,
+  { id: 'watch', name: 'THE GOLDEN WATCH', short: 'WATCH', rarity: 'legendary', desc: 'Click: stop time. Reload: turn time back, but the room never comes back the same.', watch: true, mag: 1, reload: 0, cd: 0.3, dmg: 0, sound: 'tap', kick: 0,
     m: { watch: true } },
 ];
 export const GUN = Object.fromEntries(GUNS.map((g) => [g.id, g]));
@@ -252,16 +252,6 @@ export function buildGunModel(def, withArm = true) {
     part(g, 0.12, 0.12, 0.14, M.skin, 0, 0, -0.04); part(g, 0.13, 0.13, 0.04, M.gcyan, 0, 0, -0.12);
     if (withArm) part(g, 0.13, 0.13, 0.5, M.sleeve, 0.02, -0.08, 0.28, -0.35);
     return { g, tip: new THREE.Vector3(0, 0, -0.2) };
-  }
-  if (def.remote) {
-    // a chunky TV remote (the on-screen 2D remote is what you actually use)
-    const M = mats(), g = new THREE.Group();
-    part(g, 0.1, 0.05, 0.32, M.dark, 0, 0, -0.12);
-    const cols = [M.gred, M.gcyan, M.ggreen, M.gorange, M.gpurple];
-    cols.forEach((c, k) => part(g, 0.025, 0.02, 0.025, c, -0.025 + (k % 2) * 0.05, 0.03, -0.24 + Math.floor(k / 2) * 0.06));
-    part(g, 0.06, 0.015, 0.05, M.gcyan, 0, 0.03, -0.04);
-    if (withArm) { part(g, 0.1, 0.1, 0.12, M.skin, 0, -0.06, 0.0); part(g, 0.13, 0.13, 0.5, M.sleeve, 0.02, -0.14, 0.32, -0.35); }
-    return { g, tip: new THREE.Vector3(0, 0, -0.3) };
   }
   const M = mats(), s = def.m;
   const g = new THREE.Group();

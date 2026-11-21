@@ -1,11 +1,10 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { buildFloor, floorPlan, MOODS, box, EYE, RD, TOP_FLOOR } from '../content/floors/builder.js';
-import { Enemy, Projectile, REQUIEM_ABILITIES } from '../content/enemies/ai.js';
+import { Enemy, Projectile, SUPER_ABILITIES } from '../content/enemies/ai.js';
 import { DEFS, rosterFor, isFlyer, isMelee } from '../content/enemies/roster.js';
 import { bossFor, bossKindFor, BOSS_LIST } from '../content/bosses/bosses.js';
 import { initDev, devOn, devTick, devOpen, refreshDevUi } from './dev.js';
 import { initSpirit, spiritUse, spiritUpdate, spiritOverdrive, spiritOverdriveStart, spiritGauge, spiritFill } from './spirit.js';
-import { initRemote, remoteUse, remoteUpdate, remoteSettle, showRemote, remoteFrozen, remoteRewinding, press as remotePress, remoteButtonAt } from './remote.js';
 import { Post } from '../engine/post.js';
 import { Effects } from '../engine/effects.js';
 import * as TX from '../engine/textures.js';
@@ -19,10 +18,11 @@ import { profile, addCash, stat, statMax, touch, flushProfile } from './profile.
 import { applyUpgrades, weaponBonus } from '../content/meta/upgrades.js';
 import { CHAR } from '../content/meta/characters.js';
 import { DIFFS, diffOf } from './difficulty.js';
+import { ENDINGS } from '../content/meta/endings.js';
 import { MODES, MODE, modeOpen, RUSH_FLOORS, dailySetup, todayKey, recordRun, DAILY_MODS as DAILY_MODS_REF } from './modes.js';
 import { LORE, LORE_BY_ID } from '../content/meta/lore.js';
 import { ACHIEVEMENTS } from '../content/meta/achievements.js';
-import { initHQ, bindHQ, openHQ, closeHQ, openCharSelect, openDiffSelect, unlockedCount, allUnlocked, money } from './hq.js';
+import { initHQ, bindHQ, openHQ, closeHQ, openCharSelect, openDiffSelect, unreadFiles, unlockedCount, allUnlocked, money } from './hq.js';
 import { setMusic } from '../audio/music.js';
 import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine, setSleeve, aimSpeed, goldPlate, setMutationTint } from '../content/weapons/weapons.js';
 import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet, mulberry32 } from '../engine/util.js';
@@ -130,6 +130,7 @@ const best = storeGet('overtime.best', { floor: 0, score: 0 });
 function newStats() { return { shots: 0, hits: 0, kills: 0, heads: 0, orbs: 0, dmg: 0, t: 0 }; }
 const cur = () => GUN[P.inv[P.slot].id];
 const curSlot = () => P.inv[P.slot];
+const hasSpirit = () => P.inv.some((x) => x.id === 'spirit'); // the spirit stays out while it's anywhere in your inventory
 let pendingGuns = [], choiceOpen = false, gunsThisFloor = 0;
 // run perks: level per perk id, derived modifiers M, free rerolls left
 let perkLv = {}, M = applyUpgrades(mods(perkLv), profile.upgrades), rerolls = 1, perkOffer = null;
@@ -162,8 +163,17 @@ let runCash = 0, runChar = 'temp', runMaxCombo = 0;
 let runDiff = 1, D = diffOf(1);
 // game mode of this run (see modes.js)
 let runMode = 'story', runId = 0, daily = null, rushIdx = 0, rushTime = 0, noteThisFloor = false;
-// floors past 50 (endless) reuse layouts from the upper half of the tower; difficulty keeps the real number
-const layoutOf = (n) => (n > TOP_FLOOR ? 26 + ((n - TOP_FLOOR - 1) % 25) : n);
+// The tower has 30 floors; each maps evenly onto the 50 "layout" floors the content was built for
+// (themes, rooms, enemies). Past 30 (endless) floors reuse the upper half of the content.
+// Boss Rush works directly in layout floors (its 10 boss floors).
+const layoutOf = (n) => (runMode === 'rush' ? n : n <= TOP_FLOOR ? Math.round(1 + (n - 1) * 49 / (TOP_FLOOR - 1)) : 26 + ((n - TOP_FLOOR - 1) % 25));
+// difficulty follows the content's floor, and keeps climbing in endless
+const effFloor = (n) => (runMode === 'rush' || n <= TOP_FLOOR ? layoutOf(n) : 50 + (n - TOP_FLOOR) * 1.5);
+// which of the authored bosses a boss floor gets: the nearest boss (or mini) floor of the layout
+function bossKey(n) {
+  const kind = bossKindFor(n), lf = layoutOf(n);
+  return kind === 'mini' ? clamp(5 * Math.round((lf - 3) / 5) + 3, 3, 48) : clamp(5 * Math.round(lf / 5), 5, 50);
+}
 function setDiff(i) { runDiff = DIFFS[i] ? i : 1; D = diffOf(runDiff); G.dd = D; }
 setDiff(1);
 const healP = (n) => { if (n > 0) P.hp = Math.min(M.maxHp, P.hp + n * (M.healMul || 1)); };
@@ -211,10 +221,11 @@ function clearFloor() {
 function loadFloor(n, variant, keep = false) {
   if (keep) { if (G.floor) scene.remove(G.floor.group); flying.length = 0; } else clearFloor();
   G.floorNum = n;
-  G.diff = n <= 20 ? n : 20 + (n - 20) * 0.85; // balance: late floors were too easy with a full perk set
+  const ef = effFloor(n); G.eff = ef;
+  G.diff = ef <= 20 ? ef : 20 + (ef - 20) * 0.85; // balance: late floors were too easy with a full perk set
   G.variant = variant;
   const lf = layoutOf(n); G.layout = lf;
-  const plan = floorPlan(lf, variant); plan.display = n; plan.rush = runMode === 'rush';
+  const plan = floorPlan(lf, variant); plan.display = n; plan.rush = runMode === 'rush'; plan.isBoss = bossKindFor(n) === 'boss';
   if (G.twist && G.twist.mood) { plan.mood = G.twist.mood; plan.name = plan.theme.name + ' · ' + (MOODS[plan.mood].name || ''); }
   const f = buildFloor(lf, plan);
   G.floor = f; scene.add(f.group);
@@ -276,11 +287,12 @@ function prepareArea(i) {
   area = { idx: i, room, queue: [], waveT: 2.5, maxAlive: Math.max(2, Math.min(8, 3 + Math.floor((G.diff || f) / 6) + D.alive)), clearing: false, boss: null };
   const bk = bossKindFor(f);
   if (last && bk) {
-    const id = bossFor(G.layout || f, G.variant || 0);
+    const id = bossFor(bossKey(f), G.variant || 0);
     const bossSpot = { x: 0, y: 1.9, z: room.z0 - 8.2, cover: false };
-    const b = new Enemy(G, id, bossSpot);
+    // Extra Hard (and New Game+): a third of bosses arrive as their SUPER version
+    const b = new Enemy(G, id, bossSpot, (runDiff === 3 || G.ngp) && Math.random() < (G.ngp ? 0.5 : 0.35) ? { isSuper: true } : {});
     G.enemies.push(b); area.boss = b;
-    ui.bossName.textContent = (bk === 'mini' ? 'MINI BOSS: ' : '') + DEFS[id].name;
+    ui.bossName.textContent = (bk === 'mini' ? 'MINI BOSS: ' : '') + (b.displayName || DEFS[id].name);
     // mini bosses bring a couple of regulars; Bosses bring their own help
     if (bk === 'mini') { spawnAt(weightedType()); if (f > 10) spawnAt(weightedType()); }
     return;
@@ -350,22 +362,22 @@ function introduce(type) {
   pendingIntro.push(DEFS[type].name);
 }
 
-// Extra Hard: now and then an enemy arrives as its REQUIEM version
-function requiemRoll(type) {
+// Extra Hard: now and then an enemy arrives as its SUPER version
+function superRoll(type) {
   const d = DEFS[type];
   if (runDiff !== 3 || d.boss || d.minion || mode === 'title') return null;
-  return Math.random() < 0.04 + Math.min(0.1, G.floorNum * 0.002) ? { requiem: true } : null;
+  return Math.random() < 0.04 + Math.min(0.1, (G.eff || G.floorNum) * 0.002) ? { isSuper: true } : null;
 }
-function announceRequiem(e) {
-  if (!e.requiem) return;
-  const names = e.abilities.map((id) => REQUIEM_ABILITIES.find((a) => a.id === id).name).join(' · ');
+function announceSuper(e) {
+  if (!e.isSuper) return;
+  const names = e.abilities.map((id) => SUPER_ABILITIES.find((a) => a.id === id).name).join(' · ');
   toast(`⚠ ${e.displayName}: ${names}`, '#d070ff'); sfx.rail();
   post.u.flash.value = Math.max(post.u.flash.value, 0.25); post.u.flashCol.value.set(0x8020c0);
 }
 function spawnAt(type) {
   const s = freeSpot(type);
-  const e = new Enemy(G, type, s, requiemRoll(type) || {});
-  announceRequiem(e);
+  const e = new Enemy(G, type, s, superRoll(type) || {});
+  announceSuper(e);
   s.taken = e;
   G.enemies.push(e);
   introduce(type);
@@ -378,13 +390,13 @@ function spawnReinforcement(type) {
   if (d.move === 'turret' || d.move === 'burrow') {
     // stationary things and burrowers just pop up out of the floor
     const s = freeSpot(type);
-    const e = new Enemy(G, type, s, { active: true, ...(requiemRoll(type) || {}) }); announceRequiem(e);
+    const e = new Enemy(G, type, s, { active: true, ...(superRoll(type) || {}) }); announceSuper(e);
     s.taken = e; G.enemies.push(e); effects.dust(e.pos.clone().setY(0.1), 12); introduce(type);
     return e;
   }
   const entry = pick(Math.random, room.doorSpawns).clone();
   const s = isMelee(type) ? { x: entry.x, z: entry.z + 1.6, cover: false } : freeSpot(type);
-  const e = new Enemy(G, type, s, { enter: entry, ...(requiemRoll(type) || {}) }); announceRequiem(e);
+  const e = new Enemy(G, type, s, { enter: entry, ...(superRoll(type) || {}) }); announceSuper(e);
   s.taken = e;
   G.enemies.push(e);
   introduce(type);
@@ -714,7 +726,7 @@ function causeOf(src, proj) {
 G.hurtPlayer = (dmg, src, proj) => {
   if (!G.combatActive || mode !== 'combat') return;
   if (devOn('god')) { sfx.hurt(); return; }
-  if (cur().spirit && Math.random() < 0.15) { popText(G.camPos.clone().add(new THREE.Vector3(0, -0.2, -1.2)), 'LUCKY!', '#80ffff'); return; } // the spirit's luck
+  if (hasSpirit() && Math.random() < 0.15) { popText(G.camPos.clone().add(new THREE.Vector3(0, -0.2, -1.2)), 'LUCKY!', '#80ffff'); return; } // the spirit's luck
   if (M.dodge && Math.random() < M.dodge) { popText(G.camPos.clone().add(new THREE.Vector3(0, -0.2, -1.2)), 'PHASED', '#a0b0ff'); return; } // Phase Skin
   if (M.thorns && src && !proj && src.alive && src.damage) src.damage(M.thorns, 'body', src.centerWorld(new THREE.Vector3())); // Spines
   if (M.acidBlood) G.splashEnemies(G.camPos, 2.6, M.acidBlood); // Acid Blood
@@ -742,17 +754,18 @@ G.onEnemyKilled = (e, head, noScore) => {
   // enemy log: first kill adds the entry, every skin you kill is recorded
   const bl = profile.bestiary || (profile.bestiary = {});
   const be = bl[e.type] || (bl[e.type] = { k: 0, s: {} });
-  be.k++; be.s[e.skinIdx || 0] = 1; if (e.requiem) { be.rq = 1; stat('requiemKills'); } touch();
+  be.k++; be.s[e.skinIdx || 0] = 1; if (e.isSuper) { be.rq = 1; stat('superKills'); } touch();
   if (be.k === 1 && !e.def.boss) toast(`NEW LOG ENTRY: ${e.def.name}`, '#80c0ff');
   if (e.skin && e.skin.rare) { stat('goldKills'); popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, 0.8, 0)), 'GOLDEN! x5 CASH', '#ffd040'); }
   if (head) hitStop = 0.05; // tiny freeze-frame sells a headshot
   stats.kills++; if (head) stats.heads++;
   combo = now - lastKill < M.comboWindow ? Math.min(M.comboMax, combo + 1) : 1;
   lastKill = now;
-  const pts = Math.round((e.st.score + (head ? 50 : 0)) * combo * M.score * D.score * (e.requiem ? 3 : 1));
+  const pts = Math.round((e.st.score + (head ? 50 : 0)) * combo * M.score * D.score * (e.isSuper ? 3 : 1));
   runMaxCombo = Math.max(runMaxCombo, combo);
   const f = G.floorNum;
-  const cash = addCash((e.def.boss ? (e.def.mini ? 60 + f * 6 : 150 + f * 12) : Math.max(1, Math.round(e.st.score / 40))) * M.cash * D.cash * (e.skin && e.skin.rare ? 5 : 1) * (e.requiem ? 4 : 1));
+  const ef = G.eff || f;
+  const cash = addCash((e.def.boss ? (e.def.mini ? 60 + ef * 6 : 150 + ef * 12) : Math.max(1, Math.round(e.st.score / 40))) * M.cash * D.cash * (e.skin && e.skin.rare ? 5 : 1) * (e.isSuper ? 4 : 1));
   runCash += cash;
   popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, -0.35, 0)), `$${cash}`, '#ffd040');
   stat('kills'); if (head) stat('heads'); if (cur().melee) stat('meleeKills');
@@ -774,7 +787,7 @@ G.onEnemyKilled = (e, head, noScore) => {
   if (Math.random() < gunChance) {
     const minR = e.def.boss ? (e.def.mini ? 'uncommon' : 'rare') : null, have = P.inv.map((s) => s.id);
     let id = rollGun(G.floorNum, Math.random, have, minR);
-    if (id && Math.random() < M.luck + (cur().spirit ? 0.4 : 0)) { // Lucky Charm: roll again, keep the rarer one
+    if (id && Math.random() < M.luck + (hasSpirit() ? 0.4 : 0)) { // Lucky Charm: roll again, keep the rarer one
       const order = Object.keys(RARITY), id2 = rollGun(G.floorNum, Math.random, have, minR);
       if (id2 && order.indexOf(GUN[id2].rarity) > order.indexOf(GUN[id].rarity)) id = id2;
     }
@@ -982,6 +995,7 @@ function startGame(floor = 1, keepScore = false) {
 }
 
 function startFloor(n, sameVariant = false) {
+  endRide();
   noteThisFloor = false;
   endTutorial(true);
   mode = 'intro'; G.combatActive = false;
@@ -1009,7 +1023,7 @@ function startFloor(n, sameVariant = false) {
     applyCamera();
     fade(0, 0.8);
     const bk = bossKindFor(n);
-    floorCard(n, G.floor.plan.name, MOODS[G.floor.plan.mood]?.name, bk);
+    floorCard(runMode === 'rush' ? rushIdx + 1 : n, G.floor.plan.name, MOODS[G.floor.plan.mood]?.name, bk, runMode === 'rush' ? 'BOSS' : 'FLOOR');
     yield 0.6;
     if (el) { sfx.ding(); yield 0.4; el.target = 1; sfx.door(); yield 0.9; }
     const from = G.camPos.clone();
@@ -1041,7 +1055,7 @@ function beginCombat() {
   let k = 0;
   for (const e of G.enemies) if (e.state === 'dormant') { const en = e; setTimeout(() => en.activate(), 150 + k++ * 220); }
   if (area.tutorial && !tutorial) { tutorial = new Tutorial(tutCtx); tutorial.start(); ui.tutSkip.classList.remove('hidden'); }
-  if (area.boss) { ui.bossbar.classList.remove('hidden'); bossCard(area.boss.def, area.boss.def.brain ? area.boss.def.brain.hint : 'PERFORMANCE REVIEW'); }
+  if (area.boss) { ui.bossbar.classList.remove('hidden'); bossCard({ ...area.boss.def, name: area.boss.displayName || area.boss.def.name }, area.boss.def.brain ? area.boss.def.brain.hint : 'PERFORMANCE REVIEW'); }
   updateHud(true);
 }
 
@@ -1068,7 +1082,6 @@ function startAmbush(room) {
 }
 
 function ambushCleared() {
-  remoteSettle();
   area.clearing = true;
   G.combatActive = false;
   mode = 'moving';
@@ -1081,7 +1094,6 @@ function ambushCleared() {
 }
 
 function areaCleared() {
-  remoteSettle();
   area.clearing = true;
   G.combatActive = false;
   mode = 'moving';
@@ -1126,12 +1138,46 @@ function areaCleared() {
       const y0 = yaw;
       el.target = 0; sfx.door();
       yield* tween(1.1, (k) => { yaw = y0 + Math.PI * ease(k); });
-      yield 0.4;
-      fade(1, 0.6); yield 0.7;
+      yield 0.3;
+      startRide(el);
       floorComplete();
     });
   }
 }
+
+// ------------------------------------------------------------------ the elevator ride between floors
+// Instead of a black screen you ride up in the elevator while you look at your stats and pick a
+// perk: the cab rumbles, the light flickers and the floor display counts up.
+let ride = null;
+function floorDisplay(text) {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 24;
+  const x = c.getContext('2d'); x.fillStyle = '#100604'; x.fillRect(0, 0, 64, 24);
+  x.fillStyle = '#ff5030'; x.font = 'bold 18px monospace'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, 32, 13);
+  const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; return t;
+}
+function startRide(el) {
+  endRide();
+  const n = G.floorNum, dir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(-1); // where you're looking (the doors)
+  const mat = new THREE.SpriteMaterial({ map: floorDisplay('▲ ' + String(n).padStart(2, '0')), depthTest: false, depthWrite: false });
+  const sign = new THREE.Sprite(mat); sign.scale.set(0.42, 0.16, 1);
+  sign.position.copy(el.inside).addScaledVector(dir, 0.95); sign.position.y = EYE + 0.34;
+  scene.add(sign);
+  ride = { el, sign, mat, t: 0, n, shown: n };
+  for (const l of roomLights) { l.position.copy(el.inside).add(new THREE.Vector3(0, 0.75, 0)); l.intensity = roomBase * 0.55; }
+}
+function updateRide(dt) {
+  if (!ride) return;
+  ride.t += dt;
+  // the display ticks up to the next floor, then just blinks the arrow
+  const target = ride.n + 1, show = ride.t > 2.2 ? target : ride.n;
+  if (show !== ride.shown || Math.floor(ride.t * 2) !== ride.blink) {
+    ride.shown = show; ride.blink = Math.floor(ride.t * 2);
+    ride.mat.map.dispose(); ride.mat.map = floorDisplay((ride.blink % 2 ? '  ' : '▲ ') + String(show).padStart(2, '0')); ride.mat.needsUpdate = true;
+  }
+  shake = Math.max(shake, 0.1 + Math.sin(ride.t * 1.3) * 0.04);
+  for (const l of roomLights) l.intensity = roomBase * (Math.random() < 0.02 ? 0.15 : 0.55);
+}
+function endRide() { if (ride) { scene.remove(ride.sign); ride.mat.map.dispose(); ride = null; } }
 
 function autoReload() { for (const s of P.inv) s.ammo = magOf(GUN[s.id]); P.reloadT = 0; P.burstLeft = 0; }
 
@@ -1143,7 +1189,7 @@ function floorComplete() {
   if (runMode === 'daily' && daily && n >= daily.end) { showModeEnd(); return; }
   if (runMode === 'rush' && rushIdx >= RUSH_FLOORS.length - 1) { showModeEnd(); return; }
   const acc = stats.shots ? Math.round((stats.hits / stats.shots) * 100) : 0;
-  const bonus = addCash((20 + n * 4) * M.cash * D.cash); runCash += bonus;
+  const bonus = addCash((20 + (G.eff || n) * 4) * M.cash * D.cash); runCash += bonus;
   stat('orbs', stats.orbs); statMax('maxFloor', n + 1); stat('floors'); if (stats.dmg === 0) stat('noDmgFloors');
   if (runMode === 'endless') statMax('endlessFloor', n);
   checkAch({ floorCleared: true, floorDmg: stats.dmg, shots: stats.shots, hits: stats.hits, floorTime: stats.t });
@@ -1168,6 +1214,7 @@ function fmtTime(t) { const m = Math.floor(t / 60), s = Math.floor(t % 60); retu
 
 function nextFloor() {
   hideScreens();
+  endRide();
   healP(M.floorHeal); // First Aid Kit upgrade
   const n = runMode === 'rush' ? RUSH_FLOORS[++rushIdx] : G.floorNum + 1;
   G.floorNum = n;
@@ -1181,6 +1228,7 @@ function logRun(finished) {
   touch(); flushProfile(true);
 }
 function showModeEnd() {
+  $('winStory').innerHTML = ''; $('winTitle').style.color = '';
   logRun(true);
   if (runMode === 'daily') { stat('dailyDone'); profile.twists = profile.twists || {}; profile.twists[daily.mod.id] = 1; }
   if (runMode === 'rush') { stat('rushDone'); if (!profile.stats.rushBest || rushTime < profile.stats.rushBest) profile.stats.rushBest = Math.round(rushTime); }
@@ -1215,7 +1263,11 @@ function playerDied() {
 function showWin() {
   logRun(true); stat('win_' + runChar); stat('wind_' + runDiff);
   clearRun(); stat('wins'); statMax('maxFloor', TOP_FLOOR); checkAch({ won: true }); flushProfile(true);
-  $('winTitle').textContent = 'HOSTILE TAKEOVER'; $('winTag').textContent = 'YOU REACHED THE TOP.'; $('keepBtn').classList.remove('hidden');
+  // every difficulty has its own ending
+  const E = ENDINGS[runDiff] || ENDINGS[1];
+  $('winTitle').textContent = E.title; $('winTitle').style.color = E.color; $('winTag').textContent = E.tag; $('keepBtn').classList.remove('hidden');
+  $('winStory').innerHTML = E.lines.map((l, i) => `<p style="animation-delay:${0.6 + i * 1.6}s">${l}</p>`).join('');
+  profile.endings = profile.endings || {}; profile.endings[runDiff] = 1;
   $('winStats').textContent = `FINAL SCORE ${score}\nBEST ${best.score}\nKEEP CLIMBING TO PLAY ON IN ENDLESS MODE`;
   showScreen(ui.win);
   setMusic('calm');
@@ -1223,7 +1275,7 @@ function showWin() {
 
 function toTitle() {
   hideScreens();
-  showRemote(false);
+  endRide();
   ui.hud.classList.add('hidden');
   mode = 'title'; G.combatActive = false; seq = null;
   loadFloor(1, 0);
@@ -1232,6 +1284,7 @@ function toTitle() {
   yaw = 0; pitch = BASE_PITCH; roll = 0;
   fade(0, 0.8);
   setMusic('calm');
+  { const n = unreadFiles(); $('hqBtn').innerHTML = 'HQ · UPGRADES' + (n ? ` <span class="new-tag">${n} NEW FILE${n > 1 ? 'S' : ''}</span>` : ''); }
   $('bestLbl').textContent = best.floor ? `BEST: FLOOR ${best.floor} / ${best.score} PTS` : '';
   const sv = loadRun();
   ui.continueBtn.classList.toggle('hidden', !sv);
@@ -1254,9 +1307,9 @@ function showCard(html, cls, dur) {
   cardEl.className = 'show ' + (cls || '');
   cardEl.style.animationDuration = dur + 's';
 }
-function floorCard(n, zone, mood, bk) {
+function floorCard(n, zone, mood, bk, label = 'FLOOR') {
   const chip = bk === 'boss' ? '<span class="chip" style="color:#ff5040">BOSS FLOOR</span>' : bk === 'mini' ? '<span class="chip" style="color:#ff9040">MINI BOSS</span>' : mood ? `<span class="chip" style="color:#80c0ff">${mood}</span>` : '';
-  showCard(`<div class="stripe"></div><div class="row"><div class="lbl">FLOOR</div><div class="num${bk === 'boss' ? ' boss' : ''}">${String(n).padStart(2, '0')}</div><div class="zone">${zone}</div>${chip}</div><div class="stripe"></div>`, '', 2.6);
+  showCard(`<div class="stripe"></div><div class="row"><div class="lbl">${label}</div><div class="num${bk === 'boss' ? ' boss' : ''}">${String(n).padStart(2, '0')}</div><div class="zone">${zone}</div>${chip}</div><div class="stripe"></div>`, '', 2.6);
 }
 let slowT = 0, hitStop = 0;
 function bossCard(def, hint) {
@@ -1297,8 +1350,7 @@ function equip(i, silent) {
   const id = cur().id;
   viewModel(id);
   { const md0 = models[id]; if (md0 && !md0.gold && (profile.weapons[id] || 0) >= 10) { goldPlate(md0.g); md0.gold = true; } } // armory LEGEND
-  for (const k in models) models[k].g.visible = k === id && !GUN[k].remote;
-  showRemote(!!cur().remote && mode !== 'title');
+  for (const k in models) models[k].g.visible = k === id;
   P.swapT = silent || M.fastSwap ? 0 : 1; P.reloadT = 0; P.burstLeft = 0;
   if (M.autoload) for (const s2 of P.inv) if (s2 !== curSlot()) s2.ammo = magOf(GUN[s2.id]);
   if (!silent) sfx.reload();
@@ -1316,7 +1368,7 @@ function startReload() {
   const w = cur();
   if (w.spirit) { if (spiritOverdriveStart()) stat('overdrives'); else if (spiritGauge() < 1) toast(`OVERDRIVE ${Math.floor(spiritGauge() * 100)}%`, '#80ffff'); return; }
   if (w.watch) { useWatch(); return; }
-  if (w.melee || w.remote || P.reloadT > 0 || curSlot().ammo >= magOf(w)) return;
+  if (w.melee || P.reloadT > 0 || curSlot().ammo >= magOf(w)) return;
   P.reloadT = P.reloadDur = w.reload * M.reload * wlv(w.id).reload; P.burstLeft = 0;
   sfx.reload();
 }
@@ -1324,9 +1376,8 @@ function startReload() {
 function tryFire(x, y) {
   if (!G.combatActive || mode !== 'combat' || paused) return;
   const w = cur();
-  if (w.remote) { if (P.cd > 0) return; P.cd = w.cd; stat('remoteUses'); remoteUse(x, y); return; }
   if (w.spirit) { if (P.cd > 0) return; if (spiritUse(x, y)) P.cd = w.cd * M.cd; return; }
-  if (w.watch) { if (P.cd > 0) return; P.cd = w.cd; useWatch(); return; }
+  if (w.watch) { if (P.cd > 0) return; P.cd = w.cd; stopTime(); return; }
   if (P.reloadT > 0 || P.cd > 0 || P.swapT > 0.3 || P.burstLeft > 0) return;
   if (!w.melee && curSlot().ammo <= 0) { sfx.empty(); startReload(); P.cd = 0.25; return; }
   P.cd = w.cd * M.cd * wlv(w.id).cd;
@@ -1627,8 +1678,6 @@ gameEl.addEventListener('pointerdown', (ev) => {
   if (PC && ev.pointerType === 'mouse') {
     if (locked() && mouse) {
       x = mouse.x; y = mouse.y;
-      const r0 = canvasRect(), act = cur().remote ? remoteButtonAt(r0.left + x, r0.top + y) : null;
-      if (act) { remoteHeld = act; remotePress(act, true); ev.preventDefault(); return; }
     } else { mouse = { x, y }; wantLock(); }
   }
   hold = { id: ev.pointerId, x, y };
@@ -1652,8 +1701,7 @@ gameEl.addEventListener('wheel', (ev) => {
   wheelT = performance.now();
   if (P.inv.length > 1) { equip((P.slot + (ev.deltaY > 0 ? 1 : P.inv.length - 1)) % P.inv.length); toast(cur().name, RARITY[cur().rarity].color); }
 }, { passive: true });
-let remoteHeld = null;
-const release = (ev) => { if (remoteHeld) { remotePress(remoteHeld, false); remoteHeld = null; } if (hold && hold.id === ev.pointerId) hold = null; };
+const release = (ev) => { if (hold && hold.id === ev.pointerId) hold = null; };
 gameEl.addEventListener('pointerup', release);
 gameEl.addEventListener('pointercancel', release);
 gameEl.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -1948,16 +1996,16 @@ const hudCache = {};
 function setText(el, key, v) { if (hudCache[key] !== v) { hudCache[key] = v; el.textContent = v; return true; } return false; }
 function updateHud(force) {
   if (force) for (const k in hudCache) delete hudCache[k];
-  setText(ui.floor, 'f', `FLOOR ${String(G.floorNum).padStart(2, '0')}`);
+  setText(ui.floor, 'f', runMode === 'rush' ? 'BOSS RUSH' : `FLOOR ${String(G.floorNum).padStart(2, '0')}`);
   if (G.floor) setText(ui.area, 'a', runMode === 'rush' ? `BOSS ${rushIdx + 1}/10 · ${fmtTime(rushTime)}` : runMode === 'daily' && daily ? `DAILY ${G.floorNum - daily.start + 1}/8` : `AREA ${Math.min(G.roomIdx + 1, G.floor.rooms.length)}/${G.floor.rooms.length}`);
   setText(ui.score, 's', String(score).padStart(6, '0'));
   setText(ui.cash, 'cash', money(profile.cash));
   setText(ui.combo, 'c', combo > 1 && now - lastKill < M.comboWindow ? `x${combo} COMBO` : '');
   setText(ui.hp, 'h', String(Math.ceil(P.hp)));
-  setText(ui.ammo, 'am', cur().spirit ? (spiritGauge() >= 1 ? 'READY' : `${Math.floor(spiritGauge() * 100)}%`) : cur().watch ? (watchCd > 0 ? `${Math.ceil(watchCd)}s` : 'READY') : cur().melee || cur().remote ? '∞' : String(curSlot().ammo));
-  setText(ui.reload, 'r', cur().spirit ? 'OVERDRIVE' : cur().watch ? 'REWIND' : P.reloadT > 0 ? 'RELOADING' : 'AMMO');
+  setText(ui.ammo, 'am', cur().spirit ? (spiritGauge() >= 1 ? 'READY' : `${Math.floor(spiritGauge() * 100)}%`) : cur().watch ? (timeStopT > 0 ? `${Math.ceil(timeStopT)}` : stopCd > 0 ? `${Math.ceil(stopCd)}s` : 'STOP') : cur().melee ? '∞' : String(curSlot().ammo));
+  setText(ui.reload, 'r', cur().spirit ? 'OVERDRIVE' : cur().watch ? (watchCd > 0 ? `R: REWIND ${Math.ceil(watchCd)}s` : 'R: REWIND') : P.reloadT > 0 ? 'RELOADING' : 'AMMO');
   ui.hp.classList.toggle('low', P.hp <= M.maxHp * 0.25);
-  ui.ammo.classList.toggle('low', !cur().melee && !cur().remote && !cur().spirit && !cur().watch && curSlot().ammo <= Math.ceil(magOf(cur()) * 0.25));
+  ui.ammo.classList.toggle('low', !cur().melee && !cur().spirit && !cur().watch && curSlot().ammo <= Math.ceil(magOf(cur()) * 0.25));
   ui.reload.classList.toggle('reloading', P.reloadT > 0);
   if (setText(ui.weapon, 'w', cur().short)) ui.weapon.style.color = RARITY[cur().rarity].color;
   setText(ui.slotLbl, 'sl', `SWAP ${P.slot + 1}/${P.inv.length}`);
@@ -1982,6 +2030,7 @@ function resize() {
   const W = Math.max(1, Math.round(r.width * (H / r.height)));
   renderer.setSize(W, H, false); post.setSize(W, H);
   camera.aspect = W / H; camera.updateProjectionMatrix();
+  G.viewHalfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect; // enemies stay inside this
   gunCam.aspect = W / H; gunCam.updateProjectionMatrix();
   const d = 0.55, hh = d * Math.tan(THREE.MathUtils.degToRad(gunCam.fov / 2)), hw = hh * gunCam.aspect;
   const lefty = !PC && settings.lefty === 1;
@@ -2067,8 +2116,7 @@ function update(dt) {
   if (mode === 'combat') { stats.t += dt; if (runMode === 'rush' && !paused) rushTime += dt; }
 
   const peace = devOn('peace');
-  const tStop = remoteFrozen() || remoteRewinding(); // THE REMOTE: time paused or running backwards
-  remoteUpdate(dt);
+  const tStop = timeStopT > 0; // THE GOLDEN WATCH: time stopped for everything but you
   if (!tStop) for (const e of G.enemies) { if (e.off) continue; G.actor = e; if (peace && e.atkState === 'cool') e.atkT = Math.max(e.atkT, 1); e.update(dt); }
   G.actor = null;
   G.enemies = G.enemies.filter((e) => e.alive || e === area?.boss);
@@ -2089,6 +2137,7 @@ function update(dt) {
   G.playerPos.copy(G.camPos); G.playerPos.y -= G.duck * 0.65;
   effects.update(dt);
   updateCorpses(dt);
+  updateRide(dt);
   if (!tStop) { updateHoles(dt); updateProps(dt); }
   // ambient life: broken lights spark, vents steam, lab vats bubble, lightning on stormy nights
   if (G.room && G.floor && settings.gfx > 0) {
@@ -2201,7 +2250,8 @@ function frame(t) {
   if (hitStop > 0) { hitStop -= dt; dt = 0; }
   if (slowT > 0 && !paused) slowT -= dt;
   const sdt = (slowT > 0 ? dt * 0.35 : dt) * (spiritOverdrive() ? 0.18 : 1); // boss intro slow-motion / spirit OVERDRIVE
-  if (!paused) { spiritUpdate(dt, !!cur().spirit && mode !== 'title' && mode !== 'dead'); watchRecord(sdt); }
+  if (!paused) tickTimeStop(dt);
+  if (!paused) { spiritUpdate(dt, hasSpirit() && mode !== 'title' && mode !== 'dead', !!cur().spirit); watchRecord(sdt); }
   for (let k = 0; k < (G.timeScale || 1); k++) if (!paused) { if (G.bot) G.bot(sdt); update(sdt); }
   post.update(dt);
   { const dv = post.u.dissolve; dv.value += clamp(dissolveGoal - dv.value, -dissolveRate * dt, dissolveRate * dt); }
@@ -2236,35 +2286,9 @@ function pickTarget(x, y) {
     return be ? { e: be } : null;
   }
 
-// ------------------------------------------------------------------ THE REMOTE
-let remWasPaused = false;
-initRemote({
-  G, P, post, sfx, toast, glowTex: TX.glow(),
-  active: () => !!cur().remote && mode !== 'title',
-  inCombat: () => mode === 'combat' && G.combatActive,
-  pause: () => { remWasPaused = paused; paused = true; hold = null; },
-  resume: () => { paused = remWasPaused; },
-  marker: (x, y, c) => marker(x, y, c),
-  pop: (e, text, color) => popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, 0.55, 0)), text, color),
-  moodGrade: () => GRADES[moodNow] || GRADES.normal,
-  applySettings: () => { post.u.scan.value = [0, 0, 1][settings.retro ?? 1]; post.u.chroma.value = 0; },
-  // what's under the cursor: an enemy (incl. switched-off ones) or a projectile
-  pick: (x, y) => pickTarget(x, y),
-  clone: (e) => {
-    const s2 = { x: clamp(e.pos.x + (e.pos.x > 0 ? -1 : 1), -2.8, 2.8), y: e.pos.y || 1.9, z: e.pos.z, cover: false };
-    const c = new Enemy(G, e.type, s2, { active: true }); c.activate && c.activate();
-    if (e.ownDef) { c.def = e.def; c.traits = e.traits; c.st = e.def; c.ownDef = true; }
-    c.hp = c.maxHp = e.maxHp; c.dmg = e.dmg; c.fireMul = e.fireMul; c.scale = e.scale; c.root.scale.setScalar(e.scale);
-    if (e.ally) { c.ally = true; }
-    G.enemies.push(c); effects.pop(c.centerWorld(new THREE.Vector3()));
-  },
-  erase: (e, quiet) => { if (!quiet) { effects.pop(e.centerWorld(new THREE.Vector3())); effects.sparks(e.centerWorld(new THREE.Vector3()), 12); } e.remove(); e.state = 'dead'; },
-  unspawn: (e) => { if (area && !area.boss) area.queue.unshift(e.type); e.remove(); e.state = 'dead'; },
-});
-
 // ------------------------------------------------------------------ GRAVEYARD SHIFT (spirit)
 initSpirit({
-  G, scene, camera, effects, sfx, post, PC, pick: (x, y) => pickTarget(x, y), marker: (x, y, c) => marker(x, y, c),
+  inCombat: () => mode === 'combat' && G.combatActive, G, scene, camera, effects, sfx, post, PC, pick: (x, y) => pickTarget(x, y), marker: (x, y, c) => marker(x, y, c),
   pop: (e, text, color) => popText(e.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(0, 0.55, 0)), text, color),
   orb: () => { stats.orbs++; score += 25; healP(M.orbHeal); },
   hit: (e, amt, p) => { const r = e.damage(amt, 'body', p); if (r && r !== 'immune') stats.hits++; },
@@ -2273,6 +2297,24 @@ initSpirit({
 });
 
 // ------------------------------------------------------------------ THE GOLDEN WATCH
+// CLICK / TAP: stop time for 4 seconds (everything freezes but you; recharges in 15s).
+// RELOAD: turn time back (below).
+let timeStopT = 0, stopCd = 0;
+function stopTime() {
+  if (mode !== 'combat' || !G.combatActive) return;
+  if (stopCd > 0) { toast(`TIME STOP RECHARGING (${Math.ceil(stopCd)}s)`, '#9ab8ff'); sfx.empty(); return; }
+  timeStopT = 4; stopCd = 15; stat('timeStops');
+  post.grade({ tint: 0xb8c8ff, lift: 0x000008, sat: 0.3, contrast: 1.15 });
+  post.u.flash.value = 0.4; post.u.flashCol.value.set(0xc8d8ff);
+  banner('TIME STOP', null, 1); sfx.rail();
+}
+function tickTimeStop(dt) {
+  stopCd = Math.max(0, stopCd - (timeStopT > 0 ? 0 : dt));
+  if (timeStopT > 0) {
+    timeStopT -= dt;
+    if (timeStopT <= 0 || mode !== 'combat') { timeStopT = 0; post.grade(GRADES[moodNow] || GRADES.normal); toast('TIME RESUMES', '#e8e0c8'); }
+  }
+}
 // Turns time back ~4 seconds (your health, enemies' health, shots in the air), but reality
 // reassembles differently: the floor is rebuilt as another of its versions, enemies end up in
 // new places and so do you. Recharges in 12 seconds.
@@ -2349,7 +2391,7 @@ initDev({
   clearPerks: () => { perkLv = {}; recalc(); P.hp = Math.min(P.hp, M.maxHp); },
   enemies: () => Object.entries(DEFS).filter(([, d]) => !d.boss && !d.minion && d.floors && d.floors[1] > 0).map(([id, d]) => [id, d.name]),
   bosses: () => BOSS_LIST.map((b) => [b.id, `F${b.floor} ${b.mini ? 'MINI · ' : ''}${b.name}`]),
-  spawn: (t, rq) => { if (!area) return; let e; if (rq) { const s2 = freeSpot(t); e = new Enemy(G, t, s2, { requiem: true }); s2.taken = e; G.enemies.push(e); announceRequiem(e); } else e = spawnAt(t); if (G.combatActive) e.activate(); },
+  spawn: (t, rq) => { if (!area) return; let e; if (rq) { const s2 = freeSpot(t); e = new Enemy(G, t, s2, { isSuper: true }); s2.taken = e; G.enemies.push(e); announceSuper(e); } else e = spawnAt(t); if (G.combatActive) e.activate(); },
   spawnBoss: (id) => { if (!area) return; const b = new Enemy(G, id, { x: 0, y: 1.9, z: area.room.z0 - 8.2, cover: false }); b.activate(); G.enemies.push(b); if (!area.boss) area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; },
 });
 

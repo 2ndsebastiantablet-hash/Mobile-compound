@@ -9,7 +9,7 @@ export const DIFFS = [
     dmg: 1, hp: 1, fire: 1, proj: 1, count: 1, alive: 0, heal: 1, cash: 1, score: 1 },
   { id: 'hard', name: 'HARD', color: '#ff9040', desc: 'Tougher, faster, more of them. +35% cash.',
     dmg: 1.35, hp: 1.25, fire: 0.85, proj: 1.08, count: 1.15, alive: 1, heal: 0.75, cash: 1.35, score: 1.3 },
-  { id: 'xhard', name: 'EXTRA HARD', color: '#ff4040', desc: 'For veterans. Brutal damage, half the healing. MUTATIONS replace perks, and REQUIEM enemies hunt you. +75% cash.',
+  { id: 'xhard', name: 'EXTRA HARD', color: '#ff4040', desc: 'For veterans. Brutal damage, half the healing. MUTATIONS replace perks, and SUPER enemies hunt you. +75% cash.',
     dmg: 1.8, hp: 1.5, fire: 0.72, proj: 1.15, count: 1.3, alive: 2, heal: 0.5, cash: 1.75, score: 1.6 },
 ];
 export const diffOf = (i) => DIFFS[i] || DIFFS[1];

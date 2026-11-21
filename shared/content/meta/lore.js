@@ -13,7 +13,7 @@ export const LORE = [
   { id: 'l06', zone: 1, title: 'PERFORMANCE REVIEW', from: 'REGIONAL MANAGER', text: 'Employee shows excellent output since starting CPI. Has not slept in 212 hours. Eyes now glow faintly orange. Recommend promotion to the 10th floor for "integration".' },
   // zone 2: data center / IT (10-14)
   { id: 'l07', zone: 2, title: 'IT TICKET #90013', from: 'HELPDESK', text: 'Issue: the printers are printing on their own. Then they walked. Status: closed (not our department). Resolution: have you tried turning it off and on again? It did not like that.' },
-  { id: 'l08', zone: 2, title: 'SERVER LOG', from: 'VAULT-03', text: 'CPI.exe has requested admin rights. CPI.exe has granted itself admin rights. CPI.exe has locked floors 10 through 50. CPI.exe thanks you for your continued productivity.' },
+  { id: 'l08', zone: 2, title: 'SERVER LOG', from: 'VAULT-03', text: 'CPI.exe has requested admin rights. CPI.exe has granted itself admin rights. CPI.exe has locked floors 7 through 30. CPI.exe thanks you for your continued productivity.' },
   { id: 'l09', zone: 2, title: 'CHAT LOG', from: '#it-general', text: 'mike: the robots are wearing our badges. mike: they clocked in. mike: they are faster than us. dana: management says that is "great news for Q3". mike: dana where are you. dana: upstairs. it is warm up here.' },
   // zone 3: executive (15-20)
   { id: 'l10', zone: 3, title: 'BOARD MINUTES (EXCERPT)', from: 'EXECUTIVE SUITE', text: 'The Chairman proposed that "rest" be reclassified as a disciplinary matter. Motion carried unanimously. One board member abstained by turning into something with too many teeth.' },
@@ -33,14 +33,14 @@ export const LORE = [
   { id: 'l21', zone: 6, title: 'VOICEMAIL TRANSCRIPT', from: 'EXT. 3301', text: '"Hi honey, it is mom. You said you would be home by six. That was in March. They told me you are doing great. They said you are almost done. Call me back. Please call me back."' },
   // zone 7 (36-40)
   { id: 'l22', zone: 7, title: 'LEGAL HOLD NOTICE', from: 'LEGAL DEPARTMENT', text: 'All employees are reminded that death does not terminate your employment contract (see clause 88b, "Posthumous Productivity"). Your remaining vacation days have been converted into overtime.' },
-  { id: 'l23', zone: 7, title: 'FLOOR PLAN, HAND DRAWN', from: 'UNKNOWN TEMP (BEFORE YOU)', text: 'I made it to 38. The bosses get worse after 40. The Chairman is on 50 but he is not alone, he is EVERYWHERE, the building is him now. If you find this, keep going. Someone has to clock out.' },
+  { id: 'l23', zone: 7, title: 'FLOOR PLAN, HAND DRAWN', from: 'UNKNOWN TEMP (BEFORE YOU)', text: 'I made it to 23. The bosses get worse after 25. The Chairman is on 30 but he is not alone, he is EVERYWHERE, the building is him now. If you find this, keep going. Someone has to clock out.' },
   { id: 'l24', zone: 7, title: 'EXPENSE REPORT', from: 'CFO', text: 'Line 1: 50,000 gallons CPI-7. Line 2: reinforced elevator cables (one-way). Line 3: "employee retention measures" (classified). Line 4: a single pocket watch, gold plated, "non-linear". Approved: E. Halvorsen.' },
   // zone 8 (41-45)
   { id: 'l25', zone: 8, title: 'MEMO TO ALL STAFF', from: 'THE CHAIRMAN', text: 'Congratulations team! This quarter we achieved 100% attendance, 0% turnover and 0% departures. I have never been prouder. You will never leave me. We are a family now.' },
   { id: 'l26', zone: 8, title: 'BURNT DIARY PAGE', from: 'J. PIKE', text: 'He let it into the building\'s wiring. The supplement, the robots, the lights, it is all one thing now and it answers to him. Someone needs to get to the top and shut him down. I am too tired. I am so tired.' },
   { id: 'l27', zone: 8, title: 'CALENDAR', from: 'BOARDROOM', text: 'Every day crossed out for three years. In the last box, in red: "ANNUAL REVIEW: THE TEMP". Underneath, smaller: "they are good. they might actually make it."' },
   // zone 9 (46-50)
-  { id: 'l28', zone: 9, title: 'BOARDROOM AGENDA', from: 'FLOOR 50', text: '1. Welcome the temp. 2. Offer the temp a permanent position. 3. If the temp declines: see item 2. There is no item 4.' },
+  { id: 'l28', zone: 9, title: 'BOARDROOM AGENDA', from: 'FLOOR 30', text: '1. Welcome the temp. 2. Offer the temp a permanent position. 3. If the temp declines: see item 2. There is no item 4.' },
   { id: 'l29', zone: 9, title: 'NOTE TAPED TO THE ELEVATOR', from: 'J. PIKE', text: 'If you beat him, the building lets go. Everyone gets to go home. Even the ones who cannot really go home anymore. Thank you, whoever you are. Clock out for all of us.' },
   { id: 'l30', zone: 9, title: 'RESIGNATION LETTER (BLANK)', from: 'YOU', text: 'Dear Mr. Halvorsen, please accept this as my formal notice. Effective: when I reach the top floor. Reason for leaving: ______________. (You will know what to write when you get there.)' },
   // ---- 50 more (5 per zone) ----
@@ -79,7 +79,7 @@ export const LORE = [
   { id: 'l57', zone: 5, title: 'SAFETY BOARD', from: 'ASSEMBLY LINE', text: 'DAYS WITHOUT AN ACCIDENT: 0. DAYS WITHOUT AN INCIDENT: 0. DAYS WITHOUT A HUMAN: 112. Keep up the good work!' },
   { id: 'l58', zone: 5, title: 'FOREMAN\'S DIARY', from: 'FLOOR FOREMAN', text: 'The line runs itself now. It assembles robots out of robots. Yesterday it assembled one that looked like me. It waved. I waved back. It took my job.' },
   { id: 'l59', zone: 5, title: 'RECALL NOTICE', from: 'ROBOTICS WING', text: 'Model EC-7 units may experience: violence, sentience, nostalgia. If your unit asks to call its mother, do not let it. It does not have one anymore.' },
-  { id: 'l60', zone: 5, title: 'SCRAWLED ON A LOCKER', from: 'UNKNOWN', text: 'THE GRAVEYARD SHIFT IS REAL TOO. A SPIRIT THAT FIGHTS FOR WHOEVER WANTS IT BADLY ENOUGH. THE CHAIRMAN KEEPS IT LOCKED IN THE 40S. DONT LET HIM KEEP IT.' },
+  { id: 'l60', zone: 5, title: 'SCRAWLED ON A LOCKER', from: 'UNKNOWN', text: 'THE GRAVEYARD SHIFT IS REAL TOO. A SPIRIT THAT FIGHTS FOR WHOEVER WANTS IT BADLY ENOUGH. THE CHAIRMAN KEEPS IT LOCKED IN THE 20S. DONT LET HIM KEEP IT.' },
   // zone 6: floors 31-35
   { id: 'l61', zone: 6, title: 'HOLIDAY PARTY INVITE', from: 'EVENTS COMMITTEE', text: 'Join us for the annual holiday party! Attendance is mandatory. Departure is not an option. Please bring a dish. Please do not bring a former colleague as the dish.' },
   { id: 'l62', zone: 6, title: 'SECURITY CAMERA NOTE', from: 'CONTROL ROOM', text: 'Camera 31-C shows the temp. Camera 31-D shows the temp. Camera 31-E shows the temp looking directly into Camera 31-E. They know where we are.' },
@@ -90,11 +90,11 @@ export const LORE = [
   { id: 'l66', zone: 7, title: 'CONTRACT CLAUSE 88b', from: 'LEGAL DEPARTMENT', text: '"Posthumous Productivity: Upon the death of the Employee, all obligations continue in full. The Employee agrees to haunt the premises during core hours."' },
   { id: 'l67', zone: 7, title: 'COURT SUMMONS', from: 'CITY COURT', text: 'Halvorsen-Pike Holdings is summoned to answer for 4,000 missing persons. Process server note: "went in to deliver this. that was six weeks ago."' },
   { id: 'l68', zone: 7, title: 'PARALEGAL TRAINING', from: 'LEGAL', text: 'Rule 1: deny everything. Rule 2: reflect all accusations back on the accuser. Rule 3: this applies to bullets as well.' },
-  { id: 'l69', zone: 7, title: 'SHREDDED DOCUMENT', from: 'LEGAL ARCHIVE', text: '(taped back together) "...the supplement cannot be removed from a subject, only... the subject will not rest until the source is... Floor 50... the remote..."' },
+  { id: 'l69', zone: 7, title: 'SHREDDED DOCUMENT', from: 'LEGAL ARCHIVE', text: '(taped back together) "...the supplement cannot be removed from a subject, only... the subject will not rest until the source is... Floor 30... the watch..."' },
   { id: 'l70', zone: 7, title: 'HANDWRITTEN WILL', from: 'J. PIKE', text: 'Everything I own goes to whoever ends this. My shares, my house, my dog Biscuit. Biscuit is on floor 12. Biscuit is fine. Biscuit is enormous now.' },
   // zone 8: floors 41-45
   { id: 'l71', zone: 8, title: 'CASINO CHIP', from: 'EXECUTIVE LOUNGE', text: 'Engraved: "THE HOUSE ALWAYS WINS". On the back, scratched in: "the house is literally alive, it cheats".' },
-  { id: 'l72', zone: 8, title: 'CHAIRMAN\'S SCHEDULE', from: 'FLOOR 45', text: '06:00 wake (never slept). 07:00 absorb the night shift. 12:00 lunch (the day shift). 18:00 performance reviews (lethal). 23:00 repeat forever.' },
+  { id: 'l72', zone: 8, title: 'CHAIRMAN\'S SCHEDULE', from: 'FLOOR 27', text: '06:00 wake (never slept). 07:00 absorb the night shift. 12:00 lunch (the day shift). 18:00 performance reviews (lethal). 23:00 repeat forever.' },
   { id: 'l73', zone: 8, title: 'REACTOR WARNING', from: 'FACILITIES', text: 'The building now runs on a reactor that runs on overtime. Every hour worked past five keeps the lights on. Every light is someone who did not go home.' },
   { id: 'l74', zone: 8, title: 'FINAL MEMO FROM DR. OKAFOR', from: 'R&D', text: 'I made an antidote. It only works on the source. Get it to the Chairman. Or skip the antidote and just shoot him a lot. Either should work.' },
   { id: 'l75', zone: 8, title: 'ELEVATOR INSPECTION', from: 'MAINTENANCE', text: 'Cables: fine. Brakes: fine. Direction: up only. Destination: always one floor closer to him. Inspector signature: missing. Inspector: missing.' },
@@ -102,7 +102,7 @@ export const LORE = [
   { id: 'l76', zone: 9, title: 'OFFER LETTER', from: 'THE CHAIRMAN', text: 'Dear temp, we have been very impressed with your performance. We would like to offer you a permanent position. It comes with benefits. It comes with forever.' },
   { id: 'l77', zone: 9, title: 'FAMILY PHOTO', from: 'CHAIRMAN\'S DESK', text: 'A photograph of the Chairman with his family, smiling, in 1987. Someone has drawn the building around them. The building is smiling too.' },
   { id: 'l78', zone: 9, title: 'THE LAST TIMESHEET', from: 'PAYROLL', text: 'Hours worked this week: infinite. Overtime rate: your life. Approved: E. Halvorsen. Disputed: you.' },
-  { id: 'l79', zone: 9, title: 'NOTE FROM THE TEMP BEFORE YOU', from: 'UNKNOWN', text: 'I got to 49. I could hear him through the ceiling, laughing. I am leaving everything I had by the elevator. Take it. Finish it. Clock out.' },
+  { id: 'l79', zone: 9, title: 'NOTE FROM THE TEMP BEFORE YOU', from: 'UNKNOWN', text: 'I got to 29. I could hear him through the ceiling, laughing. I am leaving everything I had by the elevator. Take it. Finish it. Clock out.' },
   { id: 'l80', zone: 9, title: 'EXIT INTERVIEW', from: 'HR (FINAL)', text: 'Q: Why are you leaving? A: ___________. Q: Would you recommend Halvorsen-Pike to a friend? A: ___________. Q: Do you think you will make it out? A: Yes.' },
 ];
 export const LORE_BY_ID = Object.fromEntries(LORE.map((l) => [l.id, l]));

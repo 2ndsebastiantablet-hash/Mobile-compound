@@ -276,7 +276,7 @@ export class BossBrain {
 
   moveCore() { if (!this.core) return; const s = pick(Math.random, this.coreSpots); this.core.position.set(s[0], s[1], s[2]); this.coreT = 4; }
 
-  get speed() { return this.enraged ? 1.45 : 1; }
+  get speed() { return (this.enraged ? 1.45 : 1) * (this.speedMul || 1); }
   pylonsUp() { this.pylons = this.pylons.filter((p) => p.alive); return this.pylons.length > 0; }
   addsUp() { this.adds = this.adds.filter((p) => p.alive); return this.adds.length > 0; }
 

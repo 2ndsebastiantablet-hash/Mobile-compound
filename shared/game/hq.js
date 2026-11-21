@@ -31,8 +31,15 @@ function buyBtn(price, can, onBuy, label) {
 export function openHQ(t = tab) { tab = t; render(); $('hq').classList.remove('hidden'); }
 export function closeHQ() { stopPreview(); logSel = null; $('hq').classList.add('hidden'); flushProfile(true); }
 
+export const unreadFiles = () => LORE.filter((l) => (profile.lore || {})[l.id] && !(profile.loreRead || {})[l.id]).length;
+function tabBadges() {
+  const n = unreadFiles();
+  const b = document.querySelector('#hqTabs button[data-tab="files"]');
+  if (b) b.innerHTML = n ? `FILES <span class="new-tag">${n}</span>` : 'FILES';
+}
 function render() {
   $('hqCash').textContent = money(profile.cash);
+  tabBadges();
   for (const b of document.querySelectorAll('#hqTabs button')) b.classList.toggle('on', b.dataset.tab === tab);
   const box = $('hqBody'); box.innerHTML = ''; box.scrollTop = 0;
   if (tab === 'upgrades') {
@@ -69,11 +76,15 @@ function render() {
     for (const l of LORE) {
       const got = !!lore[l.id];
       const row = el('div', 'hq-row' + (got ? '' : ' dim'));
-      const info = el('div', 'hq-info', got ? `<b style="color:#fff0a0">${l.title}</b><span class="lore-from">FROM: ${l.from}</span>` : `<b>??? MEMO #${l.id.slice(1)}</b><span class="lore-from">FLOORS ${zoneFloors(l.zone)}</span>`);
+      const unread = got && !(profile.loreRead || {})[l.id];
+      const info = el('div', 'hq-info', got ? `<b style="color:#fff0a0">${unread ? '<span class="new-tag">NEW</span> ' : ''}${l.title}</b><span class="lore-from">FROM: ${l.from}</span>` : `<b>??? MEMO #${l.id.slice(1)}</b><span class="lore-from">FLOORS ${zoneFloors(l.zone)}</span>`);
       if (got) {
         const txt = el('div', 'lore-txt hidden', l.text); info.append(txt);
         row.style.cursor = 'pointer';
-        row.addEventListener('click', (e) => { e.stopPropagation(); hooks.sfx.tap(); txt.classList.toggle('hidden'); });
+        row.addEventListener('click', (e) => {
+          e.stopPropagation(); hooks.sfx.tap(); txt.classList.toggle('hidden');
+          if (!(profile.loreRead || {})[l.id]) { profile.loreRead = profile.loreRead || {}; profile.loreRead[l.id] = 1; touch(); const t = info.querySelector('.new-tag'); if (t) t.remove(); tabBadges(); }
+        });
         row.append(info, el('div', 'hq-done', 'READ'));
       } else row.append(info, el('div', 'hq-done', 'MISSING'));
       box.append(row);
@@ -160,7 +171,7 @@ function renderEntry(box, id) {
     sk.append(bt);
   });
   if (!d.boss && b.rq) {
-    const bt = el('button', 'hq-buy req-btn', 'REQUIEM');
+    const bt = el('button', 'hq-buy req-btn', 'SUPER');
     bt.addEventListener('click', (e) => { e.stopPropagation(); hooks.sfx.tap(); for (const x of sk.children) x.classList.remove('on'); bt.classList.add('on'); startPreview(cv, id, 0, true); });
     sk.append(bt);
   }
@@ -174,12 +185,12 @@ function renderEntry(box, id) {
   box.append(el('div', 'hq-note', `<b style="color:#ff9070">HOW IT FIGHTS</b><br>${ft.filter(Boolean).join('<br>')}${atks.length && !d.boss ? '' : ''}`));
   const lore = ENEMY_LORE[id] || (d.boss ? `A ${d.mini ? 'mini boss' : 'boss'} of Halvorsen-Pike Holdings. The building made it what it is.` : '');
   box.append(el('div', 'hq-note', `<b style="color:#fff0a0">FILE</b><br>${lore}`));
-  if (!d.boss) box.append(el('div', 'hq-note', b.rq ? '<b style="color:#d070ff">REQUIEM VERSION DEFEATED</b><br>On Extra Hard this enemy can arrive as a Requiem: 2.4x health, harder hits, and two extra abilities.' : '<span style="color:#7a6a8a">REQUIEM VERSION: NOT YET DEFEATED (EXTRA HARD ONLY)</span>'));
+  if (!d.boss) box.append(el('div', 'hq-note', b.rq ? '<b style="color:#d070ff">SUPER VERSION DEFEATED</b><br>On Extra Hard this enemy can arrive as a Super: 2.4x health, harder hits, and two extra abilities.' : '<span style="color:#7a6a8a">SUPER VERSION: NOT YET DEFEATED (EXTRA HARD ONLY)</span>'));
   startPreview(cv, id, 0);
 }
 function stopPreview() { if (prev) { cancelAnimationFrame(prev.raf); prev.scene.remove(prev.model); prev = null; } }
 let pr = null;
-function startPreview(canvas, id, skin, requiem = false) {
+function startPreview(canvas, id, skin, isSuper = false) {
   stopPreview();
   if (!pr) {
     pr = { renderer: new THREE.WebGLRenderer({ antialias: false, alpha: true }) };
@@ -191,7 +202,7 @@ function startPreview(canvas, id, skin, requiem = false) {
   }
   const fake = { scene: pr.scene, camPos: new THREE.Vector3(0, 1.4, 6), floorNum: 1, diff: 1, dd: {}, mod: null, room: null, enemies: [] };
   let e;
-  try { e = new Enemy(fake, id, { x: 0, z: 0, y: 0, cover: false }, { decoy: !!DEFS[id].boss, skin, requiem, requiemAbilities: requiem ? ['haste', 'nova'] : undefined }); } catch (err) { return; }
+  try { e = new Enemy(fake, id, { x: 0, z: 0, y: 0, cover: false }, { decoy: !!DEFS[id].boss, skin, isSuper, superAbilities: isSuper ? ['haste', 'nova'] : undefined }); } catch (err) { return; }
   const model = e.root; model.position.set(0, 0, 0); model.rotation.set(0, 0, 0);
   for (const m of e.meshes) m.material = m.userData.mat;
   const bb = new THREE.Box3().setFromObject(model), size = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
@@ -209,7 +220,7 @@ function startPreview(canvas, id, skin, requiem = false) {
   tick();
 }
 
-const zoneFloors = (z) => ['1-4', '5-9', '10-14', '15-20', '21-25', '26-30', '31-35', '36-40', '41-45', '46-50'][z];
+const zoneFloors = (z) => ['1-3', '4-6', '7-8', '9-12', '13-15', '16-18', '19-21', '22-24', '25-27', '28-30'][z]; // real floors per content zone
 
 function charRow(c, picking, onPick) {
   const open = isUnlocked(c, profile), sel = profile.char === c.id;

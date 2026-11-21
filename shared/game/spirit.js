@@ -1,5 +1,8 @@
 // GRAVEYARD SHIFT: a legendary fighting spirit (an original "guardian spirit" in the style of
-// fighting-spirit anime). While it's equipped it floats at your shoulder:
+// fighting-spirit anime). Once you pick it up it stays out for the rest of the run, whatever
+// weapon you're holding (drop it and it's gone). While you hold something else it fights on its
+// own: it barrages the nearest enemy every few seconds. Every punch FREEZES what it hits.
+// Select it to command it directly:
 //   - CLICK/TAP an enemy: it dashes over and unloads a blur of punches, then snaps back.
 //     Clicking an incoming shot punches it out of the air.
 //   - FINGER LASER (automatic): every couple of seconds it shoots an enemy that is winding up an
@@ -103,9 +106,9 @@ export function spiritOverdriveStart() {
 }
 
 // called every frame with REAL time (it keeps full speed while OVERDRIVE slows the world)
-export function spiritUpdate(dt, equipped) {
-  if (!S) { if (!equipped) return; ensure(); }
-  if (!equipped) { if (S.g.visible) spiritShow(false); S.od = 0; return; }
+export function spiritUpdate(dt, active, equipped) {
+  if (!S) { if (!active) return; ensure(); }
+  if (!active) { if (S.g.visible) spiritShow(false); S.od = 0; return; }
   if (!S.g.visible) spiritShow(true);
   S.t += dt;
   const home = homePos(S.home);
@@ -119,6 +122,16 @@ export function spiritUpdate(dt, equipped) {
     S.g.rotation.y = C.yaw() + Math.sin(S.t * 0.9) * 0.08;
     S.armL.rotation.x = Math.sin(S.t * 2) * 0.1; S.armR.rotation.x = -Math.sin(S.t * 2) * 0.1;
     for (const f of S.ghosts) f.visible = false;
+    // fighting on its own while you hold another weapon
+    if (!equipped && S.state === 'idle' && S.od <= 0) {
+      S.autoT = (S.autoT ?? 2) - dt;
+      if (S.autoT <= 0 && C.inCombat()) {
+        S.autoT = 3.5;
+        let best = null, bd = 1e9;
+        for (const e of G.enemies) { if (!e.alive || !e.targetable || e.off) continue; const d = e.pos.distanceTo(C.camera.position); if (d < bd) { bd = d; best = e; } }
+        if (best) startBarrage(best, 8);
+      }
+    }
     // next OVERDRIVE victim
     if (S.od > 0 && S.state === 'idle') { while (S.odQueue.length && !S.odQueue[0].alive) S.odQueue.shift(); if (S.odQueue.length) startBarrage(S.odQueue.shift(), 10); }
   }
@@ -145,6 +158,7 @@ export function spiritUpdate(dt, equipped) {
           C.effects.impact(p); if (Math.random() < 0.5) C.sfx.chop();
           S.gauge = Math.min(1, S.gauge + 0.012);
           if (e.alive && !e.def.boss) { e.stagger = 1; e.kick = 0.25; if (e.interrupt) e.interrupt(); }
+          if (e.alive) { e.slowT = Math.max(e.slowT || 0, e.def.boss ? 0.6 : 1.6); if (Math.random() < 0.4) C.effects.ice(p, 2); } // its touch freezes
         }
         if (S.hitsLeft <= 0 || !e.alive) { C.pop(e, S.od > 0 ? 'OVERDRIVE!' : 'BARRAGE!', '#80ffff'); S.state = 'return'; for (const f of S.ghosts) f.visible = false; }
       }

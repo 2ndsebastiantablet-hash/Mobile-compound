@@ -80,7 +80,7 @@ export function buildFloor(floor, plan) {
   const M = themeMats(th, mood);
   const rng = mulberry32(floor * 7919 + plan.variant * 104729 + 17);
   const group = new THREE.Group();
-  const isBoss = floor % 5 === 0;
+  const isBoss = plan.isBoss ?? floor % 5 === 0;
   const nCombat = plan.rush ? 0 : Math.min(2 + Math.ceil(floor / 4), 5); // boss rush: straight to the boss room
   const types = [];
   const pool = shuffle(rng, th.rooms.slice());

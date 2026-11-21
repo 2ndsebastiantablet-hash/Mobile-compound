@@ -1,14 +1,14 @@
 // Game modes and local records.
-//   STORY      - floors 1-50, beat the Chairman.
-//   ENDLESS    - the tower never ends: past floor 50 the floors repeat (from the upper half of the
+//   STORY      - floors 1-30, beat the Chairman.
+//   ENDLESS    - the tower never ends: past floor 30 the floors repeat (from the upper half of the
 //                tower) and keep getting harder. A won story run can also keep climbing.
 //   DAILY      - the same run for everyone today: a seeded start floor, floor versions, starting
 //                weapon, perks and perk offers, plus a modifier of the day. 8 floors, best score counts.
-//   BOSS RUSH  - the 10 bosses back to back (floors 5, 10 ... 50), perks between fights, fastest time wins.
+//   BOSS RUSH  - the 10 bosses back to back (the tower's 10 boss levels), perks between fights, fastest time wins.
 import { mulberry32 } from '../engine/util.js';
 
 export const MODES = [
-  { id: 'story', name: 'STORY', color: '#f0c860', desc: 'Climb all 50 floors and take down the Chairman.' },
+  { id: 'story', name: 'STORY', color: '#f0c860', desc: 'Climb all 30 floors and take down the Chairman.' },
   { id: 'endless', name: 'ENDLESS', color: '#80c0ff', desc: 'The tower never ends. How high can you get?', lock: { text: 'REACH FLOOR 10', test: (p) => p.stats.maxFloor >= 10 } },
   { id: 'daily', name: 'DAILY CHALLENGE', color: '#60ff80', desc: 'Same run for everyone today: 8 floors with a twist.', lock: { text: 'REACH FLOOR 3', test: (p) => p.stats.maxFloor >= 3 } },
   { id: 'rush', name: 'BOSS RUSH', color: '#ff6040', desc: 'All 10 bosses back to back. Fastest time wins.', lock: { text: 'DEFEAT 3 BOSSES', test: (p) => p.stats.bossKills >= 3 } },

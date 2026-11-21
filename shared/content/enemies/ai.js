@@ -52,7 +52,7 @@ export class Enemy {
     this.centerY = 1.15; this.shoulderY = 1.42;
     BUILDERS[mk](this, def.model);
     // skin: alternate colours (golden ones are tougher and pay more)
-    this.skinIdx = opts.requiem ? 0 : opts.skin ?? rollSkin(def, Math.random, game.goldChance ? game.goldChance() : 1);
+    this.skinIdx = opts.isSuper ? 0 : opts.skin ?? rollSkin(def, Math.random, game.goldChance ? game.goldChance() : 1);
     this.skin = skinsFor(def)[this.skinIdx];
     applySkin(this, this.skin);
     if (this.skin && this.skin.rare) { this.maxHp *= 1.5; this.hp = this.maxHp; }
@@ -75,24 +75,34 @@ export class Enemy {
     this.peekGoal = new THREE.Vector3();
     if (def.move === 'stand' && spot.cover && !def.nocover && !spot.peek) this.crouch = this.crouchTarget = 1;
     if (def.brain && !opts.decoy) this.brain = new BossBrain(this);
-    if (opts.requiem && !def.boss) this.makeRequiem(opts.requiemAbilities);
+    if (opts.isSuper) this.makeSuper(opts.superAbilities);
     this.place();
     game.scene.add(this.root);
   }
 
-  makeRequiem(fixed) {
+  makeSuper(fixed) {
     const def = this.def;
-    this.requiem = true; this.traits = { ...this.traits };
-    this.maxHp = this.hp = Math.round(this.maxHp * 2.4 * 10) / 10;
-    this.dmg *= 1.35; this.fireMul *= 0.82;
+    this.isSuper = true; this.traits = { ...this.traits };
+    this.maxHp = this.hp = Math.round(this.maxHp * (def.boss ? 1.6 : 2.4) * 10) / 10;
+    this.dmg *= def.boss ? 1.25 : 1.35; this.fireMul *= 0.82;
+    if (def.boss) { // Super bosses: tougher, faster, and enraged from the start (no extra abilities, their moves are enough)
+      if (this.brain) this.brain.speedMul = 1.2;
+      this.abilities = [];
+      applySkin(this, REQ_SKIN);
+      this.displayName = 'SUPER ' + def.name;
+      REQ_HALO.map = REQ_HALO.map || TX.ring(); REQ_AURA.map = REQ_AURA.map || TX.glow();
+      this.aura = new THREE.Sprite(REQ_AURA); this.aura.scale.setScalar(3.2); this.aura.position.y = this.centerY || 1; this.root.add(this.aura);
+      this.halo = new THREE.Sprite(REQ_HALO); this.halo.scale.set(0.7, 0.7, 1); this.halo.position.y = (this.centerY || 1) * 2 + 0.2; this.root.add(this.halo);
+      return;
+    }
     this.scale *= 1.12; this.root.scale.setScalar(this.scale);
     const ranged = !!def.atk;
-    const pool = REQUIEM_ABILITIES.filter((a) => !a.ranged || ranged);
+    const pool = SUPER_ABILITIES.filter((a) => !a.ranged || ranged);
     this.abilities = fixed || [];
     while (!fixed && this.abilities.length < 2) { const a = pool[Math.floor(Math.random() * pool.length)]; if (!this.abilities.includes(a.id)) this.abilities.push(a.id); }
-    for (const id of this.abilities) REQUIEM_ABILITIES.find((a) => a.id === id).apply(this);
+    for (const id of this.abilities) SUPER_ABILITIES.find((a) => a.id === id).apply(this);
     applySkin(this, REQ_SKIN);
-    this.displayName = 'REQUIEM ' + def.name;
+    this.displayName = 'SUPER ' + def.name;
     REQ_HALO.map = REQ_HALO.map || TX.ring(); REQ_AURA.map = REQ_AURA.map || TX.glow();
     // crown of light just above the model's real top
     this.root.updateMatrixWorld(true);
@@ -137,7 +147,7 @@ export class Enemy {
     if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) this.applyMats(); }
     this.stagger = Math.max(0, this.stagger - dt * 4);
     this.kick = Math.max(0, (this.kick || 0) - dt * 1.6);
-    if (this.requiem) {
+    if (this.isSuper) {
       this.aura.material.opacity = 0.4 + Math.sin(this.phase * 4) * 0.15; this.halo.material.rotation += dt * 2;
       if (Math.random() < dt * 10) g.fx.emit(this.centerWorld(new THREE.Vector3()).add(new THREE.Vector3(rand(Math.random, -0.4, 0.4), rand(Math.random, -0.6, 0.6), rand(Math.random, -0.2, 0.2))), 1, 'pop', 0.4, -1.5, 0.5);
       if (this.echoQ && this.echoQ.t > 0) { this.echoQ.t -= dt; if (this.echoQ.t <= 0) { const q = this.echoQ; this.echoQ = null; this.shoot(q.kind, q.spread + 0.08, { ...q.atk, _echo: true }); } }
@@ -188,8 +198,21 @@ export class Enemy {
       if (this.decoy && Math.random() < dt * 1.5) { this.flashT = 0.06; for (const m of this.meshes) m.material = CLOAK; }
     }
     this.crouch += (this.crouchTarget - this.crouch) * Math.min(1, dt * 10);
+    this.keepInView();
     this.place();
     if (this.anim) this.anim(dt, this.moving);
+  }
+
+  // nobody gets behind you or off the edge of the screen (drones and orbiters used to)
+  keepInView() {
+    if (this.state !== 'active' || this.leap) return;
+    const g = this.game, cam = g.camPos, def = this.def;
+    const close = def.move === 'dive' || this.traits.kamikaze ? 0.3 : this.flyer || def.move === 'orbit' ? 1.8 : 1.0;
+    if (this.pos.z > cam.z - close) this.pos.z = cam.z - close;
+    const half = g.viewHalfW || 0.6;
+    const lim = Math.max(0.35, (cam.z - this.pos.z) * half - 0.35 * this.scale);
+    const dx = this.pos.x - cam.x;
+    if (Math.abs(dx) > lim) this.pos.x = cam.x + Math.sign(dx) * lim;
   }
 
   place() {
@@ -516,7 +539,7 @@ export class Enemy {
     const speed = this.pspeed * (atk.speed || 1) * (kind === 'shard' ? 1.2 : kind === 'sonic' ? 0.8 : 1);
     const dmg = this.dmg * (atk.dmg || 1);
     g.spawnProjectile(from, target, speed, dmg, kind, { lob: atk.lob || kind === 'grenade', homing: atk.homing });
-    if (this.echo && !atk._echo && !this.echoQ) this.echoQ = { t: 0.2, kind, spread, atk }; // Requiem ECHO SHOTS
+    if (this.echo && !atk._echo && !this.echoQ) this.echoQ = { t: 0.2, kind, spread, atk }; // Super ECHO SHOTS
     const pk = PKINDS[kind]; if (pk && !NO_HALO.has(kind)) g.fx.glowAt(from, pk.mat.color.getHex(), 0.4, 0.07); // muzzle flash
     g.sfx.enemyShot();
   }
@@ -685,10 +708,10 @@ const G_MISSILE = new THREE.BoxGeometry(0.09, 0.09, 0.32);
 const G_SONIC = new THREE.BoxGeometry(0.5, 0.08, 0.06);
 const B = (c) => new THREE.MeshBasicMaterial({ color: c });
 const CORE = B(0xfff0a0);
-// ---------------------------------------------------------------- Requiem enemies
+// ---------------------------------------------------------------- Super enemies
 // Extra Hard only: rare, much stronger versions of normal enemies with two extra abilities
 // and a dark violet look with a crown of light.
-export const REQUIEM_ABILITIES = [
+export const SUPER_ABILITIES = [
   { id: 'blink', name: 'BLINK', desc: 'Teleports away when hit', apply: (e) => { e.traits.teleportOnHit = true; } },
   { id: 'regen', name: 'REGENERATION', desc: 'Heals quickly when left alone', apply: (e) => { e.traits.regen = Math.max(e.traits.regen || 0, e.maxHp * 0.08); } },
   { id: 'mirror', name: 'MIRROR', desc: 'Sometimes reflects shots back at you', apply: (e) => { e.traits.reflect = true; } },
@@ -702,7 +725,7 @@ export const REQUIEM_ABILITIES = [
   { id: 'barbed', name: 'IRONCLAD', desc: 'Body shots do 40% less (aim for the head)', apply: (e) => { e.traits.armor = Math.min(e.traits.armor || 1, 0.6); } },
   { id: 'brood', name: 'BROODMOTHER', desc: 'Keeps spawning larvae', apply: (e) => { e.brood = 6; } },
 ];
-const REQ_SKIN = { id: 'requiem', name: 'REQUIEM', tint: [0.42, 0.26, 0.6], emissive: 0x24001a };
+const REQ_SKIN = { id: 'super', name: 'SUPER', tint: [0.42, 0.26, 0.6], emissive: 0x24001a };
 const REQ_HALO = new THREE.SpriteMaterial({ color: 0xc040ff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
 const REQ_AURA = new THREE.SpriteMaterial({ color: 0x9020c0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.55 });
 

@@ -85,7 +85,7 @@ function render() {
   for (const [id, name] of ctx.enemies()) { const o = el('option', null, name); o.value = id; sel.append(o); }
   const sb = el('button', 'dev-b', 'SPAWN ENEMY');
   sb.addEventListener('click', (e) => { e.stopPropagation(); ctx.spawn(sel.value); });
-  const rq = el('button', 'dev-b', 'SPAWN REQUIEM');
+  const rq = el('button', 'dev-b', 'SPAWN SUPER');
   rq.addEventListener('click', (e) => { e.stopPropagation(); ctx.spawn(sel.value, true); });
   row.append(sel, sb, rq); sp.append(row);
   const row2 = el('div', 'dev-row');

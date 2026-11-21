@@ -14,9 +14,9 @@ export const CHARACTERS = [
   { id: 'exec', name: 'JUNIOR EXECUTIVE', sleeve: 0x2a1e2c, weapon: 'shotgun', perks: { lucky: 1, greed: 1 }, blurb: 'Pump shotgun and connections in high places.',
     unlock: { text: 'DEFEAT 3 BOSSES', test: (p) => p.stats.bossKills >= 3, price: 2500 } },
   { id: 'contractor', name: 'THE CONTRACTOR', sleeve: 0x8a7a50, weapon: 'rifle', perks: { explosive: 1 }, blurb: 'Assault rifle with explosive rounds.',
-    unlock: { text: 'REACH FLOOR 25', test: (p) => p.stats.maxFloor >= 25 } },
+    unlock: { text: 'REACH FLOOR 15', test: (p) => p.stats.maxFloor >= 15 } },
   { id: 'heir', name: "THE CHAIRMAN'S HEIR", sleeve: 0x14101a, weapon: 'sniper', perks: { secondwind: 1, marksman: 1 }, blurb: 'Sniper rifle, Second Wind, and a sense of entitlement.',
-    unlock: { text: 'BEAT FLOOR 50', test: (p) => p.stats.maxFloor >= 50 && p.stats.wins >= 1 } },
+    unlock: { text: 'BEAT FLOOR 30', test: (p) => p.stats.wins >= 1 } },
 ];
 export const CHAR = Object.fromEntries(CHARACTERS.map((c) => [c.id, c]));
 

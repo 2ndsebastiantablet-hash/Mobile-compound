@@ -74,7 +74,7 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 - [x] **124 new achievements** (161 total) with new tracked stats
 - [x] **50 new memos** (80 total)
 - [x] **GRAVEYARD SHIFT** (golden tier fighting spirit): punch barrages, attack-cancelling finger laser, luck, OVERDRIVE ultimate
-- [x] **Requiem enemies** (Extra Hard only): rare, 2.4x health, harder hits, dark violet with a crown of light, two of 12 extra abilities (Blink, Regeneration, Mirror, Fury, Legion, Death Nova, Echo Shots, Haste, Phasing, War Cry, Ironclad, Broodmother); 4x cash, 3x score
+- [x] **Super enemies** (Extra Hard only): rare, 2.4x health, harder hits, dark violet with a crown of light, two of 12 extra abilities (Blink, Regeneration, Mirror, Fury, Legion, Death Nova, Echo Shots, Haste, Phasing, War Cry, Ironclad, Broodmother); 4x cash, 3x score
 - [x] **Mutations** (Extra Hard only): 30 mutations replace perks between floors; each has an upside and a listed downside and recolours your arms
 - [x] **THE GOLDEN WATCH** replaces The Remote: rewinds ~4s on demand and rebuilds the room as another version each time
 

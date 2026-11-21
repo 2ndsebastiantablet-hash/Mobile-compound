@@ -3,7 +3,10 @@
 import { mulberry32 } from '../../engine/util.js';
 
 export const RD = 12, RW = 7, RH = 3, HALF = RW / 2, EYE = 1.6;
-export const TOP_FLOOR = 50;
+// The tower is 30 floors tall; its content (10 zones, 60 bosses) was authored over 50 "layout"
+// floors, and each real floor maps onto one of them (see layoutOf in game.js).
+export const TOP_FLOOR = 30;
+export const LAYOUT_TOP = 50;
 
 // Each zone of the tower has three alternate themes. When the player reaches a
 // floor, one of its three variants is rolled at random (theme + lighting mood +
