@@ -7,7 +7,7 @@ import { mulberry32, rand, pick, shuffle } from '../../engine/util.js';
 import { box, plane, mergeStatic } from '../../engine/geometry.js';
 const DECAL_G = new THREE.PlaneGeometry(1, 1);
 import { RD, RW, RH, HALF, EYE, MOODS } from './zones.js';
-export { RD, RW, RH, HALF, EYE, TOP_FLOOR, ZONES, MOODS, zoneFor, floorPlan, themeFor } from './zones.js';
+export { RD, RW, RH, HALF, EYE, TOP_FLOOR, ZONES, MOODS, zoneFor, floorPlan, themeFor, BOSS_GROUPS, MINI_GROUPS, towerFloorOf, bossTowerFloor } from './zones.js';
 export { box } from '../../engine/geometry.js';
 
 // ---------------------------------------------------------------- materials
@@ -99,6 +99,7 @@ export function buildFloor(floor, plan) {
     const sp = new THREE.Mesh(plane(len, 7, Math.round(len / 14.4), 1), sky);
     sp.position.set(-(HALF + 6), 1.2, (zA + zB) / 2); sp.rotation.y = Math.PI / 2; sp.renderOrder = -1; group.add(sp);
   }
+  for (const r of rooms) r.colliders = collectColliders(r); // furniture you can't walk through (Free Roam)
   for (const r of rooms) {
     for (const p of r.props) { mergeStatic(p); p.traverse((o) => { o.userData.keep = true; }); } // each prop becomes 1-3 meshes
     mergeStatic(r.group); // one draw call per material per room
@@ -125,6 +126,27 @@ export function buildFloor(floor, plan) {
       }
     },
   };
+}
+
+// Free Roam: the footprint of every solid thing standing on the floor (desks, cabinets, pillars,
+// counters...), as world-space boxes. Knockable props are left out (they move); the game checks those live.
+function collectColliders(room) {
+  room.group.updateMatrixWorld(true);
+  for (const p of room.props) p.traverse((o) => { o.userData.inProp = true; });
+  const out = [], b = new THREE.Box3();
+  room.group.traverse((o) => {
+    if (!o.isMesh || o.userData.inProp) return;
+    const t = o.geometry.type;
+    if (t !== 'BoxGeometry' && t !== 'CylinderGeometry') return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    if (mats.some((m) => m.transparent)) return;
+    b.setFromObject(o);
+    if (b.min.y > 1.1 || b.max.y < 0.35) return; // overhead fittings, rugs and trim
+    const sx = b.max.x - b.min.x, sz = b.max.z - b.min.z;
+    if (sx > 6.2 || sz > 6.2 || sx < 0.05 || sz < 0.05) return; // walls, floors, wires
+    out.push({ x0: b.min.x, x1: b.max.x, z0: b.min.z, z1: b.max.z });
+  });
+  return out;
 }
 
 function buildRoom(c) {

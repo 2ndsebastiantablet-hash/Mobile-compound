@@ -17,6 +17,7 @@ export function initDev(c) {
   $('devClose').addEventListener('click', (e) => { e.stopPropagation(); closeDev(); });
   $('devBtn').addEventListener('click', (e) => { e.stopPropagation(); openDev(); });
   $('pDevBtn').addEventListener('click', (e) => { e.stopPropagation(); openDev(); });
+  $('tDevBtn').addEventListener('click', (e) => { e.stopPropagation(); openDev(); });
   window.addEventListener('keydown', (e) => { if (e.key === '`' && devEnabled()) { e.preventDefault(); open ? closeDev() : openDev(); } });
   refreshDevUi();
 }
@@ -26,6 +27,7 @@ export function refreshDevUi() {
   const on = devEnabled();
   $('devBtn').classList.toggle('hidden', !on);
   $('pDevBtn').classList.toggle('hidden', !on);
+  $('tDevBtn').classList.toggle('hidden', !on);
   $('fps').classList.toggle('hidden', !(on && flags.fps));
 }
 
@@ -36,10 +38,10 @@ export function devTick(dt) {
   if (fpsAcc >= 0.5) { $('fps').textContent = `${Math.round(fpsN / fpsAcc)} FPS · ${ctx.info()}`; fpsAcc = 0; fpsN = 0; }
 }
 
-function closeDev() { open = false; $('dev').classList.add('hidden'); ctx.resume(); }
+function closeDev() { open = false; $('dev').classList.add('hidden'); if (ctx.inRun()) ctx.resume(); }
 export function openDev() {
-  if (!devEnabled() || !ctx.inRun()) return;
-  open = true; ctx.pause(); render(); $('dev').classList.remove('hidden');
+  if (!devEnabled() || (!ctx.inRun() && !ctx.onTitle())) return;
+  open = true; if (ctx.inRun()) ctx.pause(); render(); $('dev').classList.remove('hidden');
 }
 
 function render() {
@@ -50,6 +52,16 @@ function render() {
     b.addEventListener('click', (e) => { e.stopPropagation(); ctx.sfx.tap(); fn(b); });
     grid.append(b); return b;
   };
+
+  // unlocks and endings work from the title screen too
+  const un = section('UNLOCKS & ADD-ONS');
+  btn(un, 'UNLOCK EVERYTHING', () => { ctx.unlockAll(); render(); });
+  btn(un, 'MARK ALL 4 ENDINGS SEEN', () => { ctx.allEndings(); render(); });
+  btn(un, `NEW GAME+: ${ctx.addon('ngp') ? 'ON' : 'OFF'}`, () => { ctx.toggleAddon('ngp'); render(); }, ctx.addon('ngp') ? 'on' : '');
+  btn(un, `FREE ROAM: ${ctx.addon('roam') ? 'ON' : 'OFF'}`, () => { ctx.toggleAddon('roam'); render(); }, ctx.addon('roam') ? 'on' : '');
+  const en = section('PLAY ENDING CUTSCENE');
+  ['EASY', 'MEDIUM', 'HARD', 'EXTRA HARD'].forEach((n, i) => btn(en, n, () => { closeDev(); ctx.ending(i); }));
+  if (!ctx.inRun()) { box.append(el('div', 'dev-h', 'START A RUN FOR CHEATS, WEAPONS, PERKS AND SPAWNING')); return; }
 
   const tg = section('CHEATS');
   for (const [k, label] of [['god', 'GOD MODE'], ['ammo', 'INFINITE AMMO'], ['onehit', 'ONE-HIT KILLS'], ['peace', 'ENEMIES DON\'T ATTACK'], ['fps', 'SHOW FPS']]) {
@@ -65,11 +77,10 @@ function render() {
   btn(ac, 'FINISH FLOOR', () => { closeDev(); ctx.finishFloor(); });
   btn(ac, '+$1,000', () => ctx.cash(1000));
   btn(ac, '+$10,000', () => ctx.cash(10000));
-  btn(ac, 'UNLOCK EVERYTHING', () => ctx.unlockAll());
   const fl = el('div', 'dev-row');
-  const inp = el('input'); inp.type = 'number'; inp.min = 1; inp.max = 50; inp.value = Math.min(50, ctx.floor() + 1); inp.className = 'dev-in';
+  const inp = el('input'); inp.type = 'number'; inp.min = 1; inp.max = 60; inp.value = Math.min(30, ctx.floor() + 1); inp.className = 'dev-in';
   const go = el('button', 'dev-b', 'GO TO FLOOR');
-  go.addEventListener('click', (e) => { e.stopPropagation(); const n = Math.max(1, Math.min(50, Math.round(+inp.value || 1))); closeDev(); ctx.gotoFloor(n); });
+  go.addEventListener('click', (e) => { e.stopPropagation(); const n = Math.max(1, Math.min(60, Math.round(+inp.value || 1))); closeDev(); ctx.gotoFloor(n); });
   fl.append(inp, go); box.append(fl);
 
   const wg = section('GIVE WEAPON');

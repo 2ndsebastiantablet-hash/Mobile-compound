@@ -1,5 +1,5 @@
 import * as THREE from '../vendor/three.module.min.js';
-import { buildFloor, floorPlan, MOODS, box, EYE, RD, HALF, TOP_FLOOR } from '../content/floors/builder.js';
+import { buildFloor, floorPlan, MOODS, box, EYE, RD, HALF, TOP_FLOOR, BOSS_GROUPS, MINI_GROUPS, bossTowerFloor } from '../content/floors/builder.js';
 import { Enemy, Projectile, SUPER_ABILITIES } from '../content/enemies/ai.js';
 import { DEFS, rosterFor, isFlyer, isMelee } from '../content/enemies/roster.js';
 import { bossFor, bossKindFor, BOSS_LIST } from '../content/bosses/bosses.js';
@@ -18,7 +18,8 @@ import { profile, addCash, stat, statMax, touch, flushProfile } from './profile.
 import { applyUpgrades, weaponBonus } from '../content/meta/upgrades.js';
 import { CHAR } from '../content/meta/characters.js';
 import { DIFFS, diffOf } from './difficulty.js';
-import { completion, roamUnlocked } from './completion.js';
+import { completion, roamUnlocked, allEndings, endingsDone } from './completion.js';
+import { playEnding } from './cutscene/endings.js';
 import { ENDINGS, ENDING_NGP } from '../content/meta/endings.js';
 import { MODES, MODE, modeOpen, RUSH_FLOORS, dailySetup, todayKey, recordRun, DAILY_MODS as DAILY_MODS_REF } from './modes.js';
 import { LORE, LORE_BY_ID } from '../content/meta/lore.js';
@@ -173,11 +174,15 @@ const effFloor = (n) => (runMode === 'rush' || n <= TOP_FLOOR ? layoutOf(n) : 50
 // which of the authored bosses a boss floor gets: the nearest boss (or mini) floor of the layout
 function bossKey(n) {
   const kind = bossKindFor(n), lf = layoutOf(n);
+  if (runMode !== 'rush' && n <= TOP_FLOOR) { // Story: pick one of this floor's boss groups, fixed for the run
+    const groups = kind === 'mini' ? MINI_GROUPS : BOSS_GROUPS, opts = groups[kind === 'mini' ? (n - 3) / 5 : n / 5 - 1];
+    if (opts) return opts[(Math.floor(runId / 1000) + n * 7) % opts.length];
+  }
   return kind === 'mini' ? clamp(5 * Math.round((lf - 3) / 5) + 3, 3, 48) : clamp(5 * Math.round(lf / 5), 5, 50);
 }
 // New Game+: unlocked by beating Story once. Tougher enemies, six new ones, more Supers,
 // a darker title screen and a faster, harsher soundtrack. Daily runs are never NG+.
-const ngpUnlocked = () => !!(profile.allModes || (profile.stats.wins || 0) >= 1);
+const ngpUnlocked = () => !!(profile.allModes || allEndings());
 const ngpWanted = () => ngpUnlocked() && !!profile.ngp;
 function setNgp(on) {
   G.ngp = !!on;
@@ -194,7 +199,7 @@ function titleNgp() { // the title screen shows NG+ while it's switched on
 // PC: WASD / arrow keys (duck moves to C, Ctrl or Space). Mobile: the joystick on the left.
 const roamWanted = () => roamUnlocked() && !!profile.roam;
 const roamKeys = new Set();
-const roamStick = { x: 0, y: 0 };
+const roamStick = { x: 0, y: 0 }, roamBox = new THREE.Box3();
 function roamUpdate(dt) {
   const show = G.roam && !PC && (mode === 'combat' || mode === 'moving') && !paused;
   if (show !== G.stickShown) { G.stickShown = show; $('roamStick').classList.toggle('hidden', !show); }
@@ -213,6 +218,22 @@ function roamUpdate(dt) {
   const room = area.room, st = room.stand;
   G.camPos.x = clamp(nx, -HALF + 0.55, HALF - 0.55);
   G.camPos.z = clamp(nz, room.zf + 1.4, st.z + 0.4);
+  // don't walk through furniture (and knockable props where they lie now)
+  const R = 0.32, solids = room.colliders || [];
+  const push = (x0, x1, z0, z1) => {
+    const cx = G.camPos.x, cz = G.camPos.z;
+    if (cx < x0 - R || cx > x1 + R || cz < z0 - R || cz > z1 + R) return;
+    const l = cx - (x0 - R), r = x1 + R - cx, f = cz - (z0 - R), b = z1 + R - cz, m = Math.min(l, r, f, b);
+    if (m === l) G.camPos.x = x0 - R; else if (m === r) G.camPos.x = x1 + R; else if (m === f) G.camPos.z = z0 - R; else G.camPos.z = z1 + R;
+  };
+  for (let pass = 0; pass < 2; pass++) {
+    for (const c of solids) push(c.x0, c.x1, c.z0, c.z1);
+    for (const p of room.props || []) {
+      if (p.userData.broken || !p.visible || Math.abs(p.position.z - G.camPos.z) > 3) continue;
+      roamBox.setFromObject(p); if (roamBox.max.y < 0.35 || roamBox.min.y > 1.1) continue;
+      push(roamBox.min.x, roamBox.max.x, roamBox.min.z, roamBox.max.z);
+    }
+  }
   // don't walk through enemies
   for (const e of G.enemies) {
     if (!e.alive || e.off) continue;
@@ -340,7 +361,7 @@ function prepareArea(i) {
   area = { idx: i, room, queue: [], waveT: 2.5, maxAlive: Math.max(2, Math.min(8, 3 + Math.floor((G.diff || f) / 6) + D.alive)), clearing: false, boss: null };
   const bk = bossKindFor(f);
   if (last && bk) {
-    const id = bossFor(bossKey(f), G.variant || 0);
+    const id = runMode === 'story' && f === TOP_FLOOR ? 'boss_chairman' : bossFor(bossKey(f), G.variant || 0); // the story always ends with the Chairman
     const bossSpot = { x: 0, y: 1.9, z: room.z0 - 8.2, cover: false };
     // Extra Hard (and New Game+): a third of bosses arrive as their SUPER version
     const b = new Enemy(G, id, bossSpot, (runDiff === 3 || G.ngp) && Math.random() < (G.ngp ? 0.5 : 0.35) ? { isSuper: true } : {});
@@ -1182,6 +1203,9 @@ function areaCleared() {
       setRoom(i + 1);
       beginCombat();
     });
+  } else if (runMode === 'story' && G.floorNum >= TOP_FLOOR) {
+    banner('THE CHAIRMAN IS DEAD', null, 1.6);
+    run(function* () { yield 1.6; fade(1, 0.5); yield 0.6; endingAfterBoss(); });
   } else {
     banner('FLOOR CLEAR', null, 1.6);
     const room = rooms[i], el = room.exitElevator;
@@ -1201,6 +1225,32 @@ function areaCleared() {
       floorComplete();
     });
   }
+}
+
+// ------------------------------------------------------------------ ending cutscenes
+// Beating the Chairman on floor 30 in Story plays the ending for this run's difficulty (cutscene/endings.js).
+// They can also be replayed from HQ > RECORDS and the dev panel.
+let cutscene = null, csReturn = null;
+function playCutscene(diff, done) {
+  if (cutscene) return;
+  csReturn = { mode, hud: !ui.hud.classList.contains('hidden') };
+  mode = 'cutscene'; G.combatActive = false;
+  ui.hud.classList.add('hidden'); hideScreens();
+  if (PC && locked()) document.exitPointerLock();
+  setMusic('off'); initAudio();
+  cutscene = playEnding(diff, {
+    renderer, post, PC, char: runChar, mutTint: mutationTint(mutLv),
+    aspect: () => camera.aspect, height: () => post.u.res.value.y,
+    onDone: () => {
+      cutscene = null;
+      post.grade(GRADES[moodNow] || GRADES.normal); post.u.flash.value = 0;
+      fade(0, 0.6);
+      done && done();
+    },
+  });
+}
+function endingAfterBoss() { // the last floor of Story: straight from the fight into the ending
+  playCutscene(runDiff, () => { mode = 'floorclear'; floorComplete(); });
 }
 
 // ------------------------------------------------------------------ the elevator ride between floors
@@ -1325,7 +1375,7 @@ function showWin() {
   const E = G.ngp ? ENDING_NGP : ENDINGS[runDiff] || ENDINGS[1];
   $('winTitle').textContent = E.title; $('winTitle').style.color = E.color; $('winTag').textContent = E.tag; $('keepBtn').classList.remove('hidden');
   $('winStory').innerHTML = E.lines.map((l, i) => `<p style="animation-delay:${0.6 + i * 1.6}s">${l}</p>`).join('');
-  profile.endings = profile.endings || {}; profile.endings[G.ngp ? 'ngp' : runDiff] = 1;
+  profile.endings = profile.endings || {}; profile.endings[runDiff] = 1; if (G.ngp) profile.endings.ngp = 1;
   $('winStats').textContent = `FINAL SCORE ${score}\nBEST ${best.score}\nKEEP CLIMBING TO PLAY ON IN ENDLESS MODE`;
   showScreen(ui.win);
   setMusic('calm');
@@ -1713,7 +1763,7 @@ const crosshair = $('crosshair');
 // MOUSE SPEED and GUN WEIGHT settings can scale it. Without capture it follows the system cursor.
 let lockLostT = 0;
 const locked = () => document.pointerLockElement === gameEl;
-const inPlay = () => mode !== 'title' && mode !== 'floorclear' && mode !== 'dead' && !paused && !choiceOpen;
+const inPlay = () => mode !== 'title' && mode !== 'cutscene' && mode !== 'floorclear' && mode !== 'dead' && !paused && !choiceOpen;
 function wantLock() {
   if (!PC || !settings.lock || locked() || !inPlay()) return;
   try { const r = gameEl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch { /* not supported */ }
@@ -1729,6 +1779,7 @@ function moveAim(dx, dy) {
   mouse.x = clamp(mouse.x + dx * k, 0, r.width); mouse.y = clamp(mouse.y + dy * k, 0, r.height);
 }
 gameEl.addEventListener('pointerdown', (ev) => {
+  if (cutscene) return;
   if (ev.target.closest('button') || ev.target.closest('.screen')) return;
   initAudio();
   if (ev.pointerType === 'mouse' && ev.button === 2) { startReload(); ev.preventDefault(); return; }
@@ -1765,6 +1816,7 @@ gameEl.addEventListener('pointerup', release);
 gameEl.addEventListener('pointercancel', release);
 gameEl.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('keydown', (e) => {
+  if (cutscene) return;
   if (e.key === 'r' || e.key === 'R') startReload();
   const k = e.key.toLowerCase();
   if (G.roam && ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { e.preventDefault(); roamKeys.add(k); }
@@ -1817,7 +1869,7 @@ function openModeSelect(onPick) {
   const box = $('modeList'); box.innerHTML = '';
   { // New Game+ switch (once Story has been beaten)
     const row = document.createElement('div'); row.className = 'hq-row ngp-row' + (ngpUnlocked() ? '' : ' dim');
-    row.innerHTML = `<div class="hq-info"><b style="color:#ff4040">NEW GAME+</b><span>Tougher enemies, six new ones, more SUPER enemies, its own ending and a darker soundtrack. Works with every mode except the Daily.</span>${ngpUnlocked() ? '' : '<small class="req">UNLOCK: BEAT STORY MODE</small>'}</div>`;
+    row.innerHTML = `<div class="hq-info"><b style="color:#ff4040">NEW GAME+</b><span>Tougher enemies, six new ones, more SUPER enemies, its own ending and a darker soundtrack. Works with every mode except the Daily.</span>${ngpUnlocked() ? '' : `<small class="req">UNLOCK: BEAT STORY ON EASY, MEDIUM, HARD AND EXTRA HARD (${endingsDone()}/4)</small>`}</div>`;
     const b = document.createElement('button'); b.className = 'hq-buy' + (ngpUnlocked() ? (profile.ngp ? ' on' : '') : ' off');
     b.textContent = ngpUnlocked() ? (profile.ngp ? 'ON' : 'OFF') : 'LOCKED';
     b.addEventListener('click', (e) => { e.stopPropagation(); if (!ngpUnlocked()) { sfx.empty(); return; } sfx.tap(); profile.ngp = !profile.ngp; flushProfile(true); titleNgp(); openModeSelect(onPick); });
@@ -1826,7 +1878,7 @@ function openModeSelect(onPick) {
   { // FREE ROAM add-on (100% completion)
     const un = roamUnlocked();
     const row = document.createElement('div'); row.className = 'hq-row roam-row' + (un ? '' : ' dim');
-    row.innerHTML = `<div class="hq-info"><b style="color:#60ff80">FREE ROAM ADD-ON</b><span>Walk around the room during fights instead of standing in one spot. ${PC ? 'WASD / arrow keys to move, C / Ctrl / Space to duck.' : 'Move with the joystick on the left.'} Works with every mode.</span>${un ? '' : `<small class="req">UNLOCK: 100% COMPLETION (NOW ${completion()}%)</small>`}</div>`;
+    row.innerHTML = `<div class="hq-info"><b style="color:#60ff80">FREE ROAM ADD-ON</b><span>Walk around the room during fights instead of standing in one spot. ${PC ? 'WASD / arrow keys to move, C / Ctrl / Space to duck.' : 'Move with the joystick on the left.'} Works with every mode.</span>${un ? '' : `<small class="req">UNLOCK: BEAT STORY ON EASY, MEDIUM, HARD AND EXTRA HARD (${endingsDone()}/4)</small>`}</div>`;
     const b = document.createElement('button'); b.className = 'hq-buy' + (un ? (profile.roam ? ' on' : '') : ' off');
     b.textContent = un ? (profile.roam ? 'ON' : 'OFF') : 'LOCKED';
     b.addEventListener('click', (e) => { e.stopPropagation(); if (!un) { sfx.empty(); return; } sfx.tap(); profile.roam = !profile.roam; flushProfile(true); openModeSelect(onPick); });
@@ -1888,7 +1940,7 @@ onBtn('retryBtn', () => restartFloor());
 onBtn('menuBtn', toTitle);
 onBtn('gcLeave', () => { sfx.tap(); openChoice(); });
 onBtn('winBtn', toTitle);
-document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'combat' && !paused) togglePause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && mode === 'combat' && !paused && !cutscene) togglePause(); });
 
 // duck: a quick crouch that lets shots fly over your head (S / down arrow / DUCK button)
 function duck() {
@@ -2341,6 +2393,16 @@ function update(dt) {
 let last = performance.now();
 function frame(t) {
   let dt = Math.min(0.05, (t - last) / 1000); last = t;
+  if (cutscene) { // a cutscene owns the screen: its own scene and camera through the same post pass
+    cutscene.update(dt);
+    post.update(dt);
+    post.u.lowHp.value = 0; post.u.dissolve.value = 0; dissolveGoal = 0;
+    post.begin(); renderer.clear();
+    if (cutscene) cutscene.render(renderer); else renderer.render(scene, camera);
+    post.end();
+    requestAnimationFrame(frame);
+    return;
+  }
   if (PC && locked() && !inPlay()) document.exitPointerLock(); // menus need the real cursor
   // dev GAME SPEED runs several fixed updates per rendered frame; G.bot is the balance-test autoplayer
   if (hitStop > 0) { hitStop -= dt; dt = 0; }
@@ -2360,7 +2422,7 @@ function frame(t) {
   requestAnimationFrame(frame);
 }
 
-initHQ({ sfx, changed: () => { recalc(); checkAch(); } });
+initHQ({ sfx, changed: () => { recalc(); checkAch(); }, watchEnding: (i) => playCutscene(i, () => { mode = 'title'; setMusic('calm'); openHQ('records'); }) });
 bindHQ();
 toTitle();
 requestAnimationFrame(frame);
@@ -2468,7 +2530,19 @@ function reshuffleRoom() {
 let devWasPaused = false;
 initDev({
   sfx, enabled: () => DEV_BUILD && settings.dev === 1,
-  inRun: () => mode !== 'title' && mode !== 'dead' && !choiceOpen,
+  inRun: () => mode !== 'title' && mode !== 'dead' && mode !== 'cutscene' && !choiceOpen,
+  onTitle: () => mode === 'title',
+  ending: (i) => {
+    const wasTitle = mode === 'title', was = mode;
+    playCutscene(i, () => {
+      if (wasTitle) { mode = 'title'; showScreen(ui.title); setMusic('calm'); return; }
+      mode = was === 'cutscene' ? 'combat' : was; ui.hud.classList.remove('hidden'); setMusic(mode === 'combat' ? 'combat' : 'calm');
+      if (mode === 'combat') G.combatActive = true;
+    });
+  },
+  allEndings: () => { profile.endings = { ...(profile.endings || {}), 0: 1, 1: 1, 2: 1, 3: 1 }; touch(); flushProfile(true); toast('NEW GAME+ AND FREE ROAM UNLOCKED'); },
+  addon: (k) => !!profile[k],
+  toggleAddon: (k) => { if (k === 'ngp' ? !ngpUnlocked() : !roamUnlocked()) { profile.endings = { ...(profile.endings || {}), 0: 1, 1: 1, 2: 1, 3: 1 }; } profile[k] = !profile[k]; touch(); flushProfile(true); if (mode === 'title') titleNgp(); toast(`${k === 'ngp' ? 'NEW GAME+' : 'FREE ROAM'} ${profile[k] ? 'ON' : 'OFF'} (NEXT RUN)`); },
   pause: () => { devWasPaused = paused; paused = true; ui.pause.classList.add('hidden'); hold = null; },
   resume: () => { paused = devWasPaused; if (paused) { ui.pause.classList.remove('hidden'); $('pausePerks').innerHTML = perkSummary(); } },
   info: () => `${G.enemies.filter((e) => e.alive).length} ENEMIES · ${drawCalls} DRAWS`,
@@ -2486,12 +2560,12 @@ initDev({
   addPerk: (id) => { const before = M.maxHp; perkLv[id] = (perkLv[id] || 0) + 1; recalc(); if (M.maxHp > before) P.hp += M.maxHp - before; P.hp = Math.min(P.hp, M.maxHp); toast(PERK[id].name, PERK_RARITY[PERK[id].rarity].color); },
   clearPerks: () => { perkLv = {}; recalc(); P.hp = Math.min(P.hp, M.maxHp); },
   enemies: () => Object.entries(DEFS).filter(([, d]) => !d.boss && !d.minion && d.floors && d.floors[1] > 0).map(([id, d]) => [id, d.name]),
-  bosses: () => BOSS_LIST.map((b) => [b.id, `F${b.floor} ${b.mini ? 'MINI · ' : ''}${b.name}`]),
+  bosses: () => BOSS_LIST.map((b) => [b.id, `F${bossTowerFloor(b.floor, b.mini)} ${b.mini ? 'MINI · ' : ''}${b.name}`]),
   spawn: (t, rq) => { if (!area) return; let e; if (rq) { const s2 = freeSpot(t); e = new Enemy(G, t, s2, { isSuper: true }); s2.taken = e; G.enemies.push(e); announceSuper(e); } else e = spawnAt(t); if (G.combatActive) e.activate(); },
   spawnBoss: (id) => { if (!area) return; const b = new Enemy(G, id, { x: 0, y: 1.9, z: area.room.z0 - 8.2, cover: false }); b.activate(); G.enemies.push(b); if (!area.boss) area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; },
 });
 
-window.__game = { get draws() { return drawCalls; }, spiritFill, get overdrive() { return spiritOverdrive(); }, get mut() { return mutLv; }, forceTwist(id) { setRunMode("daily"); const t = DAILY_MODS_REF.find((x) => x.id === id); daily.mod = t; G.twist = t; G.mod = id; recalc(); }, get run() { return { runMode, daily, rushIdx, rushTime, layout: G.layout, mod: G.mod }; }, goto(n) { hideScreens(); G.floorNum = n; startFloor(n); }, spawnNote: () => spawnNote(G.room), nextFloor: () => nextFloor(), cards: { floorCard, bossCard, dmgDir }, post, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
+window.__game = { get draws() { return drawCalls; }, ending: (i, done) => playCutscene(i, done || (() => {})), get cs() { return cutscene; }, setChar: (c) => { runChar = c; }, setMutLv: (m) => { mutLv = m; }, spiritFill, get overdrive() { return spiritOverdrive(); }, get mut() { return mutLv; }, forceTwist(id) { setRunMode("daily"); const t = DAILY_MODS_REF.find((x) => x.id === id); daily.mod = t; G.twist = t; G.mod = id; recalc(); }, get run() { return { runMode, daily, rushIdx, rushTime, layout: G.layout, mod: G.mod }; }, goto(n) { hideScreens(); G.floorNum = n; startFloor(n); }, spawnNote: () => spawnNote(G.room), nextFloor: () => nextFloor(), cards: { floorCard, bossCard, dmgDir }, post, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);

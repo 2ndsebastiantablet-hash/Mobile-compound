@@ -7,6 +7,18 @@ export const RD = 12, RW = 7, RH = 3, HALF = RW / 2, EYE = 1.6;
 // floors, and each real floor maps onto one of them (see layoutOf in game.js).
 export const TOP_FLOOR = 30;
 export const LAYOUT_TOP = 50;
+// The 30-floor tower has 6 boss floors (5, 10 ... 30) and 6 mini-boss floors (3, 8 ... 28), but the
+// content has 10 groups of each. Each tower boss floor draws from neighbouring groups (picked per
+// run), so every boss can show up in Story.
+export const BOSS_GROUPS = [[5, 10], [15, 20], [25], [30, 35], [40, 45], [50]];
+export const MINI_GROUPS = [[3, 8], [13, 18], [23], [28, 33], [38, 43], [48]];
+// a content ("layout") floor to the tower floor it appears on
+export const towerFloorOf = (lf) => Math.max(1, Math.min(TOP_FLOOR, Math.round(1 + (lf - 1) * (TOP_FLOOR - 1) / (LAYOUT_TOP - 1))));
+export function bossTowerFloor(lf, mini) {
+  const groups = mini ? MINI_GROUPS : BOSS_GROUPS;
+  const i = groups.findIndex((g) => g.includes(lf));
+  return i < 0 ? towerFloorOf(lf) : mini ? 3 + i * 5 : (i + 1) * 5;
+}
 
 // Each zone of the tower has three alternate themes. When the player reaches a
 // floor, one of its three variants is rolled at random (theme + lighting mood +

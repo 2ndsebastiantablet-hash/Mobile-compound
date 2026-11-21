@@ -79,6 +79,8 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 - [x] **THE GOLDEN WATCH** replaces The Remote: rewinds ~4s on demand and rebuilds the room as another version each time
 - [x] v0.17: **30-floor tower** (content mapped evenly), **endings per difficulty**, **elevator ride** between floors, **NEW** tags on unread files, enemies can't get behind you or off-screen, Requiem renamed **Super** (bosses too), the Watch **stops time**, the spirit stays out while carried and **freezes** what it hits
 - [x] v0.17: **New Game+** (6 new enemies, tougher stats, Supers on every difficulty, red title, intense music, own ending) and **completion %** with the **FREE ROAM add-on** at 100% (walk around the room during fights in any mode)
+- [x] v0.18: **ending cutscenes** for all four difficulties (new cutscene engine: own sets, jointed characters, particles, debris, rain, letterbox, skip); NG+ and Free Roam unlock after beating all four difficulties; Free Roam collides with furniture; dev tools from the title (unlocks, add-ons, play any ending); every boss group reachable in the 30-floor Story
+- [ ] Next: GRAVEYARD SHIFT rework (more abilities, focus-locked barrages), Golden Watch rework (right-click rewind to the start of the room, rearranges every surface), New Game+ content (new enemies, floors, weapons, 15 achievements)
 
 **🏁 MILESTONE: BETA.** Gameplay feature complete (audio still to come). Wider testing and store preparation start.
 

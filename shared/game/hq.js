@@ -1,6 +1,9 @@
 // HQ: the between-runs screen. Tabs: UPGRADES (permanent), ARMORY (weapon levels),
 // EMPLOYEES (starting characters), ACHIEVEMENTS. Also the employee picker for a new run.
 import { completion, completionParts } from './completion.js';
+import { towerFloorOf, bossTowerFloor } from '../content/floors/zones.js';
+import { ENDING_NAMES } from './cutscene/endings.js';
+const DIFF_NAMES = ['EASY', 'MEDIUM', 'HARD', 'EXTRA HARD'];
 import { profile, spend, touch, flushProfile } from './profile.js';
 import { UPGRADES, upgradeCost, WEAPON_MAX, weaponCost } from '../content/meta/upgrades.js';
 import { CHARACTERS, isUnlocked } from '../content/meta/characters.js';
@@ -94,11 +97,22 @@ function render() {
     const rec = profile.records || {};
     { // completion breakdown
       const pct = completion();
-      box.append(el('div', 'hq-note', `<b style="color:#f0c860">COMPLETION ${pct}%</b> ${pct >= 100 ? '<b style="color:#60ff80">FREE ROAM UNLOCKED</b>' : '· reach 100% to unlock the FREE ROAM add-on'}`));
+      box.append(el('div', 'hq-note', `<b style="color:#f0c860">COMPLETION ${pct}%</b>`));
       for (const c of completionParts()) {
         const k = Math.min(1, c.have / Math.max(1, c.of));
         box.append(el('div', 'hq-row', `<div class="hq-info"><b>${c.name}</b> <small>${c.have} / ${c.of}</small><div class="pips"><div class="cbar"><i style="width:${(k * 100).toFixed(1)}%"></i></div></div></div>`));
       }
+    }
+    { // the endings you've seen, to watch again
+      box.append(el('div', 'hq-note', `<b style="color:#f0c860">ENDINGS</b> · beat Story on all four difficulties to unlock NEW GAME+ and FREE ROAM`));
+      const ends = profile.endings || {};
+      ENDING_NAMES.forEach((n, i) => {
+        const seen = !!ends[i] || profile.allModes;
+        const row = el('div', 'hq-row' + (seen ? '' : ' dim'), `<div class="hq-info"><b>${seen ? n : '???'}</b><span>${DIFF_NAMES[i]} ENDING</span></div>`);
+        const b = el('button', 'hq-buy' + (seen ? '' : ' off'), seen ? 'WATCH' : 'LOCKED');
+        b.addEventListener('click', (e) => { e.stopPropagation(); if (!seen) { hooks.sfx.empty(); return; } hooks.sfx.tap(); closeHQ(); hooks.watchEnding(i); });
+        row.append(b); box.append(row);
+      });
     }
     const date = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
     const tm = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -160,9 +174,9 @@ function renderLog(box) {
     if (got) { r.style.cursor = 'pointer'; r.addEventListener('click', (e) => { e.stopPropagation(); hooks.sfx.tap(); logSel = id; render(); }); }
     box.append(r);
   };
-  for (const [id, d] of list) row(id, d, d.minion ? 'SUMMONED' : `FLOORS ${d.floors[0]}-${d.floors[1]}`);
+  for (const [id, d] of list) row(id, d, d.minion ? 'SUMMONED' : d.ngp ? 'NEW GAME+' : `FLOORS ${towerFloorOf(d.floors[0])}-${towerFloorOf(d.floors[1])}`);
   box.append(el('div', 'hq-note', '<b style="color:#ff6040">BOSSES</b>'));
-  for (const b of BOSS_LIST) row(b.id, DEFS[b.id], `${b.mini ? 'MINI BOSS' : 'BOSS'} · FLOOR ${b.floor}`);
+  for (const b of BOSS_LIST) row(b.id, DEFS[b.id], `${b.mini ? 'MINI BOSS' : 'BOSS'} · FLOOR ${bossTowerFloor(b.floor, b.mini)}`);
 }
 function renderEntry(box, id) {
   const d = DEFS[id], b = (profile.bestiary || {})[id], skins = skinsFor(d);
@@ -188,7 +202,7 @@ function renderEntry(box, id) {
   const atks = d.atk ? (Array.isArray(d.atk) ? d.atk : [d.atk]) : [];
   const stats = d.boss
     ? `HEALTH ${Math.round(d.hp)} (+ per floor) · DAMAGE ${d.dmg} · KILLED ${b.k}`
-    : `HEALTH ${d.hp} · DAMAGE ${d.dmg} · SPEED ${d.speed ?? '-'} · FLOORS ${d.floors[0]}-${d.floors[1]} · KILLED ${b.k}`;
+    : `HEALTH ${d.hp} · DAMAGE ${d.dmg} · SPEED ${d.speed ?? '-'} · FLOORS ${d.ngp ? 'NG+' : towerFloorOf(d.floors[0]) + '-' + towerFloorOf(d.floors[1])} · KILLED ${b.k}`;
   box.append(el('div', 'hq-note', `<b style="color:#f0c860">STATS</b><br>${stats}`));
   const ft = d.boss ? [d.brain && d.brain.hint ? d.brain.hint + '.' : '', 'Moves: ' + (d.brain ? d.brain.moves.map((m) => m.t.toUpperCase()).join(', ') : '-') + '.'] : fightText(d);
   box.append(el('div', 'hq-note', `<b style="color:#ff9070">HOW IT FIGHTS</b><br>${ft.filter(Boolean).join('<br>')}${atks.length && !d.boss ? '' : ''}`));

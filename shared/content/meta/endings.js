@@ -1,29 +1,29 @@
 // One ending per difficulty, shown when you beat the top floor in Story mode.
 export const ENDINGS = [
-  { title: 'TEMP TO PERM', color: '#70e070', tag: 'EASY ENDING', lines: [
-    'The Chairman falls. The lights flicker, then steady.',
-    'Nobody comes to thank you. A printer, somewhere, starts printing your contract.',
-    'You walk out into the rain at 6:02 AM. The tower is still standing behind you.',
-    'Tomorrow morning there is a new temp in the lobby. The elevator is already waiting for them.',
-    'Maybe next time, try a harder shift.' ] },
-  { title: 'CLOCKING OUT', color: '#f0c860', tag: 'MEDIUM ENDING', lines: [
-    'The Chairman falls, and the building lets out a long, tired breath.',
-    'One by one the doors unlock. The staff stumble out into the dawn, blinking, still holding their mugs.',
-    'Some of them are not quite people anymore. They go home anyway.',
-    'You drop your badge in the bin by the revolving door.',
-    'For the first time in three years, Halvorsen-Pike Holdings is closed.' ] },
-  { title: 'HOSTILE TAKEOVER', color: '#ff9040', tag: 'HARD ENDING', lines: [
-    'The Chairman falls. His chair is still warm.',
-    'The board turns to face you. All eleven of them. Waiting for instructions.',
-    'You sit down. The building hums under your hands. It would do anything you asked.',
-    'You ask it to stop.',
-    'The tower goes dark floor by floor, top to bottom, and you are the last one to leave.' ] },
-  { title: 'THE LAST SHIFT', color: '#ff4040', tag: 'EXTRA HARD ENDING · THE TRUE ENDING', lines: [
-    'The Chairman falls, and with him the thing that lived in the wiring.',
-    'You look at your hands. The supplement got to you too, somewhere around floor nine.',
-    'The building reaches for you. It needs a new heart, and you would do.',
-    'You give it one last order instead: everybody goes home. Everybody. Even you.',
-    'At dawn the tower is empty and quiet. Some shifts never end. This one did.' ] },
+  { title: 'SEVERANCE PACKAGE', color: '#70e070', tag: 'EASY ENDING', lines: [
+    'The Chairman is dead. You press the button anyway.',
+    'Thirty floors of Halvorsen-Pike Holdings go up behind you, one after another.',
+    'The paper recycling breaks your fall. It is the first useful thing the company ever did for you.',
+    'You climb out, straighten your tie, and walk home through the glow.',
+    'Nobody asks for two weeks\' notice.' ] },
+  { title: 'HOSTILE TAKEOVER', color: '#f0c860', tag: 'MEDIUM ENDING', lines: [
+    'The Chairman falls. His crown rolls across the carpet and stops at your feet.',
+    'You pick it up. It fits.',
+    'The elevator opens. The board files out in red, hoods up, and kneels around you.',
+    'Nobody says a word. Nobody has to.',
+    'Halvorsen-Pike Holdings is under new management.' ] },
+  { title: 'UNFINISHED BUSINESS', color: '#ff9040', tag: 'HARD ENDING', lines: [
+    'The tower burned for three days. You read about it in the papers.',
+    'Two years later, a man in a long coat leaves a briefcase on your table and walks out into the rain.',
+    'Inside: a photograph. A beach. A cocktail. The Chairman, smiling.',
+    'You leave a tip, get in the car, and drive toward the sunset.',
+    'Some contracts are never really terminated.' ] },
+  { title: 'THE LAST SHIFT', color: '#c040ff', tag: 'EXTRA HARD ENDING · THE TRUE ENDING', lines: [
+    'The Chairman is dead. You look down at your hands, and they are not hands anymore.',
+    'The supplement did what it was made to do. You are what the program was for.',
+    'You go out through the window. The street cracks where you land.',
+    'Somewhere in the rain, something that used to be a temp screams at the city.',
+    'The city screams back.' ] },
 ];
 
 // New Game+ has its own ending, whatever the difficulty
