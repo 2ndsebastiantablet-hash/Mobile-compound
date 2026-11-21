@@ -104,7 +104,7 @@ export const GUNS = [
   // not guns (see shared/game/spirit.js and the Golden Watch in game.js).
   { id: 'spirit', name: 'GRAVEYARD SHIFT', short: 'SPIRIT', rarity: 'legendary', desc: 'A fighting spirit: punch barrages, a finger laser that cancels attacks, luck, and OVERDRIVE.', spirit: true, mag: 1, reload: 0, cd: 0.85, dmg: 0.75, sound: 'slash', kick: 0,
     m: { spirit: true } },
-  { id: 'watch', name: 'THE GOLDEN WATCH', short: 'WATCH', rarity: 'legendary', desc: 'Click: stop time. Reload: turn time back, but the room never comes back the same.', watch: true, mag: 1, reload: 0, cd: 0.3, dmg: 0, sound: 'tap', kick: 0,
+  { id: 'watch', name: 'THE GOLDEN WATCH', short: 'WATCH', rarity: 'legendary', desc: 'No need to hold it: RIGHT CLICK (or \u25C0\u25C0 on phones) rewinds time to the start of the room. Once per room. The room never comes back the same way.', watch: true, mag: 1, reload: 0, cd: 0.3, dmg: 0, sound: 'tap', kick: 0,
     m: { watch: true } },
 ];
 export const GUN = Object.fromEntries(GUNS.map((g) => [g.id, g]));

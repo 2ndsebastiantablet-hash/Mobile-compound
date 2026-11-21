@@ -207,7 +207,7 @@ export class Enemy {
 
   // nobody gets behind you or off the edge of the screen (drones and orbiters used to)
   keepInView() {
-    if (this.state !== 'active' || this.leap) return;
+    if (this.state !== 'active' || this.leap || this.game.roam) return; // Free Roam: you can turn to face them
     const g = this.game, cam = g.camPos, def = this.def;
     const close = def.move === 'dive' || this.traits.kamikaze ? 0.3 : this.flyer || def.move === 'orbit' ? 1.8 : 1.0;
     if (this.pos.z > cam.z - close) this.pos.z = cam.z - close;
@@ -837,6 +837,16 @@ export class Projectile {
         this.kill(); return;
       }
     }
+    // walls, pillars, furniture and props stop shots (the first few cm are free so cover can be fired over)
+    if (this.mineT == null && this.life > 0.1 && this.game.solidAt && this.game.solidAt(this.mesh.position)) {
+      const p = this.mesh.position.clone();
+      if (this.bomb || this.k.explode || this.kind === 'grenade' || this.kind === 'missile') {
+        this.game.fx.explosion(p, 1.0); this.game.sfx.explode();
+        if (Math.hypot(p.x - cam.x, p.z - cam.z) < 2.0) this.game.hurtPlayer(this.dmg * 0.6, null, this);
+        if (this.game.splashEnemies) this.game.splashEnemies(p, 1.6, this.dmg * 0.5, this.owner);
+      } else { this.game.fx.impact(p); this.game.fx.dust(p, 3); }
+      this.kill(); return;
+    }
     const friendly = this.reflected || (this.owner && this.owner.ally);
     if (!friendly && this.mesh.position.distanceTo(cam) < 0.45) { this.game.hurtPlayer(this.dmg, null, this); this.kill(); return; }
     // friendly fire: enemy shots hurt any enemy they run into (not the shooter right after firing)
@@ -855,7 +865,7 @@ export class Projectile {
         }
       }
     }
-    if (this.mesh.position.z > cam.z + 0.5 || this.life > 8 || this.mesh.position.y < -0.5) this.kill();
+    if ((!this.game.roam && this.mesh.position.z > cam.z + 0.5) || this.life > 8 || this.mesh.position.y < -0.5 || this.mesh.position.distanceTo(cam) > 45) this.kill();
   }
   kill() { this.alive = false; this.game.scene.remove(this.mesh); }
 }

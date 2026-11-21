@@ -101,7 +101,7 @@ ACHIEVEMENTS.push(
   ...tiers('fc', S('floors'), [[50, 'FIFTY FLIGHTS', 'Clear 50 floors in total', 300], [250, 'STAIRMASTER', 'Clear 250 floors in total', 1200], [1000, 'SKYSCRAPER', 'Clear 1,000 floors in total', 4000]]),
   ...tiers('dk', S('ducks'), [[25, 'DUCK AND COVER', 'Duck 25 times', 100], [250, 'LIMBO CHAMPION', 'Duck 250 times', 500]]),
   ...tiers('rm', S('remoteUses'), [[10, 'DEJA VU', 'Rewind time 10 times with The Golden Watch', 300], [100, 'GROUNDHOG DAY', 'Rewind time 100 times', 1000]]),
-  ...tiers('tsp', S('timeStops'), [[1, 'STOP RIGHT THERE', 'Stop time with The Golden Watch', 300], [25, 'TIME IS MONEY', 'Stop time 25 times', 1200]]),
+  ...tiers('tsp', S('bossRewinds'), [[1, 'RETAKE', 'Rewind time during a boss fight', 300], [10, "DIRECTOR'S CUT", 'Rewind 10 boss fights', 1200]]),
   ...tiers('od', S('overdrives'), [[1, 'SPIRIT AWAKENED', 'Trigger OVERDRIVE with Graveyard Shift', 500], [10, 'OVERTIME OVERDRIVE', 'Trigger OVERDRIVE 10 times', 1500]]),
   ...tiers('bh', S('blackholes'), [[10, 'EVENT HORIZON', 'Open 10 black holes', 600]]),
   ...tiers('rq', S('superKills'), [[1, 'SUPER', 'Kill a Super enemy (Extra Hard)', 1000], [25, 'SILENCE THE CHOIR', 'Kill 25 Super enemies', 3000], [100, 'FINAL SUPER', 'Kill 100 Super enemies', 8000]]),

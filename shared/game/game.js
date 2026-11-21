@@ -8,7 +8,7 @@ import { initSpirit, spiritUse, spiritUpdate, spiritOverdrive, spiritOverdriveSt
 import { Post } from '../engine/post.js';
 import { Effects } from '../engine/effects.js';
 import * as TX from '../engine/textures.js';
-import { initAudio, sfx, setMuted, isMuted, setVolumes } from '../audio/sfx.js';
+import { initAudio, sfx, setMuted, isMuted, setVolumes, tone, noise as noiseFx } from '../audio/sfx.js';
 import { SCHEMA, DEV_BUILD, settings, setSetting, onSettingsChange, AIM_MULT, SENS_MULT, RES_MOBILE, RES_PC, FX_MULT, tutorialDone, setTutorialDone } from './settings.js';
 import { saveRun, loadRun, clearRun } from './save.js';
 import { Tutorial } from './tutorial.js';
@@ -124,6 +124,9 @@ let stats = newStats();
 let mode = 'title', paused = false;
 const BASE_PITCH = PC ? -0.06 : -0.1;
 let yaw = 0, pitch = BASE_PITCH, roll = 0, shake = 0;
+// THE GOLDEN WATCH state (see the watch section below)
+let roomStart = null, watchUsed = false, rewinding = false, rewindT = 0, histT = 0, worldRoll = 0, worldRollGoal = 0;
+const rewindHist = [];
 let area = null;
 let hold = null;
 let titleT = 0, drawCalls = 0;
@@ -199,11 +202,23 @@ function titleNgp() { // the title screen shows NG+ while it's switched on
 // PC: WASD / arrow keys (duck moves to C, Ctrl or Space). Mobile: the joystick on the left.
 const roamWanted = () => roamUnlocked() && !!profile.roam;
 const roamKeys = new Set();
-const roamStick = { x: 0, y: 0 }, roamBox = new THREE.Box3();
+let propBoxT = 0;
+const roamStick = { x: 0, y: 0 }, lookStick = { x: 0, y: 0 }, roamBox = new THREE.Box3();
 function roamUpdate(dt) {
   const show = G.roam && !PC && (mode === 'combat' || mode === 'moving') && !paused;
-  if (show !== G.stickShown) { G.stickShown = show; $('roamStick').classList.toggle('hidden', !show); }
-  if (!G.roam || mode !== 'combat' || paused || seq || !area || P.hp <= 0) return;
+  if (show !== G.stickShown) { G.stickShown = show; $('roamStick').classList.toggle('hidden', !show); $('lookStick').classList.toggle('hidden', !show); }
+  if (!G.roam || paused || P.hp <= 0) return;
+  // looking around: the right stick on phones (mouse-look on PC is in moveAim)
+  if (roamLooking()) {
+    yaw -= lookStick.x * 2.4 * dt * (0.4 + Math.abs(lookStick.x) * 0.6);
+    pitch = clamp(pitch - lookStick.y * 1.7 * dt * (0.4 + Math.abs(lookStick.y) * 0.6), BASE_PITCH - 1.15, BASE_PITCH + 1.05);
+  }
+  // during the automatic walk between areas the view drifts back to straight ahead
+  if (mode === 'moving' && seq && !(area && area.ambush)) {
+    yaw += (Math.atan2(Math.sin(-yaw), Math.cos(-yaw))) * Math.min(1, dt * 2.5);
+    pitch += (BASE_PITCH - pitch) * Math.min(1, dt * 2.5);
+  }
+  if (mode !== 'combat' || !area || (seq && !area.ambush)) return;
   let mx = roamStick.x, mz = roamStick.y;
   if (roamKeys.has('a') || roamKeys.has('arrowleft')) mx -= 1;
   if (roamKeys.has('d') || roamKeys.has('arrowright')) mx += 1;
@@ -212,14 +227,39 @@ function roamUpdate(dt) {
   const len = Math.hypot(mx, mz);
   if (len < 0.08) return;
   const sp = 3.4 * (G.duck > 0.5 ? 0.5 : 1) * Math.min(1, len) / len;
-  // movement follows where you're looking (yaw), so the camera always faces forward
+  // movement follows where you're looking
   const c = Math.cos(yaw), sn = Math.sin(yaw);
-  const nx = G.camPos.x + (mx * c + mz * sn) * sp * dt, nz = G.camPos.z + (-mx * sn + mz * c) * sp * dt;
+  G.camPos.x += (mx * c + mz * sn) * sp * dt; G.camPos.z += (-mx * sn + mz * c) * sp * dt;
+  // an ambush happens between two rooms: you can move around the corridor you were caught in
   const room = area.room, st = room.stand;
-  G.camPos.x = clamp(nx, -HALF + 0.55, HALF - 0.55);
-  G.camPos.z = clamp(nz, room.zf + 1.4, st.z + 0.4);
-  // don't walk through furniture (and knockable props where they lie now)
-  const R = 0.32, solids = room.colliders || [];
+  const zMin = area.ambush ? area.zMin : room.zf + 1.4, zMax = area.ambush ? area.zMax : st.z + 0.4;
+  const rooms = area.ambush ? G.floor.rooms.slice(area.idx, area.idx + 2) : [room];
+  solveCollisions(rooms, zMin, zMax, true);
+  G.roamBob = (G.roamBob || 0) + dt * 9;
+  G.camPos.y = st.y + Math.abs(Math.sin(G.roamBob)) * 0.035;
+}
+// is this point inside something solid? (enemy shots stop there): walls, floor, pillars, furniture, props
+const propBoxes = [];
+function refreshPropBoxes() {
+  propBoxes.length = 0;
+  if (!G.floor || !G.room) return;
+  const i = G.floor.rooms.indexOf(G.room);
+  for (const r of G.floor.rooms.slice(Math.max(0, i), i + 2)) for (const p of r.props || []) { if (!p.visible) continue; const b = new THREE.Box3().setFromObject(p); if (b.max.y > 0.3) propBoxes.push(b); }
+}
+G.solidAt = (p) => {
+  if (Math.abs(p.x) > HALF - 0.03 || p.y < 0.03) return true;
+  if (!G.floor) return false;
+  for (const r of G.floor.rooms) {
+    if (p.z > r.z0 + 0.5 || p.z < r.zf - 0.5) continue;
+    for (const c of r.colliders || []) if (p.x > c.x0 && p.x < c.x1 && p.z > c.z0 && p.z < c.z1 && p.y > c.y0 && p.y < c.y1) return true;
+  }
+  for (const b of propBoxes) if (b.containsPoint(p)) return true;
+  return false;
+};
+const roamLooking = () => G.roam && (mode === 'combat' || mode === 'moving') && !paused && !choiceOpen && !cutscene;
+// keeps you out of walls, pillars, furniture, props (and enemies, when you walk yourself)
+function solveCollisions(rooms, zMin, zMax, enemies) {
+  const R = 0.32;
   const push = (x0, x1, z0, z1) => {
     const cx = G.camPos.x, cz = G.camPos.z;
     if (cx < x0 - R || cx > x1 + R || cz < z0 - R || cz > z1 + R) return;
@@ -227,25 +267,26 @@ function roamUpdate(dt) {
     if (m === l) G.camPos.x = x0 - R; else if (m === r) G.camPos.x = x1 + R; else if (m === f) G.camPos.z = z0 - R; else G.camPos.z = z1 + R;
   };
   for (let pass = 0; pass < 2; pass++) {
-    for (const c of solids) push(c.x0, c.x1, c.z0, c.z1);
-    for (const p of room.props || []) {
-      if (p.userData.broken || !p.visible || Math.abs(p.position.z - G.camPos.z) > 3) continue;
-      roamBox.setFromObject(p); if (roamBox.max.y < 0.35 || roamBox.min.y > 1.1) continue;
-      push(roamBox.min.x, roamBox.max.x, roamBox.min.z, roamBox.max.z);
+    for (const room of rooms) {
+      if (!room) continue;
+      for (const c of room.colliders || []) if (c.y0 < 1.1) push(c.x0, c.x1, c.z0, c.z1);
+      for (const p of room.props || []) {
+        if (!p.visible || Math.abs(p.position.z - G.camPos.z) > 3) continue;
+        roamBox.setFromObject(p); if (roamBox.max.y < 0.35 || roamBox.min.y > 1.1) continue;
+        push(roamBox.min.x, roamBox.max.x, roamBox.min.z, roamBox.max.z);
+      }
     }
+    if (enemies) for (const e of G.enemies) {
+      if (!e.alive || e.off) continue;
+      const r = 0.55 * e.scale + 0.45, dx = G.camPos.x - e.pos.x, dz = G.camPos.z - e.pos.z, d = Math.hypot(dx, dz);
+      if (d < r && d > 0.001 && (e.pos.y || 0) < 1.6) { G.camPos.x = e.pos.x + dx / d * r; G.camPos.z = e.pos.z + dz / d * r; }
+    }
+    G.camPos.x = clamp(G.camPos.x, -HALF + 0.55, HALF - 0.55);
+    if (zMin != null) G.camPos.z = clamp(G.camPos.z, zMin, zMax);
   }
-  // don't walk through enemies
-  for (const e of G.enemies) {
-    if (!e.alive || e.off) continue;
-    const r = 0.55 * e.scale + 0.45, dx = G.camPos.x - e.pos.x, dz = G.camPos.z - e.pos.z, d = Math.hypot(dx, dz);
-    if (d < r && d > 0.001 && (e.pos.y || 0) < 1.6) { G.camPos.x = e.pos.x + dx / d * r; G.camPos.z = e.pos.z + dz / d * r; }
-  }
-  G.camPos.x = clamp(G.camPos.x, -HALF + 0.55, HALF - 0.55); G.camPos.z = clamp(G.camPos.z, room.zf + 1.4, st.z + 0.4);
-  G.roamBob = (G.roamBob || 0) + dt * 9;
-  G.camPos.y = st.y + Math.abs(Math.sin(G.roamBob)) * 0.035;
 }
 function setRoam(on) {
-  G.roam = !!on; roamKeys.clear(); roamStick.x = roamStick.y = 0;
+  G.roam = !!on; roamKeys.clear(); roamStick.x = roamStick.y = 0; lookStick.x = lookStick.y = 0;
   document.body.classList.toggle('roam', G.roam);
 }
 function setDiff(i) { runDiff = DIFFS[i] ? i : 1; D = diffOf(runDiff); G.dd = D; }
@@ -293,6 +334,7 @@ function clearFloor() {
 
 // keep = rebuild only the building (enemies, shots and pickups stay): used by The Golden Watch
 function loadFloor(n, variant, keep = false) {
+  if (!keep) { worldRoll = worldRollGoal = 0; rewinding = false; vhs(false); }
   if (keep) { if (G.floor) scene.remove(G.floor.group); flying.length = 0; } else clearFloor();
   G.floorNum = n;
   const ef = effFloor(n); G.eff = ef;
@@ -943,6 +985,7 @@ function collectPickup(p) {
 function foundGun(id) { if (!profile.found[id]) { profile.found[id] = 1; touch(); } }
 function giveGun(id) {
   foundGun(id); checkAch();
+  if (id === 'watch' && !hasWatch()) banner('THE GOLDEN WATCH', PC ? 'RIGHT CLICK TO REWIND TIME' : 'TAP \u25C0\u25C0 TO REWIND TIME', 3);
   const def = GUN[id];
   const have = P.inv.findIndex((s) => s.id === id);
   sfx.gunPickup();
@@ -1119,6 +1162,7 @@ function* walk(from, to, lights) {
   yield* tween(dur, (k) => {
     const e = ease(k);
     G.camPos.lerpVectors(from, to, e);
+    if (G.floor && k < 0.98) solveCollisions(lights || [G.room], null, null, false); // never through pillars or props
     const travelled = dist * e;
     G.camPos.y = to.y + Math.abs(Math.sin(travelled * 2.2)) * 0.05 - 0.02;
     roll = Math.sin(travelled * 1.1) * 0.012;
@@ -1134,12 +1178,13 @@ function beginCombat() {
   let k = 0;
   for (const e of G.enemies) if (e.state === 'dormant') { const en = e; setTimeout(() => en.activate(), 150 + k++ * 220); }
   if (area.tutorial && !tutorial) { tutorial = new Tutorial(tutCtx); tutorial.start(); ui.tutSkip.classList.remove('hidden'); }
+  snapRoomStart();
   if (area.boss) { ui.bossbar.classList.remove('hidden'); bossCard({ ...area.boss.def, name: area.boss.displayName || area.boss.def.name }, area.boss.def.brain ? area.boss.def.brain.hint : 'PERFORMANCE REVIEW'); }
   updateHud(true);
 }
 
 function startAmbush(room) {
-  area = { idx: area.idx, room, queue: [], waveT: 99, maxAlive: 0, clearing: false, boss: null, ambush: true };
+  area = { idx: area.idx, room, queue: [], waveT: 99, maxAlive: 0, clearing: false, boss: null, ambush: true, zMax: G.camPos.z + 1.2, zMin: G.camPos.z - 2.4 };
   mode = 'combat'; G.combatActive = true;
   setMusic('combat');
   banner('AMBUSH!', null, 0.9);
@@ -1157,11 +1202,12 @@ function startAmbush(room) {
     effects.dust(e.pos.clone().setY(0.1), 10);
     G.enemies.push(e); introduce(type);
   }
+  snapRoomStart();
   updateHud(true);
 }
 
 function ambushCleared() {
-  area.clearing = true;
+  area.clearing = true; resetWorldRoll();
   G.combatActive = false;
   mode = 'moving';
   setMusic('calm');
@@ -1173,7 +1219,7 @@ function ambushCleared() {
 }
 
 function areaCleared() {
-  area.clearing = true;
+  area.clearing = true; resetWorldRoll();
   G.combatActive = false;
   mode = 'moving';
   setMusic('calm');
@@ -1190,7 +1236,8 @@ function areaCleared() {
       yield 1.1;
       autoReload();
       const to = rooms[i + 1].stand;
-      if (Math.random() < Math.min(0.5, 0.22 + G.floorNum * 0.01)) {
+      if (G.forceAmbush || Math.random() < Math.min(0.5, 0.22 + G.floorNum * 0.01)) {
+        G.forceAmbush = false;
         // AMBUSH: stop halfway and make the player react
         const mid = G.camPos.clone().lerp(to, 0.45);
         yield* walk(G.camPos.clone(), mid, null);
@@ -1486,7 +1533,7 @@ function tryFire(x, y) {
   if (!G.combatActive || mode !== 'combat' || paused) return;
   const w = cur();
   if (w.spirit) { if (P.cd > 0) return; if (spiritUse(x, y)) P.cd = w.cd * M.cd; return; }
-  if (w.watch) { if (P.cd > 0) return; P.cd = w.cd; stopTime(); return; }
+  if (w.watch) { if (P.cd > 0) return; P.cd = w.cd; useWatch(); return; }
   if (P.reloadT > 0 || P.cd > 0 || P.swapT > 0.3 || P.burstLeft > 0) return;
   if (!w.melee && curSlot().ammo <= 0) { sfx.empty(); startReload(); P.cd = 0.25; return; }
   P.cd = w.cd * M.cd * wlv(w.id).cd;
@@ -1684,7 +1731,7 @@ function applyHit(e, part, point, w, sound, dir) {
   if (w.freeze) { e.slowT = w.freeze; effects.ice(point, 6); }
   if (w.knock && e.alive && !e.def.boss && area) {
     e.pos.addScaledVector(dir.clone().setY(0).normalize(), w.knock); // negative knock = pull toward you
-    e.pos.z = clamp(e.pos.z, area.room.zf + 0.6, G.camPos.z - 1.4); e.pos.x = clamp(e.pos.x, -3, 3);
+    e.pos.z = clamp(e.pos.z, area.room.zf + 0.6, G.roam ? area.room.z0 - 0.6 : G.camPos.z - 1.4); e.pos.x = clamp(e.pos.x, -3, 3);
   }
   if (w.leech) { healP(w.leech); effects.emit(point, 3, 'ice', 1); }
   if (w.chain) chainFrom(e, point, w);
@@ -1765,7 +1812,7 @@ let lockLostT = 0;
 const locked = () => document.pointerLockElement === gameEl;
 const inPlay = () => mode !== 'title' && mode !== 'cutscene' && mode !== 'floorclear' && mode !== 'dead' && !paused && !choiceOpen;
 function wantLock() {
-  if (!PC || !settings.lock || locked() || !inPlay()) return;
+  if (!PC || (!settings.lock && !G.roam) || locked() || !inPlay()) return; // Free Roam always captures the mouse to look around
   try { const r = gameEl.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch { /* not supported */ }
 }
 document.addEventListener('pointerlockchange', () => {
@@ -1775,6 +1822,10 @@ document.addEventListener('pointerlockchange', () => {
 function moveAim(dx, dy) {
   const r = canvasRect();
   const k = SENS_MULT[settings.sens ?? 2] * (settings.weight ? aimSpeed(cur()) : 1);
+  if (roamLooking()) { // Free Roam: the mouse turns your head; the crosshair stays in the middle
+    yaw -= dx * k * 0.0024; pitch = clamp(pitch - dy * k * 0.0024, BASE_PITCH - 1.15, BASE_PITCH + 1.05);
+    mouse = { x: r.width / 2, y: r.height / 2 }; return;
+  }
   mouse = mouse || { x: r.width / 2, y: r.height / 2 };
   mouse.x = clamp(mouse.x + dx * k, 0, r.width); mouse.y = clamp(mouse.y + dy * k, 0, r.height);
 }
@@ -1782,7 +1833,7 @@ gameEl.addEventListener('pointerdown', (ev) => {
   if (cutscene) return;
   if (ev.target.closest('button') || ev.target.closest('.screen')) return;
   initAudio();
-  if (ev.pointerType === 'mouse' && ev.button === 2) { startReload(); ev.preventDefault(); return; }
+  if (ev.pointerType === 'mouse' && ev.button === 2) { if (hasWatch() && mode === 'combat') useWatch(); else startReload(); ev.preventDefault(); return; }
   if (ev.pointerType === 'mouse' && ev.button !== 0) return;
   let { x, y } = localXY(ev);
   if (PC && ev.pointerType === 'mouse') {
@@ -1795,6 +1846,7 @@ gameEl.addEventListener('pointerdown', (ev) => {
   ev.preventDefault();
 });
 gameEl.addEventListener('pointermove', (ev) => {
+  if (ev.pointerType === 'mouse' && PC && !locked() && roamLooking() && (ev.movementX || ev.movementY)) { moveAim(ev.movementX, ev.movementY); return; }
   if (ev.pointerType === 'mouse' && PC && locked()) {
     // some browsers report a bogus jump on the first events after capture: ignore spikes
     if (Math.abs(ev.movementX) < 250 && Math.abs(ev.movementY) < 250) moveAim(ev.movementX, ev.movementY);
@@ -1833,18 +1885,18 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => roamKeys.delete(e.key.toLowerCase()));
 window.addEventListener('blur', () => roamKeys.clear());
-// mobile joystick
-{
-  const pad = $('roamStick'), knob = pad.querySelector('i');
-  let id = null;
+// mobile joysticks: move (left) and look (right)
+for (const [id, st] of [['roamStick', roamStick], ['lookStick', lookStick]]) {
+  const pad = $(id), knob = pad.querySelector('i');
+  let pid = null;
   const move = (ev) => {
     const r = pad.getBoundingClientRect(), R = r.width / 2;
     let x = (ev.clientX - r.left - R) / R, y = (ev.clientY - r.top - R) / R; const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
-    roamStick.x = x; roamStick.y = y; knob.style.transform = `translate(${x * R * 0.6}px, ${y * R * 0.6}px)`;
+    st.x = x; st.y = y; knob.style.transform = `translate(${x * R * 0.6}px, ${y * R * 0.6}px)`;
   };
-  pad.addEventListener('pointerdown', (ev) => { ev.stopPropagation(); ev.preventDefault(); id = ev.pointerId; pad.setPointerCapture(id); move(ev); });
-  pad.addEventListener('pointermove', (ev) => { if (ev.pointerId === id) move(ev); });
-  const up = (ev) => { if (ev.pointerId !== id) return; id = null; roamStick.x = roamStick.y = 0; knob.style.transform = ''; };
+  pad.addEventListener('pointerdown', (ev) => { ev.stopPropagation(); ev.preventDefault(); pid = ev.pointerId; pad.setPointerCapture(pid); move(ev); });
+  pad.addEventListener('pointermove', (ev) => { if (ev.pointerId === pid) move(ev); });
+  const up = (ev) => { if (ev.pointerId !== pid) return; pid = null; st.x = st.y = 0; knob.style.transform = ''; };
   pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up);
 }
 const onBtn = (id, fn) => $(id).addEventListener('click', (e) => { e.stopPropagation(); initAudio(); fn(); });
@@ -1930,6 +1982,7 @@ onBtn('confirmNo', () => closeConfirm(true));
 onBtn('tutSkip', () => { sfx.tap(); if (tutorial) tutorial.finish(); });
 onBtn('reloadBtn', startReload);
 onBtn('duckBtn', duck);
+$('rewindBtn').addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); initAudio(); useWatch(); });
 onBtn('weaponBtn', swapWeapon);
 onBtn('pauseBtn', togglePause);
 onBtn('resumeBtn', togglePause);
@@ -2149,9 +2202,10 @@ function updateHud(force) {
   setText(ui.cash, 'cash', money(profile.cash));
   setText(ui.combo, 'c', combo > 1 && now - lastKill < M.comboWindow ? `x${combo} COMBO` : '');
   setText(ui.hp, 'h', String(Math.ceil(P.hp)));
-  setText(ui.ammo, 'am', cur().spirit ? (spiritGauge() >= 1 ? 'READY' : `${Math.floor(spiritGauge() * 100)}%`) : cur().watch ? (timeStopT > 0 ? `${Math.ceil(timeStopT)}` : stopCd > 0 ? `${Math.ceil(stopCd)}s` : 'STOP') : cur().melee ? '∞' : String(curSlot().ammo));
-  setText(ui.reload, 'r', cur().spirit ? 'OVERDRIVE' : cur().watch ? (watchCd > 0 ? `R: REWIND ${Math.ceil(watchCd)}s` : 'R: REWIND') : P.reloadT > 0 ? 'RELOADING' : 'AMMO');
+  setText(ui.ammo, 'am', cur().spirit ? (spiritGauge() >= 1 ? 'READY' : `${Math.floor(spiritGauge() * 100)}%`) : cur().watch ? (watchUsed ? 'USED' : 'READY') : cur().melee ? '∞' : String(curSlot().ammo));
+  setText(ui.reload, 'r', cur().spirit ? 'OVERDRIVE' : cur().watch ? (PC ? 'RIGHT CLICK: REWIND' : 'REWIND') : P.reloadT > 0 ? 'RELOADING' : 'AMMO');
   ui.hp.classList.toggle('low', P.hp <= M.maxHp * 0.25);
+  { const rb = $('rewindBtn'); const show = !PC && hasWatch() && (mode === 'combat' || mode === 'moving'); rb.classList.toggle('hidden', !show); rb.classList.toggle('used', watchUsed); }
   ui.ammo.classList.toggle('low', !cur().melee && !cur().spirit && !cur().watch && curSlot().ammo <= Math.ceil(magOf(cur()) * 0.25));
   ui.reload.classList.toggle('reloading', P.reloadT > 0);
   if (setText(ui.weapon, 'w', cur().short)) ui.weapon.style.color = RARITY[cur().rarity].color;
@@ -2193,7 +2247,7 @@ function applyCamera() {
   camera.position.set(G.camPos.x + (Math.random() - 0.5) * s, G.camPos.y - G.duck * 0.65 + (Math.random() - 0.5) * s, G.camPos.z);
   const breathe = mode === 'combat' ? Math.sin(now * 1.3) * 0.006 : 0;
   P.punch = Math.max(0, (P.punch || 0) - 0.016 * 0.4 - P.punch * 0.12);
-  camera.rotation.set(pitch + breathe + (P.punch || 0) + (Math.random() - 0.5) * s * 0.5, yaw, roll, 'YXZ');
+  camera.rotation.set(pitch + breathe + (P.punch || 0) + (Math.random() - 0.5) * s * 0.5, yaw, roll + worldRoll, 'YXZ');
 }
 
 function updateGun(dt) {
@@ -2261,10 +2315,11 @@ function update(dt) {
     for (const el of G.floor.elevators) if (el.closeAt && now > el.closeAt) { el.target = 0; el.closeAt = 0; }
   }
   roamUpdate(dt);
+  propBoxT -= dt; if (propBoxT <= 0) { propBoxT = 0.25; refreshPropBoxes(); }
   if (mode === 'combat') { stats.t += dt; if (runMode === 'rush' && !paused) rushTime += dt; }
 
   const peace = devOn('peace');
-  const tStop = timeStopT > 0; // THE GOLDEN WATCH: time stopped for everything but you
+  const tStop = rewinding; // THE GOLDEN WATCH: the world is frozen while the tape rewinds
   if (!tStop) for (const e of G.enemies) { if (e.off) continue; G.actor = e; if (peace && e.atkState === 'cool') e.atkT = Math.max(e.atkT, 1); e.update(dt); }
   G.actor = null;
   G.enemies = G.enemies.filter((e) => e.alive || e === area?.boss);
@@ -2408,8 +2463,8 @@ function frame(t) {
   if (hitStop > 0) { hitStop -= dt; dt = 0; }
   if (slowT > 0 && !paused) slowT -= dt;
   const sdt = (slowT > 0 ? dt * 0.35 : dt) * (spiritOverdrive() ? 0.18 : 1); // boss intro slow-motion / spirit OVERDRIVE
-  if (!paused) tickTimeStop(dt);
-  if (!paused) { spiritUpdate(dt, hasSpirit() && mode !== 'title' && mode !== 'dead', !!cur().spirit); watchRecord(sdt); }
+  if (!paused) tickRewind(dt);
+  if (!paused) { spiritUpdate(dt, hasSpirit() && mode !== 'title' && mode !== 'dead', !!cur().spirit); rewindRecord(sdt); }
   for (let k = 0; k < (G.timeScale || 1); k++) if (!paused) { if (G.bot) G.bot(sdt); update(sdt); }
   post.update(dt);
   { const dv = post.u.dissolve; dv.value += clamp(dissolveGoal - dv.value, -dissolveRate * dt, dissolveRate * dt); }
@@ -2455,76 +2510,97 @@ initSpirit({
 });
 
 // ------------------------------------------------------------------ THE GOLDEN WATCH
-// CLICK / TAP: stop time for 4 seconds (everything freezes but you; recharges in 15s).
-// RELOAD: turn time back (below).
-let timeStopT = 0, stopCd = 0;
-function stopTime() {
-  if (mode !== 'combat' || !G.combatActive) return;
-  if (stopCd > 0) { toast(`TIME STOP RECHARGING (${Math.ceil(stopCd)}s)`, '#9ab8ff'); sfx.empty(); return; }
-  timeStopT = 4; stopCd = 15; stat('timeStops');
-  post.grade({ tint: 0xb8c8ff, lift: 0x000008, sat: 0.3, contrast: 1.15 });
-  post.u.flash.value = 0.4; post.u.flashCol.value.set(0xc8d8ff);
-  banner('TIME STOP', null, 1); sfx.rail();
+// You don't have to hold it: once it's in your pockets, RIGHT CLICK (or the rewind button on phones)
+// rewinds time to the moment the room started: you see everything run backwards, then your health,
+// ammo, score and every enemy go back to how they were. But reality never reassembles the same way:
+// the room's faces are turned around (the floor might be a wall now, or the ceiling), the lights are
+// somewhere else and the enemies come back in new places. Once per room.
+const hasWatch = () => P.inv.some((s) => s.id === 'watch');
+function snapRoomStart() {
+  roomStart = {
+    hp: P.hp, score, runCash, cam: G.camPos.clone(), ammo: P.inv.map((s) => [s.id, s.ammo]),
+    en: G.enemies.filter((e) => e.alive && !e.decoy && !e.def.boss).map((e) => ({ type: e.type, sup: !!e.isSuper })),
+    queue: area.queue.slice(), bossHp: area.boss ? area.boss.maxHp : 0,
+  };
+  watchUsed = false; rewindHist.length = 0; histT = 0;
 }
-function tickTimeStop(dt) {
-  stopCd = Math.max(0, stopCd - (timeStopT > 0 ? 0 : dt));
-  if (timeStopT > 0) {
-    timeStopT -= dt;
-    if (timeStopT <= 0 || mode !== 'combat') { timeStopT = 0; post.grade(GRADES[moodNow] || GRADES.normal); toast('TIME RESUMES', '#e8e0c8'); }
-  }
+function rewindRecord(dt) {
+  if (mode !== 'combat' || rewinding) return;
+  histT -= dt; if (histT > 0) return;
+  histT = 0.08;
+  rewindHist.push({ cam: G.camPos.clone(), yaw, pitch, en: G.enemies.filter((e) => e.alive).map((e) => [e, e.pos.clone()]) });
+  if (rewindHist.length > 500) for (let i = 1; i < rewindHist.length; i++) rewindHist.splice(i, 1); // keep the whole room, thinned out
 }
-// Turns time back ~4 seconds (your health, enemies' health, shots in the air), but reality
-// reassembles differently: the floor is rebuilt as another of its versions, enemies end up in
-// new places and so do you. Recharges in 12 seconds.
-const watchSnaps = [];
-let watchSnapT = 0, watchCd = 0;
-function watchRecord(dt) {
-  watchCd = Math.max(0, watchCd - dt);
-  if (mode !== 'combat') { watchSnaps.length = 0; return; }
-  watchSnapT -= dt;
-  if (watchSnapT > 0) return;
-  watchSnapT = 0.1;
-  watchSnaps.push({ hp: P.hp, en: G.enemies.filter((e) => e.alive).map((e) => [e, e.hp]) });
-  if (watchSnaps.length > 50) watchSnaps.shift();
+function vhs(on) {
+  let o = $('vhs');
+  if (!o) { o = document.createElement('div'); o.id = 'vhs'; o.innerHTML = '<b>&#9664;&#9664; REWIND</b><i></i><i class="b2"></i><span></span>'; document.body.append(o); }
+  o.classList.toggle('on', on);
+  return o;
 }
 function useWatch() {
-  if (mode !== 'combat' || !G.combatActive) return;
-  if (watchCd > 0) { toast(`WATCH RECHARGING (${Math.ceil(watchCd)}s)`, '#c0a060'); sfx.empty(); return; }
-  watchCd = 12; stat('remoteUses');
-  const snap = watchSnaps[Math.max(0, watchSnaps.length - 40)];
-  if (snap) {
-    P.hp = Math.max(P.hp, snap.hp);
-    for (const [e, hp] of snap.en) if (e.alive) e.hp = Math.max(e.hp, hp);
+  if (!hasWatch() || mode !== 'combat' || !G.combatActive || rewinding || !roomStart || P.hp <= 0) return;
+  if (watchUsed) { toast('THE WATCH IS SPENT UNTIL THE NEXT ROOM', '#c0a060'); sfx.empty(); return; }
+  watchUsed = true; rewinding = true; rewindT = 0;
+  stat('remoteUses'); if (area.boss) stat('bossRewinds');
+  hold = null;
+  vhs(true);
+  post.grade({ tint: 0xb8ccff, lift: 0x060a14, sat: 0.3, contrast: 1.25 });
+  post.u.scan.value = 1; post.u.flash.value = 0.3; post.u.flashCol.value.set(0xc8d8ff);
+  // the tape squeals backwards
+  tone('sawtooth', 240, 2400, 1.6, 0.06); tone('square', 120, 900, 1.6, 0.03); noiseFx(1.6, 0.25, 'bandpass', 800, 5000);
+}
+function tickRewind(dt) {
+  worldRoll += (worldRollGoal - worldRoll) * Math.min(1, dt * 4.5);
+  if (!rewinding) return;
+  rewindT += dt;
+  const D = 1.6, k = Math.min(1, rewindT / D);
+  // play the room backwards, faster and faster
+  const n = rewindHist.length;
+  if (n) {
+    const h = rewindHist[Math.max(0, Math.floor((1 - k * k) * (n - 1)))];
+    G.camPos.copy(h.cam); yaw = h.yaw; pitch = h.pitch;
+    for (const [e, p] of h.en) if (e.alive && !e.def.boss) { e.pos.copy(p); if (e.place) e.place(); }
   }
+  post.u.chroma.value = 0.5 + Math.random() * 0.6; shake = Math.max(shake, 0.15);
+  const t = Math.max(0, Math.round((1 - k) * n * 0.08));
+  vhs(true).querySelector('span').textContent = `PLAY ${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  if (k >= 1) finishRewind();
+}
+function finishRewind() {
+  rewinding = false; vhs(false); post.u.scan.value = settings.retro >= 2 ? 1 : 0;
+  post.grade(GRADES[moodNow] || GRADES.normal);
   for (const p of G.projectiles) p.kill();
   G.projectiles = [];
-  watchSnaps.length = 0;
-  reshuffleRoom();
-  post.u.dissolve.value = 1; dissolveGoal = 0; dissolveRate = 2.5;
-  post.u.chroma.value = 1; post.u.flash.value = 0.5; post.u.flashCol.value.set(0xffd860);
-  banner('DÉJÀ VU', 'THE ROOM IS DIFFERENT', 1.4); sfx.unlock(); sfx.rail();
-}
-function reshuffleRoom() {
-  const idx = G.roomIdx;
-  const v = (G.variant + 1 + Math.floor(Math.random() * 2)) % 3;
-  effects.clearAll();
-  loadFloor(G.floorNum, v, true);
-  setRoom(idx); setLights(G.room, G.room, 0);
-  if (area) {
-    area.room = G.room;
-    G.room.spots.forEach((s2) => (s2.taken = null));
-    for (const e of G.enemies) {
-      if (!e.alive || e.def.boss) continue;
-      const s2 = freeSpot(e.type); s2.taken = e; e.spot = s2;
-      e.pos.set(s2.x, e.flyer ? (s2.y || e.pos.y) : e.hover || 0, s2.z);
-      if (e.goal) e.goal.copy(e.pos);
-      e.crouch = e.crouchTarget = 0; e.place && e.place();
+  // everything goes back to how the room started...
+  if (area.boss) {
+    if (area.boss.alive) area.boss.hp = roomStart.bossHp;
+  } else {
+    for (const e of G.enemies) e.remove();
+    G.enemies = [];
+    area.room.spots.forEach((s2) => (s2.taken = null));
+    for (const r of roomStart.en) {
+      const sp = freeSpot(r.type), e = new Enemy(G, r.type, sp, { active: true, ...(r.sup ? { isSuper: true } : {}) });
+      sp.taken = e; e.atkT = rand(Math.random, 1.2, 2.4); G.enemies.push(e);
     }
+    area.queue = roomStart.queue.slice(); area.waveT = 2.5;
   }
-  // you get moved too
-  G.camPos.copy(G.room.stand); G.camPos.x = rand(Math.random, -1.1, 1.1); G.camPos.z -= rand(Math.random, 0, 0.4);
-  yaw = 0; applyCamera();
+  P.hp = Math.max(1, roomStart.hp); score = roomStart.score; runCash = roomStart.runCash;
+  for (const [id, ammo] of roomStart.ammo) { const sl = P.inv.find((x) => x.id === id); if (sl) sl.ammo = ammo; }
+  P.reloadT = 0;
+  G.camPos.copy(roomStart.cam); yaw = 0; pitch = BASE_PITCH;
+  rewindHist.length = 0;
+  // ...but not quite the same: the room's faces are turned, the lights moved
+  const rolls = [Math.PI / 2, Math.PI, -Math.PI / 2, 0].filter((r) => Math.abs(r - worldRollGoal) > 0.1);
+  worldRollGoal = pick(Math.random, rolls);
+  const room = area.room;
+  for (const l of roomLights) l.position.set(rand(Math.random, -HALF + 0.6, HALF - 0.6), rand(Math.random, 0.6, 2.8), rand(Math.random, room.zf + 1, room.z0 - 1));
+  for (const e of G.enemies) if (e.flyer && !e.def.boss) { e.pos.y = rand(Math.random, 1.2, 2.6); if (e.place) e.place(); }
+  post.u.flash.value = 0.7; post.u.flashCol.value.set(0xffe090); post.u.chroma.value = 1;
+  banner('DÉJÀ VU', worldRollGoal === 0 ? 'EVERYTHING IS SOMEWHERE ELSE' : worldRollGoal === Math.PI ? 'THE CEILING IS THE FLOOR NOW' : 'THE FLOOR IS A WALL NOW', 1.6);
+  sfx.unlock(); tone('sine', 90, 40, 0.5, 0.5);
+  updateHud(true);
 }
+function resetWorldRoll() { worldRollGoal = 0; }
 
 // ------------------------------------------------------------------ developer tools
 let devWasPaused = false;
@@ -2565,7 +2641,7 @@ initDev({
   spawnBoss: (id) => { if (!area) return; const b = new Enemy(G, id, { x: 0, y: 1.9, z: area.room.z0 - 8.2, cover: false }); b.activate(); G.enemies.push(b); if (!area.boss) area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; },
 });
 
-window.__game = { get draws() { return drawCalls; }, ending: (i, done) => playCutscene(i, done || (() => {})), get cs() { return cutscene; }, setChar: (c) => { runChar = c; }, setMutLv: (m) => { mutLv = m; }, spiritFill, get overdrive() { return spiritOverdrive(); }, get mut() { return mutLv; }, forceTwist(id) { setRunMode("daily"); const t = DAILY_MODS_REF.find((x) => x.id === id); daily.mod = t; G.twist = t; G.mod = id; recalc(); }, get run() { return { runMode, daily, rushIdx, rushTime, layout: G.layout, mod: G.mod }; }, goto(n) { hideScreens(); G.floorNum = n; startFloor(n); }, spawnNote: () => spawnNote(G.room), nextFloor: () => nextFloor(), cards: { floorCard, bossCard, dmgDir }, post, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
+window.__game = { get draws() { return drawCalls; }, get watch() { return { used: watchUsed, rewinding, roll: worldRollGoal, hist: rewindHist.length, start: roomStart && roomStart.en.length }; }, useWatch, get yaw() { return yaw; }, get pitch() { return pitch; }, moveAim, solidAt: (x, y, z) => G.solidAt(new THREE.Vector3(x, y, z)), ending: (i, done) => playCutscene(i, done || (() => {})), get cs() { return cutscene; }, setChar: (c) => { runChar = c; }, setMutLv: (m) => { mutLv = m; }, spiritFill, get overdrive() { return spiritOverdrive(); }, get mut() { return mutLv; }, forceTwist(id) { setRunMode("daily"); const t = DAILY_MODS_REF.find((x) => x.id === id); daily.mod = t; G.twist = t; G.mod = id; recalc(); }, get run() { return { runMode, daily, rushIdx, rushTime, layout: G.layout, mod: G.mod }; }, goto(n) { hideScreens(); G.floorNum = n; startFloor(n); }, spawnNote: () => spawnNote(G.room), nextFloor: () => nextFloor(), cards: { floorCard, bossCard, dmgDir }, post, profile, checkAch, setPerks(lv) { perkLv = lv; recalc(); }, rollPerks, rollGun, PERKS, setDiff, startReload, equip, magOf, get M() { return M; }, collect: (p) => collectPickup(p), get stats() { return stats; }, get seq() { return !!seq; }, get perks() { return { perkLv, M, rerolls, perkOffer }; }, takePerk: (id) => takePerk(id), spawnSpot(type, spot) { const e = new Enemy(G, type, spot); e.activate(); G.enemies.push(e); return e; }, spawnBoss(id) { const room = area.room; const b = new Enemy(G, id, { x: 0, y: 1.9, z: room.z0 - 9.6, cover: false }); b.activate(); G.enemies.push(b); area.boss = b; ui.bossbar.classList.remove('hidden'); ui.bossName.textContent = DEFS[id].name; return b; }, get dbg() { return { paused, seq: !!seq, seqWait, until: !!seqUntil, fade: ui.fade.style.opacity, choiceOpen, pending: pendingGuns.length }; }, preview(n, v, room = 0) { loadFloor(n, v); setRoom(room); prepareArea(room); G.camPos.copy(G.floor.rooms[room].stand); setLights(G.room, G.room, 0); return G.floor.plan.name + ' / ' + G.floor.rooms.map(r => r.type).join(','); }, get area() { return area; }, DEFS, spawnAt: (t) => spawnAt(t), giveGun, dropGun: (id) => dropGun(G.camPos.clone().add(new THREE.Vector3(0.6, 0, -4)), id), GUNS, cur, openChoice, get choiceOpen() { return choiceOpen; }, probe(x, y) {
   const rect = canvasRect(); const ndc = new THREE.Vector2((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const targets = []; for (const e of G.enemies) if (e.alive) targets.push(...e.meshes);

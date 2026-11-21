@@ -141,10 +141,10 @@ function collectColliders(room) {
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     if (mats.some((m) => m.transparent)) return;
     b.setFromObject(o);
-    if (b.min.y > 1.1 || b.max.y < 0.35) return; // overhead fittings, rugs and trim
+    if (b.min.y > 2.4 || b.max.y < 0.35) return; // ceiling fittings, rugs and trim
     const sx = b.max.x - b.min.x, sz = b.max.z - b.min.z;
     if (sx > 6.2 || sz > 6.2 || sx < 0.05 || sz < 0.05) return; // walls, floors, wires
-    out.push({ x0: b.min.x, x1: b.max.x, z0: b.min.z, z1: b.max.z });
+    out.push({ x0: b.min.x, x1: b.max.x, z0: b.min.z, z1: b.max.z, y0: b.min.y, y1: b.max.y });
   });
   return out;
 }
