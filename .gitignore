@@ -1,3 +1,4 @@
 node_modules/
 *.zip
 .DS_Store
+v0*-screens.png
