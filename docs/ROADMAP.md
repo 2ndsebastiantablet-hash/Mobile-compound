@@ -81,7 +81,7 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 - [x] v0.17: **New Game+** (6 new enemies, tougher stats, Supers on every difficulty, red title, intense music, own ending) and **completion %** with the **FREE ROAM add-on** at 100% (walk around the room during fights in any mode)
 - [x] v0.18: **ending cutscenes** for all four difficulties (new cutscene engine: own sets, jointed characters, particles, debris, rain, letterbox, skip); NG+ and Free Roam unlock after beating all four difficulties; Free Roam collides with furniture; dev tools from the title (unlocks, add-ons, play any ending); every boss group reachable in the 30-floor Story
 - [x] v0.19: Free Roam **look around** (mouse-look / right stick) and movement in ambushes; enemy shots stop at pillars, furniture and props; nothing walks through pillars; **Golden Watch rework**: right-click rewind to the start of the room (VHS rewind effect, works from your pocket), the room comes back turned (floor becomes a wall or the ceiling), lights and enemies moved; time stop removed
-- [ ] Next: GRAVEYARD SHIFT rework (more abilities, focus-locked barrages), New Game+ content (new enemies, floors, weapons, 15 achievements)
+- [x] v0.20: **GRAVEYARD SHIFT rework** (autonomous GUARD / BARRAGE-until-dead / BULLET CATCH / SHOCKWAVE / ICE FIST, FOCUSED weakness, orders while held) and **New Game+ content**: 10 nightmare floors, 6 NG+ weapons (incl. the new execute mechanic), 15 more NG+ achievements, NG+ levels 1-5, OVERTIME PAY
 
 **🏁 MILESTONE: BETA.** Gameplay feature complete (audio still to come). Wider testing and store preparation start.
 

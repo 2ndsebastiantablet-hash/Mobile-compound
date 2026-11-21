@@ -71,7 +71,15 @@ The PC version shows the whole room in widescreen, the gun follows your cursor, 
   - **Daily Challenge** (reach floor 3): the same 8-floor run for everyone today: seeded start floor, floor versions, starting weapon and perks, plus one of 36 twists of the day (Glass Cannon, Big Heads, Power Cut, Big and Tall, Deadline, Gold Rush, Demolition Day, Quarterly Crunch and many more). Your best score per day is kept.
   - **Boss Rush** (defeat 3 bosses): all 10 bosses back to back with perks between fights. Fastest time wins.
 - **Between floors** you ride the elevator up: the cab hums and shakes, the floor display ticks over, and you pick your perk on the way.
-- **New Game+** (beat Story on all four difficulties, then switch it on at the top of the mode screen): tougher enemies (1.5x health, 1.3x damage, faster shots), **six NG+-only enemies** (Overseer, Nightmare Hound, Hunter-Killer Drone, Red Cell, Auditor Prime, Shift Ghost), Super enemies on every difficulty, a red title screen (OVERTIME+), a faster, darker soundtrack and its own ending, *Under New Management*. Works with every mode except the Daily.
+- **New Game+** (beat Story on all four difficulties, then switch it on at the top of the mode screen). Works with every mode except the Daily:
+  - **Tougher enemies:** 1.5x health and 1.3x damage, plus faster shots. Super enemies show up on every difficulty.
+  - **Six NG+-only enemies:** Overseer, Nightmare Hound, Hunter-Killer Drone, Red Cell, Auditor Prime and Shift Ghost.
+  - **Ten NIGHTMARE floors:** every zone gets a fourth version under red nightmare lighting: The Dead Letter Office, The Cubicle Void, The Meat Servers, Tarnished Gold, The Nursery, Scrap Cathedral, The Burned Archives, The Rotting Garden, The Red Room and The Other Side. About 40% of NG+ floors are one of these.
+  - **Six NG+-only weapons:** PINK SLIP (homing, chains), BLOOD CONTRACT (full-auto, heals per hit), THE CLOSER (pierces everything and finishes anything under 30% health), MANDATORY FUN (exploding confetti shells), OVERTIME CANNON (piercing rail that arcs to 2 more) and SEVERANCE (a long blade that heals and finishes the weak).
+  - **OVERTIME PAY:** +50% cash.
+  - **NG+ levels:** each NG+ you beat makes the next one tougher, up to NG+5 (shown as OVERTIME+2, +3...).
+  - **Presentation:** a red title screen, a faster, darker soundtrack and its own ending text.
+  - **18 NG+ achievements.**
 - **Completion and FREE ROAM:** HQ > RECORDS shows your completion % (awards, enemy log, files, weapons, employees, endings; also on the title screen). **Free Roam add-on** (unlocked together with New Game+, by beating Story on all four difficulties): switch it on at the top of the mode screen and, in any mode, you can walk around the room during fights instead of standing in one spot (PC: WASD / arrow keys, duck moves to C / Ctrl / Space; mobile: a joystick on the left). **Look around freely**: mouse-look on PC (the mouse is captured; the crosshair stays in the middle), and a second joystick on the right on phones. You can also move during **ambushes**. Desks, cabinets, pillars, counters, props and enemies block you. The walk between areas is still automatic and eases your view back to straight ahead.
 - **Enemies stay in view:** drones and other enemies can't drift behind you or off the sides of the screen (in Free Roam you can turn to face them instead).
 - **Solid world:** your shots stop at walls, pillars, furniture and props, and so do enemy shots (grenades and missiles blow up on them). You never walk through pillars or props, on rails or in Free Roam.
@@ -95,7 +103,7 @@ The PC version shows the whole room in widescreen, the gun follows your cursor, 
   - **Upgrades:** 22 permanent boosts for every future run (Vitality, Firepower, Speed Loader, Body Plating, First Aid Kit, Bounty Hunter, Perk Scholar, More Options, Backpack, Signing Bonus, Life Insurance, Sharpshooter, Trigger Discipline, Bigger Mags, Better Coffee, First Responder, Scrapper, Reflexes, Momentum, Orientation, Four-Leaf Clover, Gold Magnet).
   - **Armory:** level up any weapon you've found, up to level 10: +damage and +magazine every level, faster reloads at 5 and 8, and at level 10 it fires faster and is **gold plated**.
   - **Employees:** 8 starting characters, each with their own weapon and perks (The Temp, Night Guard, The Intern, The Janitor, IT Technician, Junior Executive, The Contractor, The Chairman's Heir). Unlock them through milestones or buy them.
-  - **Awards:** 176 achievements with cash rewards.
+  - **Awards:** 191 achievements with cash rewards.
   - **Files** (memos) and **Records** (best runs per mode).
 - **Developer mode** (for testing; Settings > Developer Mode, then the green **DEV** button, the `` ` `` key, or **DEV TOOLS** on the title screen): unlock everything, mark all four endings seen (unlocks New Game+ and Free Roam), switch New Game+ / Free Roam on or off, play any ending cutscene; god mode, infinite ammo, one-hit kills, enemies that don't attack, FPS counter, game speed 1x/2x/4x, full heal, kill all, finish floor, go to any floor, +cash, unlock everything, give any weapon or perk, spawn any enemy or boss. Before a public release, set `DEV_BUILD = false` in `shared/game/settings.js` to hide it.
 - **Tutorial:** a new player's first area on floor 1 walks through shooting, headshots, shooting fireballs, reloading, picking up and switching weapons. It can be skipped.
@@ -299,13 +307,15 @@ Mini bosses always have a condition for when they can be hurt.
 
 
 ### Golden-tier specials (legendary drops)
-**GRAVEYARD SHIFT** (a fighting spirit). While it's equipped, a glowing spirit floats beside you:
-- **Click/tap an enemy:** the spirit dashes over and unloads a blur of punches (14 hits), then snaps back. Click an incoming shot and it punches it out of the air.
-- **Finger laser** (automatic): every couple of seconds it shoots an enemy that's winding up an attack (**cancelling** it) or a shot about to hit you.
-- **Luck:** while it's out, 15% of hits on you are shrugged off ("LUCKY!") and weapon drops are luckier.
-- **OVERDRIVE:** punches fill a gauge (shown where ammo usually is). When it reads READY, press RELOAD (R / right click / RELOAD button): time slows to a crawl and the spirit punches its way through every enemy in the room.
-
-**GRAVEYARD SHIFT** stays out once you pick it up: switch to another weapon and it keeps fighting on its own (a barrage every few seconds); drop it and it's gone. Every punch **freezes** what it hits.
+**GRAVEYARD SHIFT** (a fighting spirit). Once you pick it up it stays out for the rest of the run, whatever you're holding (drop it and it's gone), and it **thinks for itself**:
+- **GUARD:** it floats beside you with its fists up and protects you. It punches incoming shots out of the air ("BLOCKED") or snipes them with its **finger laser**, and the laser also cancels enemy attacks that are winding up (and freezes them).
+- **BULLET CATCH:** sometimes it catches a shot instead and throws it straight back at the shooter ("RETURNED!").
+- **BARRAGE:** when nothing is coming at you it picks an enemy (whoever is about to attack, else the closest) and **punches it until it's dead**. Every punch freezes, and every 12th is an **ICE FIST** that locks the target solid. It waits a moment for cloaked or phased targets, and takes short breathers against bosses.
+- **SHOCKWAVE:** when 3 or more enemies bunch up it slams the floor between them: damage, knockback and freeze.
+- **The weakness:** it can't multitask. While it's punching or slamming, it's **FOCUSED** (a tag over its head, and its aura turns orange) and won't defend you, so shots get through.
+- **Orders** (while you hold it): click an enemy to send it there, click a shot to make it grab that one, click empty space to call it back to **GUARD** you.
+- **OVERDRIVE:** blocks and punches fill a gauge. When it's full, press RELOAD while holding it: time slows to a crawl and it punches its way through the room.
+- **Luck:** while it's out, 15% of hits on you are shrugged off and weapon drops are luckier.
 
 **THE GOLDEN WATCH** (The Remote is gone; this replaces it). You don't need to hold it: once it's in your pockets, **RIGHT CLICK** (phones: the gold **◀◀** button) rewinds time to the moment the room started. The screen turns into a rewinding VHS tape and you watch the fight run backwards. Then your health, ammo and score are back to what they were, and every enemy of the room is back too. But reality never reassembles the same way: the room's faces are turned around (the floor might now be a wall, or the ceiling), the lights are somewhere else and the enemies come back in new places. The room turns upright again once it's cleared. One rewind per room (in a boss fight the boss's health is rewound). Picking it up tells you how to use it.
 

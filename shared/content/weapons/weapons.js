@@ -1,4 +1,4 @@
-// The armory: 20 guns with distinct behaviours, plus a procedural model builder
+// The armory: 48 weapons (6 of them New Game+ only) with distinct behaviours, plus a procedural model builder
 // so each one looks different in your hands and as a floor pickup.
 import * as THREE from '../../vendor/three.module.min.js';
 import * as TX from '../../engine/textures.js';
@@ -101,8 +101,21 @@ export const GUNS = [
     m: { len: 0.3, h: 0.12, col: 'dark', blen: 0.16, bt: 0.08, tank: true } },
   { id: 'blackhole', name: 'BLACK HOLE GUN', short: 'BLACKHOLE', rarity: 'legendary', desc: 'Collapses a singularity that drags enemies in.', mag: 1, reload: 3, cd: 0.4, dmg: 16, explode: 2.8, pull: true, tracer: 0xa040ff, sound: 'rail', kick: 2.6,
     m: { len: 0.34, h: 0.14, col: 'dark', blen: 0.12, bt: 0.1, coil: 'purple', glow: 'purple', w: 0.12 } },
+  // ---------------------------------------------------------------- NEW GAME+ only (they never drop in a normal run)
+  { id: 'pinkslip', name: 'PINK SLIP', rarity: 'epic', ngp: true, desc: 'Homing termination notices that arc to a second target.', mag: 14, reload: 1.1, cd: 0.16, dmg: 1.7, seek: 120, chain: 1, tracer: 0xff70c0, sound: 'zap', kick: 0.7,
+    m: { len: 0.28, h: 0.08, col: 'white', blen: 0.06, glow: 'red', scope: true } },
+  { id: 'bloodcontract', name: 'BLOOD CONTRACT', short: 'CONTRACT', rarity: 'epic', ngp: true, desc: 'Full-auto. Every hit heals you a little.', mag: 40, reload: 1.4, cd: 0.08, dmg: 0.62, leech: 0.25, spread: 10, auto: true, tracer: 0xff2040, sound: 'smg', kick: 0.5,
+    m: { len: 0.38, h: 0.1, col: 'red', blen: 0.14, mag: 'box', stock: 'dark', glow: 'red' } },
+  { id: 'closer', name: 'THE CLOSER', rarity: 'legendary', ngp: true, desc: 'Pierces everything. Instantly finishes any enemy below 30% health.', mag: 4, reload: 1.9, cd: 0.85, dmg: 8, pierce: 99, headMult: 5, execute: 0.3, tracer: 0xff4060, sound: 'sniper', kick: 2.4,
+    m: { len: 0.5, h: 0.09, col: 'dark', blen: 0.46, bt: 0.03, scope: true, stock: 'dark', glow: 'red' } },
+  { id: 'mandatoryfun', name: 'MANDATORY FUN', short: 'FUN', rarity: 'rare', ngp: true, desc: 'Shotgun shells packed with explosive confetti.', mag: 5, reload: 1.5, cd: 0.6, dmg: 0.9, pellets: 6, spread: 30, explode: 0.8, range: 13, sound: 'shotgun', kick: 2.2,
+    m: { len: 0.26, h: 0.09, col: 'orange', blen: 0.42, tube: true, glow: 'orange' } },
+  { id: 'overtimecannon', name: 'OVERTIME CANNON', short: 'OT CANNON', rarity: 'legendary', ngp: true, desc: 'A rail of pure unpaid hours: pierces everything and arcs to 2 more.', mag: 3, reload: 2.2, cd: 0.9, dmg: 11, pierce: 99, chain: 2, tracer: 0xffd040, sound: 'rail', kick: 2.8,
+    m: { len: 0.44, h: 0.14, col: 'gold', blen: 0.3, bt: 0.06, coil: 'orange', glow: 'orange', w: 0.12 } },
+  { id: 'severance', name: 'SEVERANCE', rarity: 'epic', ngp: true, desc: 'A long red blade. Cuts through 3, heals on every hit, finishes the weak.', melee: 5, cd: 0.38, dmg: 5.5, pierce: 2, leech: 1.2, execute: 0.2, sound: 'slash', kick: 1,
+    m: { melee: 'blade' } },
   // not guns (see shared/game/spirit.js and the Golden Watch in game.js).
-  { id: 'spirit', name: 'GRAVEYARD SHIFT', short: 'SPIRIT', rarity: 'legendary', desc: 'A fighting spirit: punch barrages, a finger laser that cancels attacks, luck, and OVERDRIVE.', spirit: true, mag: 1, reload: 0, cd: 0.85, dmg: 0.75, sound: 'slash', kick: 0,
+  { id: 'spirit', name: 'GRAVEYARD SHIFT', short: 'SPIRIT', rarity: 'legendary', desc: 'A fighting spirit with a mind of its own. It guards you (blocks, catches and returns shots, lasers wind-ups), then picks an enemy and punches it until it drops, freezing it. Can\'t defend you while it\'s focused. Hold it to give orders.', spirit: true, mag: 1, reload: 0, cd: 0.35, dmg: 0.5, sound: 'slash', kick: 0,
     m: { spirit: true } },
   { id: 'watch', name: 'THE GOLDEN WATCH', short: 'WATCH', rarity: 'legendary', desc: 'No need to hold it: RIGHT CLICK (or \u25C0\u25C0 on phones) rewinds time to the start of the room. Once per room. The room never comes back the same way.', watch: true, mag: 1, reload: 0, cd: 0.3, dmg: 0, sound: 'tap', kick: 0,
     m: { watch: true } },
@@ -110,10 +123,13 @@ export const GUNS = [
 export const GUN = Object.fromEntries(GUNS.map((g) => [g.id, g]));
 for (const g of GUNS) { if (g.melee) { g.mag = 0; g.reload = 0; } g.pellets ||= 1; g.spread ||= 0; g.pierce ||= 0; g.headMult ||= 3; g.short ||= g.name; }
 
+// NEW GAME+ weapons only drop in NG+ runs
+let ngpGuns = false;
+export function setNgpGuns(on) { ngpGuns = !!on; }
 export function rollGun(floor, rng = Math.random, exclude = [], minRarity = null) {
   const order = Object.keys(RARITY);
   const minIdx = minRarity ? order.indexOf(minRarity) : 0;
-  const pool = GUNS.filter((g) => g.id !== 'pistol' && !exclude.includes(g.id)
+  const pool = GUNS.filter((g) => g.id !== 'pistol' && !exclude.includes(g.id) && (!g.ngp || ngpGuns)
     && floor >= RARITY[g.rarity].minFloor && order.indexOf(g.rarity) >= minIdx);
   if (!pool.length) return null;
   let total = pool.reduce((a, g) => a + RARITY[g.rarity].weight, 0), r = rng() * total;

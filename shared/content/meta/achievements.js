@@ -107,6 +107,14 @@ ACHIEVEMENTS.push(
   ...tiers('rq', S('superKills'), [[1, 'SUPER', 'Kill a Super enemy (Extra Hard)', 1000], [25, 'SILENCE THE CHOIR', 'Kill 25 Super enemies', 3000], [100, 'FINAL SUPER', 'Kill 100 Super enemies', 8000]]),
   ...tiers('mu', S('mutations'), [[1, 'SIDE EFFECTS', 'Take a mutation (Extra Hard)', 300], [25, 'NOT QUITE HUMAN', 'Take 25 mutations', 1500], [100, 'THE SUPPLEMENT WINS', 'Take 100 mutations', 4000]]),
   { id: 'mutfull', name: 'ABOMINATION', desc: 'Have 15 mutations in one run', reward: 2500, test: (p, r) => r && r.mutCount >= 15 },
+  // New Game+ (15)
+  ...[['overseer', 'OVERSEEN', 'the Overseer'], ['nightmare', 'PUT DOWN', 'a Nightmare Hound'], ['hunter', 'COUNTER-DRONE', 'a Hunter-Killer Drone'], ['redcell', 'CELL DIVISION', 'a Red Cell'], ['auditprime', 'AUDITED', 'Auditor Prime'], ['shiftghost', 'GHOSTED', 'a Shift Ghost']]
+    .map(([id, name, who]) => ({ id: 'ngpk_' + id, name, desc: `New Game+: kill ${who}`, reward: 800, test: (p) => !!(p.bestiary && p.bestiary[id]) })),
+  ...[['pinkslip', "YOU'RE FIRED", 'Pink Slip'], ['bloodcontract', 'SIGNED IN BLOOD', 'Blood Contract'], ['closer', 'ALWAYS BE CLOSING', 'The Closer'], ['mandatoryfun', 'TEAM BUILDING', 'Mandatory Fun'], ['overtimecannon', 'UNPAID OVERTIME', 'the Overtime Cannon'], ['severance', 'SEVERED TIES', 'Severance']]
+    .map(([id, name, gun]) => ({ id: 'ngpw_' + id, name, desc: `New Game+: find ${gun}`, reward: 900, test: (p) => !!p.found[id] })),
+  { id: 'ngpfl20', name: 'THIRD SHIFT', desc: 'Reach floor 20 in New Game+', reward: 3500, test: (p, r) => r && r.ngp && r.floor >= 20 },
+  { id: 'ngpxh', name: 'NO REST FOR THE WICKED', desc: 'Beat New Game+ on Extra Hard', reward: 12000, test: (p) => (p.stats.ngpwin_3 || 0) >= 1 },
+  { id: 'ngpk200', name: 'MANDATORY OVERTIME', desc: 'Kill 200 enemies in New Game+', reward: 3000, prog: (p) => Math.min(200, p.stats.ngpKills || 0), goal: 200, test: (p) => (p.stats.ngpKills || 0) >= 200 },
   { id: 'ngp1', name: 'DEJA VU', desc: 'Start a New Game+ run', reward: 500, test: (p) => (p.stats.ngpRuns || 0) >= 1 },
   { id: 'ngpwin', name: 'UNDER NEW MANAGEMENT', desc: 'Beat floor 30 in New Game+', reward: 8000, test: (p) => (p.stats.ngpWins || 0) >= 1 },
   { id: 'ngpfl15', name: 'SECOND SHIFT', desc: 'Reach floor 15 in New Game+', reward: 2500, test: (p, r) => r && r.ngp && r.floor >= 15 },

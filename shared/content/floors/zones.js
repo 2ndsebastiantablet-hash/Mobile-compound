@@ -77,12 +77,29 @@ export const ZONES = [
   ] },
 ];
 
+// NEW GAME+ only: a fourth, nightmare version of every zone (always under NIGHTMARE lighting)
+const NGP_THEMES = [
+  T('deadletter', 'THE DEAD LETTER OFFICE', { carpet: [60, 30, 28], wall: [110, 84, 70], trim: [40, 20, 16], fabric: [80, 40, 36], fog: 0x140404, light: 0xff9070, hemi: [0xff9a80, 0x2a0808], rooms: ['mailroom', 'archive', 'mailroom', 'office'], focus: 'mutant' }),
+  T('cubevoid', 'THE CUBICLE VOID', { carpet: [24, 22, 34], carpet2: [14, 12, 22], wall: [40, 36, 56], trim: [20, 18, 30], fabric: [50, 30, 70], fog: 0x06040c, light: 0xd060ff, hemi: [0xc080ff, 0x100818], rooms: ['cubicles', 'cubicles', 'cubicles', 'conference'], focus: 'office' }),
+  T('meat', 'THE MEAT SERVERS', { floorStyle: 'tile', carpet: [120, 60, 56], carpet2: [80, 30, 30], wall: [140, 70, 66], wallStyle: 'tile', fog: 0x120404, light: 0xff6060, hemi: [0xff8080, 0x200606], ceil: [120, 60, 60], rooms: ['servers', 'servers', 'lab', 'servers'], focus: 'mutant' }),
+  T('tarnish', 'TARNISHED GOLD', { floorStyle: 'marble', carpet: [70, 62, 40], carpet2: [40, 34, 20], wall: [90, 80, 56], wallStyle: 'marble', trim: [80, 60, 20], fog: 0x0a0804, light: 0xd8b060, hemi: [0xd0b070, 0x181006], rooms: ['executive', 'lounge', 'executive'], focus: 'security' }),
+  T('nursery', 'THE NURSERY', { floorStyle: 'tile', carpet: [90, 130, 70], carpet2: [50, 80, 36], wall: [110, 150, 90], wallStyle: 'tile', fog: 0x061204, light: 0x90ff60, hemi: [0xa0ff80, 0x082008], rooms: ['lab', 'lab', 'reactor'], focus: 'mutant' }),
+  T('scrap', 'SCRAP CATHEDRAL', { floorStyle: 'metal', carpet: [96, 64, 40], carpet2: [56, 36, 20], wall: [110, 74, 50], wallStyle: 'concrete', fog: 0x100804, light: 0xffa050, hemi: [0xffb070, 0x201006], rooms: ['factory', 'factory', 'factory'], focus: 'robot' }),
+  T('burned', 'THE BURNED ARCHIVES', { floorStyle: 'wood', carpet: [44, 30, 22], carpet2: [26, 16, 10], wall: [56, 40, 30], fog: 0x0c0602, light: 0xff8030, hemi: [0xff9040, 0x180802], rooms: ['archive', 'archive', 'office'], focus: 'office' }),
+  T('rot', 'THE ROTTING GARDEN', { floorStyle: 'grass', carpet: [60, 50, 70], carpet2: [40, 30, 50], wall: [90, 80, 100], fog: 0x0a060e, light: 0xc0a0ff, hemi: [0xb090ff, 0x140a18], rooms: ['garden', 'garden', 'lab'], focus: 'mutant' }),
+  T('redroom', 'THE RED ROOM', { carpet: [140, 10, 20], carpet2: [100, 6, 14], carpetPattern: [40, 0, 4], wall: [120, 14, 24], wallStyle: 'panel', trim: [60, 4, 10], fog: 0x140204, light: 0xff2030, hemi: [0xff4050, 0x200206], rooms: ['lounge', 'executive', 'lounge'], focus: 'security' }),
+  T('otherside', 'THE OTHER SIDE', { floorStyle: 'tile', carpet: [230, 230, 236], carpet2: [20, 20, 24], wall: [30, 30, 34], wallStyle: 'concrete', fog: 0x000000, light: 0xe8f0ff, hemi: [0xe0e8ff, 0x000000], rooms: ['reactor', 'lab', 'servers', 'executive'], focus: 'robot' }),
+];
+ZONES.forEach((z, i) => { z.themes.push({ ...NGP_THEMES[i], ngp: true }); });
+export const NGP_FLOOR_NAMES = NGP_THEMES.map((t) => t.name);
+
 export const MOODS = {
   normal: { name: '', w: 0.45 },
   night: { name: 'NIGHT SHIFT', w: 0.2, hemi: 0.55, room: 0.7, fog: 17, tint: 0x8090ff, off: 0.25 },
   emergency: { name: 'LOCKDOWN', w: 0.15, hemi: 0.75, room: 0.85, fog: 19, light: 0xff4a30, flicker: 0.35 },
   blackout: { name: 'BLACKOUT', w: 0.1, hemi: 0.32, room: 0.5, fog: 13, off: 0.7, flicker: 0.2 },
   toxic: { name: 'CONTAMINATED', w: 0.1, hemi: 0.8, room: 0.85, fog: 15, light: 0xb0ff80, fogCol: 0x0c2208 },
+  nightmare: { name: 'NIGHTMARE', w: 0, hemi: 0.6, room: 0.8, fog: 14, light: 0xff4060, fogCol: 0x180208, flicker: 0.3 },
 };
 
 export function zoneFor(floor) { return ZONES.find((z) => floor >= z.from && floor <= z.to) || ZONES[ZONES.length - 1]; }
@@ -90,11 +107,12 @@ export function zoneFor(floor) { return ZONES.find((z) => floor >= z.from && flo
 // The three options for a floor. Deterministic per (floor, variant) so a retry replays the same floor.
 export function floorPlan(floor, variant) {
   const z = zoneFor(floor);
-  const th = z.themes[variant % 3];
+  const th = z.themes[variant] || z.themes[variant % 3];
   const r = mulberry32(floor * 131 + variant * 977 + 5);
   let mood = 'normal';
-  if (floor > 1) {
-    const ms = Object.entries(MOODS);
+  if (th.ngp) mood = 'nightmare';
+  else if (floor > 1) {
+    const ms = Object.entries(MOODS).filter(([, m]) => m.w > 0);
     let tw = ms.reduce((a, [, m]) => a + m.w, 0), x = r() * tw;
     for (const [k, m] of ms) if ((x -= m.w) <= 0) { mood = k; break; }
   }
