@@ -289,3 +289,17 @@ body.pc #dmgDir i { top: -210px; transform-origin: 70px 210px; }
 #winStory p { margin: 6px 0; font-size: 19px; color: #d8d0c0; opacity: 0; animation: storyIn 1.2s forwards; text-shadow: 1px 1px 0 #000; }
 @keyframes storyIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 body.pc #winStory p { font-size: 24px; }
+/* New Game+ title: darker, redder, and a big plus */
+body.ngp #title .logo { color: #ffb0a0; text-shadow: 4px 4px 0 #900000, 8px 8px 0 #000, 0 0 24px #ff2000; }
+body.ngp #title .logo i { font-style: normal; color: #ff2a10; margin-left: 6px; text-shadow: 4px 4px 0 #3a0000, 0 0 30px #ff2000; animation: ngpPulse 1.2s ease-in-out infinite; }
+body.ngp #title .tag { color: #ff6050; }
+body.ngp #title { background: radial-gradient(ellipse at center, rgba(90,0,0,.25), rgba(20,0,0,.7)); }
+body.ngp #title .menu-btn, body.ngp #title button.big { border-color: #ff6040 #6a1010 #6a1010 #ff6040; }
+.ngp-row { border-color: #803020 !important; background: rgba(80, 10, 10, .35) !important; }
+@keyframes ngpPulse { 50% { opacity: .55; transform: scale(1.12); } }
+/* FREE ROAM joystick (mobile) */
+#roamStick { position: absolute; left: 18px; bottom: 150px; width: 120px; height: 120px; border-radius: 50%; z-index: 30; touch-action: none;
+  background: radial-gradient(circle, rgba(255,255,255,.06), rgba(0,0,0,.35)); border: 3px solid rgba(96,255,128,.45); }
+#roamStick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(96,255,128,.35); border: 3px solid rgba(160,255,180,.7); }
+.roam-row { border-color: #2a7a3a !important; background: rgba(10, 60, 20, .3) !important; }
+.cbar { height: 8px; background: #2a2620; border: 1px solid #5a5448; margin-top: 4px; } .cbar i { display: block; height: 100%; background: linear-gradient(90deg, #c09030, #f0c860); }

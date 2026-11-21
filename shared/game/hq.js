@@ -1,5 +1,6 @@
 // HQ: the between-runs screen. Tabs: UPGRADES (permanent), ARMORY (weapon levels),
 // EMPLOYEES (starting characters), ACHIEVEMENTS. Also the employee picker for a new run.
+import { completion, completionParts } from './completion.js';
 import { profile, spend, touch, flushProfile } from './profile.js';
 import { UPGRADES, upgradeCost, WEAPON_MAX, weaponCost } from '../content/meta/upgrades.js';
 import { CHARACTERS, isUnlocked } from '../content/meta/characters.js';
@@ -38,7 +39,7 @@ function tabBadges() {
   if (b) b.innerHTML = n ? `FILES <span class="new-tag">${n}</span>` : 'FILES';
 }
 function render() {
-  $('hqCash').textContent = money(profile.cash);
+  $('hqCash').textContent = `${money(profile.cash)} · ${completion()}%`;
   tabBadges();
   for (const b of document.querySelectorAll('#hqTabs button')) b.classList.toggle('on', b.dataset.tab === tab);
   const box = $('hqBody'); box.innerHTML = ''; box.scrollTop = 0;
@@ -91,6 +92,14 @@ function render() {
     }
   } else if (tab === 'records') {
     const rec = profile.records || {};
+    { // completion breakdown
+      const pct = completion();
+      box.append(el('div', 'hq-note', `<b style="color:#f0c860">COMPLETION ${pct}%</b> ${pct >= 100 ? '<b style="color:#60ff80">FREE ROAM UNLOCKED</b>' : '· reach 100% to unlock the FREE ROAM add-on'}`));
+      for (const c of completionParts()) {
+        const k = Math.min(1, c.have / Math.max(1, c.of));
+        box.append(el('div', 'hq-row', `<div class="hq-info"><b>${c.name}</b> <small>${c.have} / ${c.of}</small><div class="pips"><div class="cbar"><i style="width:${(k * 100).toFixed(1)}%"></i></div></div></div>`));
+      }
+    }
     const date = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
     const tm = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
     const list = (title, rows, fmt) => {

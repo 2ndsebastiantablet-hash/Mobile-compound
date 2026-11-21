@@ -87,6 +87,12 @@ export const ENEMY_LORE = {
   dealerbot: 'Casino dealer robot. Deals shards, reflects bad bets.',
   reactorwraith: 'Something that lives in the reactor core. Cloaks, then lasers.',
   pylon: 'Shield pylon. While it stands, the boss is protected.',
+  overseer: 'NEW GAME+. The night shift supervisor who never clocked out. Lasers you, then calls in staff.',
+  nightmare: 'NEW GAME+. The lobby dog after the second dose. Faster every time you hurt it.',
+  hunter: 'NEW GAME+. A drone built after the first temp got out. It hunts with missiles.',
+  redcell: 'NEW GAME+. The supplement, concentrated. Splits and bursts when you kill it.',
+  auditprime: 'NEW GAME+. The audit department, upgraded. Lasers and walls of paper razors.',
+  shiftghost: 'NEW GAME+. Someone who worked here for so long they forgot to be solid.',
 };
 
 const ATK_TEXT = {

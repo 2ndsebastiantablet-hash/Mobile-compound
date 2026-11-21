@@ -1,6 +1,6 @@
 # OVERTIME
 
-A retro on-rails shooter set in a 50-floor office tower, with a mobile (portrait, touch) version and a PC (landscape, mouse & keyboard) version. A free-roam PC version is planned. You stand in place with a fixed camera and shoot enemies. When an area is clear you walk to the next one automatically. Clear every area on a floor, ride the elevator up, and keep climbing until you reach the boardroom.
+A retro on-rails shooter set in a 30-floor office tower, with a mobile (portrait, touch) version and a PC (landscape, mouse & keyboard) version. A free-roam PC version is planned. You stand in place with a fixed camera and shoot enemies. When an area is clear you walk to the next one automatically. Clear every area on a floor, ride the elevator up, and keep climbing until you reach the boardroom.
 
 The look is a low-res, chunky-pixel 3D style in the spirit of mid-90s shooters. Everything is drawn in code at runtime: blocky box models, tiny nearest-filtered textures, flat fluorescent lighting and fog. The game ships no image or audio files. Every texture, model, sound effect and music loop is generated procedurally.
 
@@ -61,15 +61,19 @@ The PC version shows the whole room in widescreen, the gun follows your cursor, 
 ## How it plays
 - **Saving:** your run is autosaved at the start of every floor. **Continue** on the title screen picks it up again, even after closing the game. Retrying after death, or choosing *Restart floor* from the pause menu, replays that floor's save with full health.
 - **Game modes** (CLOCK IN opens the mode screen):
-  - **Story:** floors 1-50, beat the Chairman. Winning lets you **keep climbing** into Endless.
-  - **Endless** (reach floor 10 to unlock): the tower never ends. Past 50, floors reuse upper-tower layouts and keep getting harder.
+  - **Story:** floors 1-30, beat the Chairman. Each difficulty has **its own ending** (Easy: *Temp to Perm*, Medium: *Clocking Out*, Hard: *Hostile Takeover*, Extra Hard: *The Last Shift*, the true ending). Winning lets you **keep climbing** into Endless.
+  - **Endless** (reach floor 10 to unlock): the tower never ends. Past 30, floors reuse upper-tower layouts and keep getting harder.
   - **Daily Challenge** (reach floor 3): the same 8-floor run for everyone today: seeded start floor, floor versions, starting weapon and perks, plus one of 36 twists of the day (Glass Cannon, Big Heads, Power Cut, Big and Tall, Deadline, Gold Rush, Demolition Day, Quarterly Crunch and many more). Your best score per day is kept.
   - **Boss Rush** (defeat 3 bosses): all 10 bosses back to back with perks between fights. Fastest time wins.
+- **Between floors** you ride the elevator up: the cab hums and shakes, the floor display ticks over, and you pick your perk on the way.
+- **New Game+** (beat Story once, then switch it on at the top of the mode screen): tougher enemies (1.5x health, 1.3x damage, faster shots), **six NG+-only enemies** (Overseer, Nightmare Hound, Hunter-Killer Drone, Red Cell, Auditor Prime, Shift Ghost), Super enemies on every difficulty, a red title screen (OVERTIME+), a faster, darker soundtrack and its own ending, *Under New Management*. Works with every mode except the Daily.
+- **Completion and FREE ROAM:** HQ > RECORDS shows your completion % (awards, enemy log, files, weapons, employees, endings; also on the title screen). At **100%** the **Free Roam add-on** unlocks: switch it on at the top of the mode screen and, in any mode, you can walk around the room during fights instead of standing in one spot (PC: WASD / arrow keys, duck moves to C / Ctrl / Space; mobile: a joystick on the left). The walk between areas is still automatic.
+- **Enemies stay in view:** drones and other enemies can't drift behind you or off the sides of the screen.
 - **Extra Hard extras:**
   - **Mutations** replace perks: between floors you choose 1 of 3 mutations (rerolls work too). Each gives a real upside and has a downside written on the card (for example Muscle Mass: +22% damage, but ducking recovers twice as slowly; Carapace: +50 max health, but you can't duck). 30 in total; your hands change colour as they pile up. They're listed in the pause menu.
-  - **Super enemies:** now and then an enemy arrives as its Super version: dark violet with a crown of light, 2.4x health, harder hits and two extra abilities (Blink, Regeneration, Mirror, Fury, Legion, Death Nova, Echo Shots, Haste, Phasing, War Cry, Ironclad, Broodmother). A warning names it and its abilities. They pay 4x cash and 3x score, and get their own mark in the enemy log.
+  - **Super enemies** (also in New Game+, bosses included): now and then an enemy arrives as its Super version: dark violet with a crown of light, 2.4x health, harder hits and two extra abilities (Blink, Regeneration, Mirror, Fury, Legion, Death Nova, Echo Shots, Haste, Phasing, War Cry, Ironclad, Broodmother). A warning names it and its abilities. They pay 4x cash and 3x score, and get their own mark in the enemy log.
 - **Enemy log** (HQ > LOG): every enemy you kill gets an entry with its lore, how it fights, its stats and a rotating 3D model. Enemies can spawn in **skins** (three themed variants per family, like Night Shift, Rusted or Toxic, plus a rare **GOLDEN** one that's tougher and pays 5x cash); every skin you kill is added to its entry.
-- **Memos:** 80 memos, emails and logs lie around the tower in Story and Endless (a glowing sheet of paper; tap it). Read them at **HQ > FILES** to find out what happened at Halvorsen-Pike Holdings.
+- **Memos:** 80 memos (new ones show a **NEW** tag in HQ > FILES until you read them), emails and logs lie around the tower in Story and Endless (a glowing sheet of paper; tap it). Read them at **HQ > FILES** to find out what happened at Halvorsen-Pike Holdings.
 - **Records:** HQ > RECORDS shows your best runs per mode (kept on this device; online leaderboards come with the store release).
 - **Look & feel:** the 3D view goes through a retro post-processing pass: glow on lights and muzzle flashes, a colour grade for each lighting mood, and an optional dither/scanline **Retro Filter** (Settings: Off, Soft, Full). Explosions and gunfire light up the room, dark floors give you a flashlight, lockdown floors pulse with alarm lights, and night floors flash with lightning. Enemies get knocked back, splatter the walls, and die in different ways: humans fall, robots spark and blow, flyers crash, bosses explode in a chain. Every floor opens with an intro card and every boss with a letterboxed slow-motion intro. Turn **Effects** off in Settings for very old devices.
 - **Duck:** press `S` / down arrow (or the DUCK button on mobile) to drop down for a moment. Shots fired at you before you ducked fly over your head, and lasers miss. Homing shots and melee still get you.
@@ -85,7 +89,7 @@ The PC version shows the whole room in widescreen, the gun follows your cursor, 
   - **Upgrades:** 22 permanent boosts for every future run (Vitality, Firepower, Speed Loader, Body Plating, First Aid Kit, Bounty Hunter, Perk Scholar, More Options, Backpack, Signing Bonus, Life Insurance, Sharpshooter, Trigger Discipline, Bigger Mags, Better Coffee, First Responder, Scrapper, Reflexes, Momentum, Orientation, Four-Leaf Clover, Gold Magnet).
   - **Armory:** level up any weapon you've found, up to level 10: +damage and +magazine every level, faster reloads at 5 and 8, and at level 10 it fires faster and is **gold plated**.
   - **Employees:** 8 starting characters, each with their own weapon and perks (The Temp, Night Guard, The Intern, The Janitor, IT Technician, Junior Executive, The Contractor, The Chairman's Heir). Unlock them through milestones or buy them.
-  - **Awards:** 161 achievements with cash rewards.
+  - **Awards:** 176 achievements with cash rewards.
   - **Files** (memos) and **Records** (best runs per mode).
 - **Developer mode** (for testing; Settings > Developer Mode, then the green **DEV** button or the `` ` `` key): god mode, infinite ammo, one-hit kills, enemies that don't attack, FPS counter, game speed 1x/2x/4x, full heal, kill all, finish floor, go to any floor, +cash, unlock everything, give any weapon or perk, spawn any enemy or boss. Before a public release, set `DEV_BUILD = false` in `shared/game/settings.js` to hide it.
 - **Tutorial:** a new player's first area on floor 1 walks through shooting, headshots, shooting fireballs, reloading, picking up and switching weapons. It can be skipped.
@@ -295,7 +299,11 @@ Mini bosses always have a condition for when they can be hurt.
 - **Luck:** while it's out, 15% of hits on you are shrugged off ("LUCKY!") and weapon drops are luckier.
 - **OVERDRIVE:** punches fill a gauge (shown where ammo usually is). When it reads READY, press RELOAD (R / right click / RELOAD button): time slows to a crawl and the spirit punches its way through every enemy in the room.
 
-**THE GOLDEN WATCH** (replaces The Remote). Click/tap (or RELOAD) to turn time back about 4 seconds: your health and enemy health go back to what they were and every shot in the air is gone. But reality never reassembles the same way: **the floor is rebuilt as one of its other versions** (different room, props, lighting), enemies end up in new places and so do you. Recharges in 12 seconds.
+**GRAVEYARD SHIFT** stays out once you pick it up: switch to another weapon and it keeps fighting on its own (a barrage every few seconds); drop it and it's gone. Every punch **freezes** what it hits.
+
+**THE GOLDEN WATCH** (The Remote is gone; this replaces it).
+- **Click/tap: STOP TIME** for 4 seconds. Enemies, shots, bombs and props freeze while you keep shooting. Recharges in 15 seconds.
+- **RELOAD: REWIND** about 4 seconds: your health and enemy health go back to what they were and every shot in the air is gone. But reality never reassembles the same way: **the floor is rebuilt as one of its other versions** (different room, props, lighting), enemies end up in new places and so do you. Recharges in 12 seconds.
 
 ### Weapons
 There are 42 weapons: 33 guns, 7 melee weapons, the Graveyard Shift spirit and The Golden Watch. You start with a pistol. Enemies randomly drop weapons, shown as a spinning model with a light beam in the gun's rarity color. Bosses always drop a rare or better gun. Tap a drop to grab it; anything left on the floor is collected automatically when the area is clear. You can carry **3 guns**, and **SWAP** cycles through them. If your hands are full when you pick one up, you choose which gun to drop, or leave the new one behind. Picking up a gun you already carry refills its ammo.
@@ -349,7 +357,9 @@ There are 42 weapons: 33 guns, 7 melee weapons, the Graveyard Shift spirit and T
 
 Higher rarities only start dropping on later floors.
 
-### The tower: 50 floors, 3 versions each
+### The tower: 30 floors, 3 versions each
+The floor numbers in the zone and boss tables below are the game's 50 content steps; the 30-floor tower walks through all of them evenly (zones: floors 1-3, 4-6, 7-8, 9-12, 13-15, 16-18, 19-21, 22-24, 25-27, 28-30). Floors 5, 10, 15, 20, 25 and 30 are boss floors and 3, 8, 13, 18, 23 and 28 are mini-boss floors, each picking the authored boss for its height.
+
 The tower has 10 zones. Each zone has **three alternate themes**, and when you reach a floor one version is picked at random. A version is a theme (look, floor and wall materials, room types) plus a lighting mood (normal, **Night Shift**, red **Lockdown**, **Blackout**, toxic **Contaminated**) plus an enemy focus (office staff, security, robots or mutants). Retrying a floor replays the same version.
 
 | Floors | Version A | Version B | Version C |
@@ -365,4 +375,4 @@ The tower has 10 zones. Each zone has **three alternate themes**, and when you r
 | 41–45 | The Penthouse | Casino Lounge | Marble Halls |
 | 46–50 | Reactor Core | Black Site | Chairman's Sanctum |
 
-Room types are offices, cubicles, break rooms, conference rooms, mailrooms, server rooms, executive offices, labs (specimen tanks), factories (conveyors and robot arms), archives, roof gardens, lounges (bar, piano, pool table) and reactor rooms. There's a boss every 5 floors, ending with the Chairman on floor 50. The city skyline outside the windows sinks as you climb. Above floor 20 the whole upper-tower roster is in play, and the difficulty curve flattens.
+Room types are offices, cubicles, break rooms, conference rooms, mailrooms, server rooms, executive offices, labs (specimen tanks), factories (conveyors and robot arms), archives, roof gardens, lounges (bar, piano, pool table) and reactor rooms. There's a boss every 5 floors, ending with the Chairman on floor 30. The city skyline outside the windows sinks as you climb. Above floor 20 the whole upper-tower roster is in play, and the difficulty curve flattens.

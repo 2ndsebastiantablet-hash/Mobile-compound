@@ -65,22 +65,25 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 - [x] **Records:** local leaderboards per mode at HQ > RECORDS
 - [ ] Online leaderboards: need a small server or service; planned with the store release (Phase 8)
 
-## Phase 6.5: Collection & extras ✅ DONE (v0.14–v0.16)
+## Phase 6.5: Collection & extras ✅ DONE (v0.14–v0.17)
 - [x] Duller lights on bright floors (washed-out enemy heads)
 - [x] **Enemy skins:** 3 themed variants per enemy family + a rare GOLDEN skin (tougher, 5x cash)
 - [x] **Enemy log** (HQ > LOG): unlocked on first kill; lore, how it fights, stats, rotating 3D model with every skin you've killed; bosses too
 - [x] **11 new HQ upgrades** (22 total) and **Armory levels 6-10** (level 10 = gold plated LEGEND)
 - [x] **36 daily twists** (30 new), built from a knob system
-- [x] **124 new achievements** (161 total) with new tracked stats
+- [x] **124 new achievements** (161 total) with new tracked stats; 176 after v0.17
 - [x] **50 new memos** (80 total)
 - [x] **GRAVEYARD SHIFT** (golden tier fighting spirit): punch barrages, attack-cancelling finger laser, luck, OVERDRIVE ultimate
 - [x] **Super enemies** (Extra Hard only): rare, 2.4x health, harder hits, dark violet with a crown of light, two of 12 extra abilities (Blink, Regeneration, Mirror, Fury, Legion, Death Nova, Echo Shots, Haste, Phasing, War Cry, Ironclad, Broodmother); 4x cash, 3x score
 - [x] **Mutations** (Extra Hard only): 30 mutations replace perks between floors; each has an upside and a listed downside and recolours your arms
 - [x] **THE GOLDEN WATCH** replaces The Remote: rewinds ~4s on demand and rebuilds the room as another version each time
+- [x] v0.17: **30-floor tower** (content mapped evenly), **endings per difficulty**, **elevator ride** between floors, **NEW** tags on unread files, enemies can't get behind you or off-screen, Requiem renamed **Super** (bosses too), the Watch **stops time**, the spirit stays out while carried and **freezes** what it hits
+- [x] v0.17: **New Game+** (6 new enemies, tougher stats, Supers on every difficulty, red title, intense music, own ending) and **completion %** with the **FREE ROAM add-on** at 100% (walk around the room during fights in any mode)
 
 **🏁 MILESTONE: BETA.** Gameplay feature complete (audio still to come). Wider testing and store preparation start.
 
 ## Phase 7: PC Free Roam (3–5 sessions · weeks 7–10)
+- [x] First step shipped in v0.17: the FREE ROAM add-on lets you walk around the current room during fights (both versions)
 - [ ] WASD + mouse-look controller, collision, sprint, crouch
 - [ ] Room-triggered combat instead of auto-walking; elevator interaction
 - [ ] AI rework: steering around furniture, cover relative to a moving player, flanking

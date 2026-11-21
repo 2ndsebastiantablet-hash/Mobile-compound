@@ -265,9 +265,29 @@ export function category(id) {
 }
 
 // Floors 1-20 use each enemy's own range. Above 20 the whole upper-tower roster is in play.
-export function rosterFor(floor, focus) {
+// New Game+ only: six enemies that never appear in a normal run
+Object.assign(DEFS, {
+  overseer: { name: 'OVERSEER', floors: [1, 50], w: 0.22, ngp: true, hp: 14, score: 700, dmg: 12, scale: 1.2,
+    model: H('shadow', { face: 'grey', glasses: true, weapon: 'big' }), move: 'stand', nocover: true, speed: 0.9,
+    atk: [{ type: 'laser' }, { type: 'summon', minion: 'grunt', n: 1 }], fire: [2.4, 3.2], wind: 1.2, interrupt: true },
+  nightmare: { name: 'NIGHTMARE HOUND', floors: [1, 50], w: 0.25, ngp: true, hp: 8, score: 500, dmg: 14,
+    model: { kind: 'quad', style: 'hound', col: [70, 20, 24], eye: 'hound', eyeCol: [255, 220, 40], tail: true }, move: 'leap', speed: 3.8, traits: { enrage: true, regen: 0.8 } },
+  hunter: { name: 'HUNTER-KILLER DRONE', floors: [1, 50], w: 0.25, ngp: true, hp: 7, score: 550, dmg: 8,
+    model: { kind: 'drone', col: [24, 24, 28], eye: 'mono', eyeCol: [255, 30, 30], rotors: 4 }, move: 'fly', speed: 2.6,
+    atk: [{ type: 'homing', n: 2, kind: 'missile' }, { type: 'burst', n: 3, kind: 'bolt', speed: 1.5 }], fire: [2.0, 2.8], wind: 0.6 },
+  redcell: { name: 'RED CELL', floors: [1, 50], w: 0.22, ngp: true, hp: 10, score: 500, dmg: 14,
+    model: { kind: 'blob', col: [200, 40, 40], eyeCol: [255, 255, 255] }, move: 'crawl', speed: 1.4, traits: { split: { type: 'oozeling', n: 2 }, deathBlast: 2.5 } },
+  auditprime: { name: 'AUDITOR PRIME', floors: [1, 50], w: 0.2, ngp: true, hp: 16, score: 800, dmg: 14, scale: 1.2,
+    model: { kind: 'mech', col: [30, 30, 34], accent: [230, 180, 40], eye: 'mono', eyeCol: [255, 200, 40] }, move: 'stand', nocover: true, speed: 0.8,
+    atk: [{ type: 'laser' }, { type: 'wall', n: 6, kind: 'shard' }], fire: [2.4, 3.2], wind: 1.1, interrupt: true, traits: { armor: 0.5 } },
+  shiftghost: { name: 'SHIFT GHOST', floors: [1, 50], w: 0.22, ngp: true, hp: 7, score: 550, dmg: 9,
+    model: { kind: 'floater', style: 'wraith', eyeCol: [255, 40, 40] }, move: 'fly', speed: 1.8,
+    atk: { type: 'spread', n: 3, angle: 0.12, kind: 'plasma' }, fire: [1.8, 2.6], wind: 0.6, traits: { cloak: true, phase: true } },
+});
+
+export function rosterFor(floor, focus, ngp = false) {
   return Object.entries(DEFS)
-    .filter(([, d]) => !d.boss && !d.minion && d.w > 0 && (
+    .filter(([, d]) => !d.boss && !d.minion && d.w > 0 && (!d.ngp || ngp) && (
       // enemies whose range reaches past 20 use it exactly; the original late roster fills floors 21-50
       d.floors[1] > 20 ? floor >= d.floors[0] && floor <= d.floors[1]
         : floor > 20 ? d.floors[1] >= 14 : floor >= d.floors[0] && floor <= d.floors[1]))

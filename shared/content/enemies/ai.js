@@ -30,11 +30,13 @@ export class Enemy {
     const TW = game.twist; // daily challenge knobs
     if (TW && TW.enemyHp) this.maxHp = this.hp = Math.round(this.hp * TW.enemyHp * 10) / 10;
     if (game.mutHp && game.mutHp !== 1 && !def.boss) this.maxHp = this.hp = Math.round(this.hp * game.mutHp * 10) / 10; // Hive Mind mutation
+    if (game.ngp && !def.brain) this.maxHp = this.hp = Math.round(this.hp * 1.5 * 10) / 10; // New Game+
     if (TW && TW.oneHit) this.maxHp = this.hp = def.boss ? Math.round(this.hp * 0.25) : 0.1;
     if (opts.decoy) this.maxHp = this.hp = 1;
     this.decoy = !!opts.decoy; this.yawExtra = 0;
     this.dmg = def.dmg * (1 + f * 0.015) * (1 + late * 0.015); // balance pass: was 3% per floor, far too steep past floor 10
-    this.pspeed = 4.6 * (1 + f * 0.015) * (dd.proj || 1);
+    if (game.ngp) this.dmg *= 1.3;
+    this.pspeed = 4.6 * (1 + f * 0.015) * (dd.proj || 1) * (game.ngp ? 1.1 : 1);
     this.fireMul = Math.max(0.72, 1 - f * 0.014) * (dd.fire || 1) * (game.twist && game.twist.enemyFire || 1);
     this.shieldHp = this.traits.shield || 0;
     this.scale = def.scale || 1;
@@ -554,7 +556,7 @@ export class Enemy {
       this.summoned = this.summoned || 0;
       if (this.summoned < 3 && frac < 1 - (this.summoned + 1) * 0.25) {
         this.summoned++;
-        const pool = rosterFor(g.floorNum).filter(([id, d]) => !isFlyer(id) && d.move !== 'burrow' && d.move !== 'turret' && d.hp < 12).map(([id]) => id);
+        const pool = rosterFor(g.layout || g.floorNum, null, g.ngp).filter(([id, d]) => !isFlyer(id) && d.move !== 'burrow' && d.move !== 'turret' && d.hp < 12).map(([id]) => id);
         for (let k = 0; k < 2; k++) g.spawnReinforcement(pick(Math.random, pool.length ? pool : ['grunt']));
       } else for (let k = -1; k <= 1; k++) this.shoot('big', k * 0.14);
     }

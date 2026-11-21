@@ -1,5 +1,5 @@
 import * as THREE from '../vendor/three.module.min.js';
-import { buildFloor, floorPlan, MOODS, box, EYE, RD, TOP_FLOOR } from '../content/floors/builder.js';
+import { buildFloor, floorPlan, MOODS, box, EYE, RD, HALF, TOP_FLOOR } from '../content/floors/builder.js';
 import { Enemy, Projectile, SUPER_ABILITIES } from '../content/enemies/ai.js';
 import { DEFS, rosterFor, isFlyer, isMelee } from '../content/enemies/roster.js';
 import { bossFor, bossKindFor, BOSS_LIST } from '../content/bosses/bosses.js';
@@ -18,12 +18,13 @@ import { profile, addCash, stat, statMax, touch, flushProfile } from './profile.
 import { applyUpgrades, weaponBonus } from '../content/meta/upgrades.js';
 import { CHAR } from '../content/meta/characters.js';
 import { DIFFS, diffOf } from './difficulty.js';
-import { ENDINGS } from '../content/meta/endings.js';
+import { completion, roamUnlocked } from './completion.js';
+import { ENDINGS, ENDING_NGP } from '../content/meta/endings.js';
 import { MODES, MODE, modeOpen, RUSH_FLOORS, dailySetup, todayKey, recordRun, DAILY_MODS as DAILY_MODS_REF } from './modes.js';
 import { LORE, LORE_BY_ID } from '../content/meta/lore.js';
 import { ACHIEVEMENTS } from '../content/meta/achievements.js';
 import { initHQ, bindHQ, openHQ, closeHQ, openCharSelect, openDiffSelect, unreadFiles, unlockedCount, allUnlocked, money } from './hq.js';
-import { setMusic } from '../audio/music.js';
+import { setMusic, setMusicIntense } from '../audio/music.js';
 import { GUN, GUNS, RARITY, rollGun, buildGunModel, statLine, setSleeve, aimSpeed, goldPlate, setMutationTint } from '../content/weapons/weapons.js';
 import { rand, pick, shuffle, ease, lerp, clamp, storeGet, storeSet, mulberry32 } from '../engine/util.js';
 
@@ -174,6 +175,58 @@ function bossKey(n) {
   const kind = bossKindFor(n), lf = layoutOf(n);
   return kind === 'mini' ? clamp(5 * Math.round((lf - 3) / 5) + 3, 3, 48) : clamp(5 * Math.round(lf / 5), 5, 50);
 }
+// New Game+: unlocked by beating Story once. Tougher enemies, six new ones, more Supers,
+// a darker title screen and a faster, harsher soundtrack. Daily runs are never NG+.
+const ngpUnlocked = () => !!(profile.allModes || (profile.stats.wins || 0) >= 1);
+const ngpWanted = () => ngpUnlocked() && !!profile.ngp;
+function setNgp(on) {
+  G.ngp = !!on;
+  setMusicIntense(G.ngp);
+  document.body.classList.toggle('ngp', G.ngp);
+}
+function titleNgp() { // the title screen shows NG+ while it's switched on
+  setNgp(ngpWanted());
+  const lg = document.querySelector('#title .logo'), tg = document.querySelector('#title .tag');
+  if (lg) lg.innerHTML = G.ngp ? 'OVER<span>TIME</span><i>+</i>' : 'OVER<span>TIME</span>';
+  if (tg) tg.textContent = G.ngp ? 'NEW GAME+. YOU HAVE BEEN HERE BEFORE.' : '30 FLOORS. NO WAY DOWN.';
+}
+// FREE ROAM add-on (unlocked at 100% completion): walk around the room during fights.
+// PC: WASD / arrow keys (duck moves to C, Ctrl or Space). Mobile: the joystick on the left.
+const roamWanted = () => roamUnlocked() && !!profile.roam;
+const roamKeys = new Set();
+const roamStick = { x: 0, y: 0 };
+function roamUpdate(dt) {
+  const show = G.roam && !PC && (mode === 'combat' || mode === 'moving') && !paused;
+  if (show !== G.stickShown) { G.stickShown = show; $('roamStick').classList.toggle('hidden', !show); }
+  if (!G.roam || mode !== 'combat' || paused || seq || !area || P.hp <= 0) return;
+  let mx = roamStick.x, mz = roamStick.y;
+  if (roamKeys.has('a') || roamKeys.has('arrowleft')) mx -= 1;
+  if (roamKeys.has('d') || roamKeys.has('arrowright')) mx += 1;
+  if (roamKeys.has('w') || roamKeys.has('arrowup')) mz -= 1;
+  if (roamKeys.has('s') || roamKeys.has('arrowdown')) mz += 1;
+  const len = Math.hypot(mx, mz);
+  if (len < 0.08) return;
+  const sp = 3.4 * (G.duck > 0.5 ? 0.5 : 1) * Math.min(1, len) / len;
+  // movement follows where you're looking (yaw), so the camera always faces forward
+  const c = Math.cos(yaw), sn = Math.sin(yaw);
+  const nx = G.camPos.x + (mx * c + mz * sn) * sp * dt, nz = G.camPos.z + (-mx * sn + mz * c) * sp * dt;
+  const room = area.room, st = room.stand;
+  G.camPos.x = clamp(nx, -HALF + 0.55, HALF - 0.55);
+  G.camPos.z = clamp(nz, room.zf + 1.4, st.z + 0.4);
+  // don't walk through enemies
+  for (const e of G.enemies) {
+    if (!e.alive || e.off) continue;
+    const r = 0.55 * e.scale + 0.45, dx = G.camPos.x - e.pos.x, dz = G.camPos.z - e.pos.z, d = Math.hypot(dx, dz);
+    if (d < r && d > 0.001 && (e.pos.y || 0) < 1.6) { G.camPos.x = e.pos.x + dx / d * r; G.camPos.z = e.pos.z + dz / d * r; }
+  }
+  G.camPos.x = clamp(G.camPos.x, -HALF + 0.55, HALF - 0.55); G.camPos.z = clamp(G.camPos.z, room.zf + 1.4, st.z + 0.4);
+  G.roamBob = (G.roamBob || 0) + dt * 9;
+  G.camPos.y = st.y + Math.abs(Math.sin(G.roamBob)) * 0.035;
+}
+function setRoam(on) {
+  G.roam = !!on; roamKeys.clear(); roamStick.x = roamStick.y = 0;
+  document.body.classList.toggle('roam', G.roam);
+}
 function setDiff(i) { runDiff = DIFFS[i] ? i : 1; D = diffOf(runDiff); G.dd = D; }
 setDiff(1);
 const healP = (n) => { if (n > 0) P.hp = Math.min(M.maxHp, P.hp + n * (M.healMul || 1)); };
@@ -260,7 +313,7 @@ function setLights(a, b, k) {
 
 // ------------------------------------------------------------------ area planning
 function weightedType() {
-  const pool = rosterFor(G.layout || G.floorNum, G.floor && G.floor.plan.focus);
+  const pool = rosterFor(G.layout || G.floorNum, G.floor && G.floor.plan.focus, G.ngp);
   let total = pool.reduce((a, [, d]) => a + d.w, 0), r = Math.random() * total;
   for (const [id, d] of pool) if ((r -= d.w) <= 0) return id;
   return 'grunt';
@@ -365,8 +418,11 @@ function introduce(type) {
 // Extra Hard: now and then an enemy arrives as its SUPER version
 function superRoll(type) {
   const d = DEFS[type];
-  if (runDiff !== 3 || d.boss || d.minion || mode === 'title') return null;
-  return Math.random() < 0.04 + Math.min(0.1, (G.eff || G.floorNum) * 0.002) ? { isSuper: true } : null;
+  if ((runDiff !== 3 && !G.ngp) || d.boss || d.minion || mode === 'title') return null;
+  const base = 0.04 + Math.min(0.1, (G.eff || G.floorNum) * 0.002);
+  // New Game+ has Supers on every difficulty (fewer below Extra Hard), and more of them on Extra Hard
+  const ch = runDiff === 3 ? (G.ngp ? base * 1.8 : base) : base * 0.6;
+  return Math.random() < ch ? { isSuper: true } : null;
 }
 function announceSuper(e) {
   if (!e.isSuper) return;
@@ -945,7 +1001,7 @@ function continueRun(sv, fullHp = false) {
   hideScreens();
   score = sv.score || 0; floorStartScore = score;
   perkLv = { ...(sv.perks || {}) }; mutLv = { ...(sv.mut || {}) }; rerolls = sv.rerolls ?? 1; recalc();
-  P.revives = sv.revives ?? M.revives; runCash = sv.cash || 0; runChar = sv.char || 'temp'; setDiff(sv.diff ?? 1); setRunMode(sv.rmode || 'story', sv.dailyKey); runId = sv.runId || Date.now(); rushIdx = sv.rushIdx || 0; rushTime = sv.rushTime || 0; setSleeve(CHAR[runChar]?.sleeve ?? 0xd2d2cc);
+  P.revives = sv.revives ?? M.revives; runCash = sv.cash || 0; runChar = sv.char || 'temp'; setDiff(sv.diff ?? 1); setRunMode(sv.rmode || 'story', sv.dailyKey); runId = sv.runId || Date.now(); rushIdx = sv.rushIdx || 0; rushTime = sv.rushTime || 0; setNgp(!!sv.ngp && sv.rmode !== 'daily'); setRoam(!!sv.roam && roamUnlocked()); setSleeve(CHAR[runChar]?.sleeve ?? 0xd2d2cc);
   P.hp = fullHp ? M.maxHp : Math.max(1, Math.min(M.maxHp, sv.hp || M.maxHp));
   P.inv = sv.inv.filter((s) => GUN[s.id]).map((s) => ({ ...s }));
   if (!P.inv.length) P.inv = [{ id: 'pistol', ammo: GUN.pistol.mag }];
@@ -965,6 +1021,8 @@ function startGame(floor = 1, keepScore = false) {
     runChar = ch.id; setSleeve(ch.sleeve); setDiff(profile.diff ?? 1);
     score = 0; perkLv = { ...ch.perks }; recalc(); rerolls = 1 + M.extraRerolls; P.revives = M.revives; runCash = 0;
     stat('runs'); runId = Date.now(); rushIdx = 0; rushTime = 0; mutLv = {};
+    setNgp(runMode !== 'daily' && ngpWanted()); if (G.ngp) stat('ngpRuns');
+    setRoam(roamWanted()); if (G.roam) stat('roamRuns');
     for (let k = 0; k < (M.startPerks || 0); k++) { const o = rollPerks(perkLv, 1); if (o[0]) perkLv[o[0]] = (perkLv[o[0]] || 0) + 1; } recalc(); // Orientation upgrade
     if (runMode === 'daily') {
       stat('dailyRuns');
@@ -1009,7 +1067,7 @@ function startFloor(n, sameVariant = false) {
   gunsThisFloor = 0;
   equip(P.slot, true);
   // autosave: a run can always be continued from the start of this floor
-  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls, revives: P.revives, cash: runCash, char: runChar, diff: runDiff, rmode: runMode, runId, rushIdx, rushTime, dailyKey: daily && daily.key, mut: mutLv });
+  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls, revives: P.revives, cash: runCash, char: runChar, diff: runDiff, rmode: runMode, runId, rushIdx, rushTime, dailyKey: daily && daily.key, mut: mutLv, ngp: G.ngp ? 1 : 0, roam: G.roam ? 1 : 0 });
   statMax('maxFloor', n); checkAch();
   P.windUsed = false;
   tutorialPending = n === 1 && !tutorialDone();
@@ -1262,12 +1320,12 @@ function playerDied() {
 
 function showWin() {
   logRun(true); stat('win_' + runChar); stat('wind_' + runDiff);
-  clearRun(); stat('wins'); statMax('maxFloor', TOP_FLOOR); checkAch({ won: true }); flushProfile(true);
+  clearRun(); stat('wins'); if (G.ngp) stat('ngpWins'); statMax('maxFloor', TOP_FLOOR); checkAch({ won: true }); flushProfile(true);
   // every difficulty has its own ending
-  const E = ENDINGS[runDiff] || ENDINGS[1];
+  const E = G.ngp ? ENDING_NGP : ENDINGS[runDiff] || ENDINGS[1];
   $('winTitle').textContent = E.title; $('winTitle').style.color = E.color; $('winTag').textContent = E.tag; $('keepBtn').classList.remove('hidden');
   $('winStory').innerHTML = E.lines.map((l, i) => `<p style="animation-delay:${0.6 + i * 1.6}s">${l}</p>`).join('');
-  profile.endings = profile.endings || {}; profile.endings[runDiff] = 1;
+  profile.endings = profile.endings || {}; profile.endings[G.ngp ? 'ngp' : runDiff] = 1;
   $('winStats').textContent = `FINAL SCORE ${score}\nBEST ${best.score}\nKEEP CLIMBING TO PLAY ON IN ENDLESS MODE`;
   showScreen(ui.win);
   setMusic('calm');
@@ -1283,9 +1341,10 @@ function toTitle() {
   G.camPos.copy(G.floor.rooms[0].stand);
   yaw = 0; pitch = BASE_PITCH; roll = 0;
   fade(0, 0.8);
+  titleNgp(); setRoam(false);
   setMusic('calm');
   { const n = unreadFiles(); $('hqBtn').innerHTML = 'HQ · UPGRADES' + (n ? ` <span class="new-tag">${n} NEW FILE${n > 1 ? 'S' : ''}</span>` : ''); }
-  $('bestLbl').textContent = best.floor ? `BEST: FLOOR ${best.floor} / ${best.score} PTS` : '';
+  { const c = completion(); $('bestLbl').textContent = (best.floor ? `BEST: FLOOR ${best.floor} / ${best.score} PTS` : '') + (profile.stats.runs ? `${best.floor ? ' · ' : ''}${c}% COMPLETE` : ''); }
   const sv = loadRun();
   ui.continueBtn.classList.toggle('hidden', !sv);
   if (sv) ui.continueBtn.textContent = `CONTINUE · FLOOR ${String(sv.floor).padStart(2, '0')}`;
@@ -1707,7 +1766,10 @@ gameEl.addEventListener('pointercancel', release);
 gameEl.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') startReload();
-  if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') { e.preventDefault(); duck(); }
+  const k = e.key.toLowerCase();
+  if (G.roam && ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { e.preventDefault(); roamKeys.add(k); }
+  else if (k === 's' || k === 'arrowdown') { e.preventDefault(); duck(); }
+  if (G.roam && (k === 'c' || k === 'control' || k === ' ')) { e.preventDefault(); duck(); }
   if (e.key === 'q' || e.key === 'Q' || e.key === 'Tab') { e.preventDefault(); swapWeapon(); }
   if ((e.key === 'Escape' && performance.now() - lockLostT > 400) || e.key === 'p' || e.key === 'P') togglePause();
   if (e.key === 'e' || e.key === 'E') swapWeapon();
@@ -1717,6 +1779,22 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && mode === 'title') $('startBtn').click();
 });
 
+window.addEventListener('keyup', (e) => roamKeys.delete(e.key.toLowerCase()));
+window.addEventListener('blur', () => roamKeys.clear());
+// mobile joystick
+{
+  const pad = $('roamStick'), knob = pad.querySelector('i');
+  let id = null;
+  const move = (ev) => {
+    const r = pad.getBoundingClientRect(), R = r.width / 2;
+    let x = (ev.clientX - r.left - R) / R, y = (ev.clientY - r.top - R) / R; const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
+    roamStick.x = x; roamStick.y = y; knob.style.transform = `translate(${x * R * 0.6}px, ${y * R * 0.6}px)`;
+  };
+  pad.addEventListener('pointerdown', (ev) => { ev.stopPropagation(); ev.preventDefault(); id = ev.pointerId; pad.setPointerCapture(id); move(ev); });
+  pad.addEventListener('pointermove', (ev) => { if (ev.pointerId === id) move(ev); });
+  const up = (ev) => { if (ev.pointerId !== id) return; id = null; roamStick.x = roamStick.y = 0; knob.style.transform = ''; };
+  pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up);
+}
 const onBtn = (id, fn) => $(id).addEventListener('click', (e) => { e.stopPropagation(); initAudio(); fn(); });
 const launchRun = () => { sfx.tap(); fade(1, 0.3); setTimeout(() => startGame(startFloorFor(runMode)), 320); };
 // with more than one employee unlocked, pick who starts the run
@@ -1737,6 +1815,23 @@ const newRun = () => {
 };
 function openModeSelect(onPick) {
   const box = $('modeList'); box.innerHTML = '';
+  { // New Game+ switch (once Story has been beaten)
+    const row = document.createElement('div'); row.className = 'hq-row ngp-row' + (ngpUnlocked() ? '' : ' dim');
+    row.innerHTML = `<div class="hq-info"><b style="color:#ff4040">NEW GAME+</b><span>Tougher enemies, six new ones, more SUPER enemies, its own ending and a darker soundtrack. Works with every mode except the Daily.</span>${ngpUnlocked() ? '' : '<small class="req">UNLOCK: BEAT STORY MODE</small>'}</div>`;
+    const b = document.createElement('button'); b.className = 'hq-buy' + (ngpUnlocked() ? (profile.ngp ? ' on' : '') : ' off');
+    b.textContent = ngpUnlocked() ? (profile.ngp ? 'ON' : 'OFF') : 'LOCKED';
+    b.addEventListener('click', (e) => { e.stopPropagation(); if (!ngpUnlocked()) { sfx.empty(); return; } sfx.tap(); profile.ngp = !profile.ngp; flushProfile(true); titleNgp(); openModeSelect(onPick); });
+    row.append(b); box.append(row);
+  }
+  { // FREE ROAM add-on (100% completion)
+    const un = roamUnlocked();
+    const row = document.createElement('div'); row.className = 'hq-row roam-row' + (un ? '' : ' dim');
+    row.innerHTML = `<div class="hq-info"><b style="color:#60ff80">FREE ROAM ADD-ON</b><span>Walk around the room during fights instead of standing in one spot. ${PC ? 'WASD / arrow keys to move, C / Ctrl / Space to duck.' : 'Move with the joystick on the left.'} Works with every mode.</span>${un ? '' : `<small class="req">UNLOCK: 100% COMPLETION (NOW ${completion()}%)</small>`}</div>`;
+    const b = document.createElement('button'); b.className = 'hq-buy' + (un ? (profile.roam ? ' on' : '') : ' off');
+    b.textContent = un ? (profile.roam ? 'ON' : 'OFF') : 'LOCKED';
+    b.addEventListener('click', (e) => { e.stopPropagation(); if (!un) { sfx.empty(); return; } sfx.tap(); profile.roam = !profile.roam; flushProfile(true); openModeSelect(onPick); });
+    row.append(b); box.append(row);
+  }
   for (const m of MODES) {
     const open = modeOpen(m, profile);
     const row = document.createElement('div'); row.className = 'hq-row' + (open ? '' : ' dim');
@@ -1814,7 +1909,7 @@ function togglePause() {
 let flushT = 2, achT = 0;
 const achQueue = [];
 function checkAch(extra = {}) {
-  const run = { maxCombo: runMaxCombo, perkCount: Object.values(perkLv).reduce((a, b) => a + b, 0), mutCount: Object.values(mutLv || {}).reduce((a, b) => a + b, 0), diff: runDiff, floor: G.floorNum, ...extra };
+  const run = { maxCombo: runMaxCombo, perkCount: Object.values(perkLv).reduce((a, b) => a + b, 0), mutCount: Object.values(mutLv || {}).reduce((a, b) => a + b, 0), diff: runDiff, floor: G.floorNum, ngp: G.ngp, ...extra };
   for (const a of ACHIEVEMENTS) {
     if (profile.ach[a.id]) continue;
     let ok = false;
@@ -2113,6 +2208,7 @@ function update(dt) {
     G.floor.update(dt);
     for (const el of G.floor.elevators) if (el.closeAt && now > el.closeAt) { el.target = 0; el.closeAt = 0; }
   }
+  roamUpdate(dt);
   if (mode === 'combat') { stats.t += dt; if (runMode === 'rush' && !paused) rushTime += dt; }
 
   const peace = devOn('peace');

@@ -107,6 +107,9 @@ ACHIEVEMENTS.push(
   ...tiers('rq', S('superKills'), [[1, 'SUPER', 'Kill a Super enemy (Extra Hard)', 1000], [25, 'SILENCE THE CHOIR', 'Kill 25 Super enemies', 3000], [100, 'FINAL SUPER', 'Kill 100 Super enemies', 8000]]),
   ...tiers('mu', S('mutations'), [[1, 'SIDE EFFECTS', 'Take a mutation (Extra Hard)', 300], [25, 'NOT QUITE HUMAN', 'Take 25 mutations', 1500], [100, 'THE SUPPLEMENT WINS', 'Take 100 mutations', 4000]]),
   { id: 'mutfull', name: 'ABOMINATION', desc: 'Have 15 mutations in one run', reward: 2500, test: (p, r) => r && r.mutCount >= 15 },
+  { id: 'ngp1', name: 'DEJA VU', desc: 'Start a New Game+ run', reward: 500, test: (p) => (p.stats.ngpRuns || 0) >= 1 },
+  { id: 'ngpwin', name: 'UNDER NEW MANAGEMENT', desc: 'Beat floor 30 in New Game+', reward: 8000, test: (p) => (p.stats.ngpWins || 0) >= 1 },
+  { id: 'ngpfl15', name: 'SECOND SHIFT', desc: 'Reach floor 15 in New Game+', reward: 2500, test: (p, r) => r && r.ngp && r.floor >= 15 },
   { id: 'mutwin', name: 'EVOLVED', desc: 'Beat floor 30 on Extra Hard', reward: 6000, test: (p, r) => r && r.won && r.diff >= 3 },
   ...tiers('mdk', S('medkits'), [[25, 'BAND-AID', 'Pick up 25 medkits', 200], [100, 'FREQUENT FLYER', 'Pick up 100 medkits', 800]]),
 );

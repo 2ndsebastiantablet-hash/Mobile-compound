@@ -25,3 +25,11 @@ export const ENDINGS = [
     'You give it one last order instead: everybody goes home. Everybody. Even you.',
     'At dawn the tower is empty and quiet. Some shifts never end. This one did.' ] },
 ];
+
+// New Game+ has its own ending, whatever the difficulty
+export const ENDING_NGP = { title: 'UNDER NEW MANAGEMENT', color: '#ff4040', tag: 'NEW GAME+ ENDING', lines: [
+  'The Chairman falls again. This time he laughs on the way down.',
+  'You remember this. The rain, the elevator, the printer. You have done this before.',
+  'In the lobby a temp is waiting for the elevator. It is you. It was always you.',
+  'You hand yourself the badge. The doors close. The display reads 01.',
+  'Overtime is mandatory. Overtime is forever.' ] };
