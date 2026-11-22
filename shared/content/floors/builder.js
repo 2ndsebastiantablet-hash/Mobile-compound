@@ -135,7 +135,7 @@ function collectColliders(room) {
   for (const p of room.props) p.traverse((o) => { o.userData.inProp = true; });
   const out = [], b = new THREE.Box3();
   room.group.traverse((o) => {
-    if (!o.isMesh || o.userData.inProp) return;
+    if (!o.isMesh || o.userData.inProp || o.userData.dyn) return; // sliding doors aren't walls
     const t = o.geometry.type;
     if (t !== 'BoxGeometry' && t !== 'CylinderGeometry') return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];

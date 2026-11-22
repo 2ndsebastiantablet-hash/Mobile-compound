@@ -196,7 +196,11 @@ export class Enemy {
       if (this.moveTo(this.goal, def.speed * 1.4, dt)) { this.state = 'active'; this.atkT = rand(Math.random, 0.3, 1.0); }
     } else if (this.state === 'active') {
       if (this.brain) this.brain.update(dt);
-      else { this.updateMove(dt); if (this.state === 'dead') return; this.updateAttack(dt); }
+      else {
+        this.updateMove(dt); if (this.state === 'dead') return;
+        if (g.roam && g.solidPush && !this.flyer && !def.boss && this.moving) g.solidPush(this.pos, 0.3 * this.scale); // slide around furniture
+        this.updateAttack(dt);
+      }
       if (this.decoy && Math.random() < dt * 1.5) { this.flashT = 0.06; for (const m of this.meshes) m.material = CLOAK; }
     }
     this.crouch += (this.crouchTarget - this.crouch) * Math.min(1, dt * 10);
@@ -238,7 +242,26 @@ export class Enemy {
   roomZ() { const r = this.game.room; return r ? [r.zf + 0.8, r.z0 - 3.5] : [-100, 100]; }
 
   pickGoal() {
-    const def = this.def;
+    const def = this.def, g = this.game;
+    if (g.roam && !this.flyer && !def.boss && g.room) {
+      // Free Roam: the player moves, so cover and positions are picked relative to where they are now
+      const cam = g.camPos, r = g.room, [zmin, zmax] = this.roomZ();
+      if (def.move === 'stand' && !def.nocover) {
+        const good = r.spots.filter((s) => s.cover && s.z < cam.z - 2.5 && (!s.taken || s.taken === this));
+        if (good.length) {
+          let s = good[0], bd = 1e9; for (const q of good) { const d = Math.hypot(q.x - this.pos.x, q.z - this.pos.z) + Math.random() * 1.5; if (d < bd) { bd = d; s = q; } }
+          if (this.spot !== s) { if (this.spot && this.spot.taken === this) this.spot.taken = null; s.taken = this; this.spot = s; }
+          this.goal.set(s.x, 0, s.z); return;
+        }
+      }
+      // flankers work their way round to your side; the rest keep a fighting distance in front of you
+      const side = this.flankSide || (this.flankSide = Math.random() < 0.5 ? -1 : 1);
+      const flank = def.move === 'strafe' || def.move === 'charge' || Math.random() < 0.3;
+      const x = cam.x + side * (flank ? rand(Math.random, 1.8, 3.2) : rand(Math.random, 0, 1.6));
+      const z = cam.z - (flank ? rand(Math.random, 2.2, 4.5) : rand(Math.random, 4, 7.5));
+      this.goal.set(clamp(x, -2.9, 2.9), this.hover, clamp(z, zmin, Math.min(zmax, cam.z - 1.5)));
+      return;
+    }
     if (this.flyer) {
       const r = this.game.room;
       this.goal.set(rand(Math.random, -2.2, 2.2), rand(Math.random, 1.7, 2.5), r.z0 - rand(Math.random, 5, 10.5));
@@ -251,7 +274,14 @@ export class Enemy {
   }
 
   // low critters stop further away so they stay above the HUD and stay tappable
-  meleeTarget() { const c = this.game.camPos; const low = !this.hover && this.centerY * this.scale < 0.7; return new THREE.Vector3(c.x, this.hover, c.z - (low ? (this.game.lowReach || 2.1) : 1.3)); }
+  meleeTarget() {
+    const c = this.game.camPos; const low = !this.hover && this.centerY * this.scale < 0.7, reach = low ? (this.game.lowReach || 2.1) : 1.3;
+    if (this.game.roam) { // Free Roam: come at you from wherever they are
+      const dx = this.pos.x - c.x, dz = this.pos.z - c.z, l = Math.hypot(dx, dz) || 1;
+      return new THREE.Vector3(c.x + dx / l * reach, this.hover, c.z + dz / l * reach);
+    }
+    return new THREE.Vector3(c.x, this.hover, c.z - reach);
+  }
 
   doMelee(dt) {
     this.meleeT -= dt;
@@ -268,6 +298,21 @@ export class Enemy {
   updateMove(dt) {
     const g = this.game, def = this.def, sp = def.speed * (1 + (g.diff || g.floorNum) * 0.015) * (g.twist && g.twist.enemySpeed || 1) * (this.speedMul || 1);
     const planted = this.atkState === 'wind' || this.atkState === 'burst';
+    if (g.roam && !def.boss && !this.flyer) {
+      // Free Roam: every few seconds, check the cover still works against where you are now
+      this.roamT = (this.roamT ?? rand(Math.random, 1, 2.5)) - dt;
+      if (this.roamT <= 0) {
+        this.roamT = rand(Math.random, 2.2, 3.6);
+        const exposed = this.spot && this.spot.cover && !(this.spot.z < g.camPos.z - 2);
+        if ((def.move === 'stand' && (exposed || !this.spot.cover)) || def.move === 'strafe') { this.pickGoal(); this.relocating = def.move === 'stand'; }
+      }
+      if (this.relocating && !planted) {
+        this.crouchTarget = 0;
+        if (this.moveTo(this.goal, sp * 1.4, dt)) this.relocating = false;
+        if (g.solidPush) g.solidPush(this.pos, 0.3 * this.scale);
+        return;
+      }
+    }
     switch (def.move) {
       case 'stand':
         if (this.spot.peek && this.spot.cover && !def.nocover) {
@@ -535,6 +580,7 @@ export class Enemy {
     const from = this.muzzle(new THREE.Vector3());
     const foe = this.ally ? this.nearestFoe() : null; // switched sides with THE REMOTE: shoot the others
     const target = foe ? foe.centerWorld(new THREE.Vector3()) : (g.playerPos || g.camPos).clone(); // aims where you are now (ducking after the shot is fired dodges it)
+    if (!foe && g.roam && g.playerVel) target.addScaledVector(g.playerVel, Math.min(1.2, from.distanceTo(target) / (this.pspeed || 5)) * 0.7); // leads a moving player
     const miss = 0.4;
     target.x += rand(Math.random, -miss, miss); target.y += rand(Math.random, -miss * 0.6, miss * 0.4);
     if (spread) { const dir = target.clone().sub(from); dir.applyAxisAngle(UP, spread); target.copy(from).add(dir); }

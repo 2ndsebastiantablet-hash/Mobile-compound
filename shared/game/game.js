@@ -206,8 +206,12 @@ function titleNgp() { // the title screen shows NG+ while it's switched on
 }
 // FREE ROAM add-on (unlocked at 100% completion): walk around the room during fights.
 // PC: WASD / arrow keys (duck moves to C, Ctrl or Space). Mobile: the joystick on the left.
-const roamWanted = () => roamUnlocked() && !!profile.roam;
+// FREE ROAM levels: 0 off, 1 ROOM (move inside a fight, auto-walk between rooms), 2 FULL (walk the whole floor yourself)
+const roamLevel = (v) => (v === true ? 2 : v | 0);
+const roamWanted = () => (roamUnlocked() ? roamLevel(profile.roam) : 0);
 const roamKeys = new Set();
+let explore = null; // FULL Free Roam: walking between rooms yourself ({ i, prepared, ambush } or { i, elevator })
+const crouching = () => G.roam && (roamKeys.has('c') || roamKeys.has('control'));
 let propBoxT = 0;
 const roamStick = { x: 0, y: 0 }, lookStick = { x: 0, y: 0 }, roamBox = new THREE.Box3();
 function roamUpdate(dt) {
@@ -224,7 +228,8 @@ function roamUpdate(dt) {
     yaw += (Math.atan2(Math.sin(-yaw), Math.cos(-yaw))) * Math.min(1, dt * 2.5);
     pitch += (BASE_PITCH - pitch) * Math.min(1, dt * 2.5);
   }
-  if (mode !== 'combat' || !area || (seq && !area.ambush)) return;
+  const exploring = mode === 'moving' && explore && !seq;
+  if (!exploring && (mode !== 'combat' || !area || (seq && !area.ambush))) return;
   let mx = roamStick.x, mz = roamStick.y;
   if (roamKeys.has('a') || roamKeys.has('arrowleft')) mx -= 1;
   if (roamKeys.has('d') || roamKeys.has('arrowright')) mx += 1;
@@ -232,15 +237,23 @@ function roamUpdate(dt) {
   if (roamKeys.has('s') || roamKeys.has('arrowdown')) mz += 1;
   const len = Math.hypot(mx, mz);
   if (len < 0.08) return;
-  const sp = 3.4 * (G.duck > 0.5 ? 0.5 : 1) * Math.min(1, len) / len;
+  const sprint = roamKeys.has('shift') || Math.hypot(roamStick.x, roamStick.y) > 0.95;
+  const sp = (crouching() ? 1.6 : G.duck > 0.5 ? 1.7 : sprint ? 5.4 : 3.4) * Math.min(1, len) / len;
   // movement follows where you're looking
   const c = Math.cos(yaw), sn = Math.sin(yaw);
   G.camPos.x += (mx * c + mz * sn) * sp * dt; G.camPos.z += (-mx * sn + mz * c) * sp * dt;
   // an ambush happens between two rooms: you can move around the corridor you were caught in
-  const room = area.room, st = room.stand;
-  const zMin = area.ambush ? area.zMin : room.zf + 1.4, zMax = area.ambush ? area.zMax : st.z + 0.4;
-  const rooms = area.ambush ? G.floor.rooms.slice(area.idx, area.idx + 2) : [room];
-  solveCollisions(rooms, zMin, zMax, true);
+  let room = area.room, zMin, zMax, rooms;
+  if (exploring) { // FULL Free Roam: the cleared room, the doorway and the next room (or the elevator)
+    const R = G.floor.rooms, r = R[explore.i], nx = R[explore.i + 1];
+    room = r; zMax = r.z0 - 0.5;
+    zMin = explore.elevator ? explore.elevator.inside.z - 0.2 : nx ? nx.zf + 1.4 : r.zf + 0.6;
+    if (G.keycard && !G.keycard.got && G.keycard.room === explore.i) zMin = Math.max(zMin, G.keycard.barrierZ + 0.45); // locked door
+    rooms = nx ? [r, nx] : [r];
+  } else if (area.ambush) { zMin = area.zMin; zMax = area.zMax; rooms = G.floor.rooms.slice(area.idx, area.idx + 2); }
+  else { zMin = room.zf + 1.4; zMax = room.stand.z + 0.4; rooms = [room]; }
+  const st = room.stand;
+  solveCollisions(rooms, zMin, zMax, !exploring);
   G.roamBob = (G.roamBob || 0) + dt * 9;
   G.camPos.y = st.y + Math.abs(Math.sin(G.roamBob)) * 0.035;
 }
@@ -262,6 +275,96 @@ G.solidAt = (p) => {
   for (const b of propBoxes) if (b.containsPoint(p)) return true;
   return false;
 };
+// ---- FULL Free Roam: walking the floor yourself
+function exploreUpdate(dt) {
+  if (!explore || mode !== 'moving' || seq || paused || !G.floor) { showUse(null); return; }
+  const R = G.floor.rooms, r = R[explore.i];
+  if (explore.elevator) {
+    const el = explore.elevator, inCab = Math.hypot(G.camPos.x - el.inside.x, G.camPos.z - el.inside.z) < 1.1;
+    showUse(inCab ? (PC ? 'E · TAKE THE ELEVATOR' : 'TAKE THE ELEVATOR') : null);
+    return;
+  }
+  const nx = R[explore.i + 1];
+  showUse(null);
+  setLights(r, nx, clamp((r.zf + 2.5 - G.camPos.z) / 5, 0, 1));
+  if (G.keycard && !G.keycard.got && G.keycard.room === explore.i && G.camPos.z < G.keycard.barrierZ + 0.9) {
+    G.keycard.nagT = (G.keycard.nagT || 0) - dt; if (G.keycard.nagT <= 0) { G.keycard.nagT = 3; toast('LOCKED · FIND THE KEYCARD', '#ff5040'); sfx.empty(); }
+  }
+  if (explore.ambush && G.camPos.z < r.zf + 3) { explore.ambush = false; startAmbush(r); return; }
+  if (!explore.prepared && G.camPos.z < r.zf + 2.5) { prepareArea(explore.i + 1); explore.prepared = true; }
+  if (explore.prepared && G.camPos.z < nx.z0 - 1.6) { const i = explore.i + 1; explore = null; setRoom(i); beginCombat(); }
+}
+function showUse(text) {
+  const b = $('useBtn');
+  if ((text || '') === b.dataset.t) return;
+  b.dataset.t = text || ''; b.textContent = text || ''; b.classList.toggle('hidden', !text);
+}
+function useThing() {
+  if (explore && explore.elevator && $('useBtn').dataset.t) {
+    const el = explore.elevator; explore = null; showUse(null);
+    run(function* () {
+      yield* walk(G.camPos.clone(), el.inside, null);
+      const y0 = yaw; let to = Math.PI; while (to - y0 > Math.PI) to -= Math.PI * 2; while (to - y0 < -Math.PI) to += Math.PI * 2;
+      el.target = 0; sfx.door();
+      yield* tween(1.1, (k) => { yaw = y0 + (to - y0) * ease(k); pitch += (BASE_PITCH - pitch) * 0.1; });
+      yield 0.3;
+      startRide(el);
+      floorComplete();
+    });
+  }
+}
+// keycards: on some floors in FULL Free Roam the door out of the second room is locked; the card is somewhere in that room
+function placeKeycard() {
+  G.keycard = null;
+  const R = G.floor && G.floor.rooms;
+  if (!G.roamFull || runMode === 'rush' || !R || R.length < 4 || G.floor.isBoss || (Math.random() > 0.4 && !G.forceKeycard)) return;
+  const room = R[1], spots = room.spots.filter((s) => !s.cover);
+  const s0 = spots.length ? pick(Math.random, spots) : { x: 2.4, z: room.zf + 3 };
+  const card = new THREE.Group();
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.17, 0.02), new THREE.MeshBasicMaterial({ color: 0xffd040 }));
+  m.material.color.multiplyScalar(1.6); card.add(m);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.04, 0.025), new THREE.MeshBasicMaterial({ color: 0x202020 })); stripe.position.y = 0.04; card.add(stripe);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: TX.glow(), color: 0xffd040, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false })); glow.scale.set(0.9, 0.9, 1); card.add(glow);
+  card.position.set(clamp(s0.x + 0.6, -2.8, 2.8), 1.0, s0.z + 0.5); scene.add(card);
+  // a red laser grid across the doorway into room 3
+  const bz = room.zf, barrier = new THREE.Group();
+  const sheet = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, 2.9), new THREE.MeshBasicMaterial({ color: 0xff1010, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  sheet.position.set(0, 1.45, bz + 0.1); barrier.add(sheet);
+  const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: lockedSign(), transparent: true, depthWrite: false })); sign.scale.set(1.6, 0.4, 1); sign.position.set(0, 2.2, bz + 0.15); barrier.add(sign);
+  for (let k = 0; k < 9; k++) { const l = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.06, 0.06), new THREE.MeshBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.85 })); l.material.color.multiplyScalar(2); l.position.set(0, 0.25 + k * 0.32, bz + 0.1); barrier.add(l); }
+  scene.add(barrier);
+  G.keycard = { mesh: card, barrier, room: 1, barrierZ: bz, got: false };
+}
+function lockedSign() {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 32; const x = c.getContext('2d');
+  x.fillStyle = 'rgba(40,0,0,.8)'; x.fillRect(0, 0, 128, 32); x.strokeStyle = '#ff3030'; x.lineWidth = 2; x.strokeRect(1, 1, 126, 30);
+  x.fillStyle = '#ff5040'; x.font = 'bold 14px monospace'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('KEYCARD REQUIRED', 64, 17);
+  const t = new THREE.CanvasTexture(c); t.magFilter = t.minFilter = THREE.NearestFilter; return t;
+}
+function keycardUpdate(dt) {
+  const k = G.keycard; if (!k) return;
+  if (!k.got) {
+    k.mesh.rotation.y += dt * 2; k.mesh.position.y = 1.0 + Math.sin(now * 3) * 0.08;
+    for (const l of k.barrier.children) if (l.isMesh && l.geometry.type === 'BoxGeometry') l.material.opacity = 0.6 + Math.random() * 0.35;
+    if (G.camPos.distanceTo(k.mesh.position) < 1.2) {
+      k.got = true; scene.remove(k.mesh); sfx.pickup(); banner('KEYCARD', 'THE DOOR IS OPEN', 1.2); stat('keycards');
+      const b = k.barrier; let t = 0; const fadeOut = () => { t += 0.05; for (const l of b.children) l.material.opacity = Math.max(0, Math.min(l.material.opacity, 0.8 - t)); if (t < 0.9) setTimeout(fadeOut, 30); else scene.remove(b); }; fadeOut();
+    }
+  }
+}
+function clearKeycard() { if (G.keycard) { scene.remove(G.keycard.mesh); scene.remove(G.keycard.barrier); G.keycard = null; } }
+// enemies slide around furniture in Free Roam
+G.solidPush = (pos, r) => {
+  const room = G.room; if (!room) return;
+  for (const c of room.colliders || []) {
+    if (c.y0 > 1.1) continue;
+    if (pos.x < c.x0 - r || pos.x > c.x1 + r || pos.z < c.z0 - r || pos.z > c.z1 + r) continue;
+    const l = pos.x - (c.x0 - r), rr = c.x1 + r - pos.x, f = pos.z - (c.z0 - r), b = c.z1 + r - pos.z, m = Math.min(l, rr, f, b);
+    if (m === l) pos.x = c.x0 - r; else if (m === rr) pos.x = c.x1 + r; else if (m === f) pos.z = c.z0 - r; else pos.z = c.z1 + r;
+  }
+  pos.x = clamp(pos.x, -HALF + 0.4, HALF - 0.4);
+};
+G.playerVel = new THREE.Vector3(); const lastCamPos = new THREE.Vector3();
 const roamLooking = () => G.roam && (mode === 'combat' || mode === 'moving') && !paused && !choiceOpen && !cutscene;
 // keeps you out of walls, pillars, furniture, props (and enemies, when you walk yourself)
 function solveCollisions(rooms, zMin, zMax, enemies) {
@@ -291,8 +394,8 @@ function solveCollisions(rooms, zMin, zMax, enemies) {
     if (zMin != null) G.camPos.z = clamp(G.camPos.z, zMin, zMax);
   }
 }
-function setRoam(on) {
-  G.roam = !!on; roamKeys.clear(); roamStick.x = roamStick.y = 0; lookStick.x = lookStick.y = 0;
+function setRoam(lv) {
+  lv = roamLevel(lv); G.roam = lv > 0; G.roamFull = lv === 2; explore = null; roamKeys.clear(); roamStick.x = roamStick.y = 0; lookStick.x = lookStick.y = 0;
   document.body.classList.toggle('roam', G.roam);
 }
 function setDiff(i) { runDiff = DIFFS[i] ? i : 1; D = diffOf(runDiff); G.dd = D; }
@@ -340,6 +443,7 @@ function clearFloor() {
 
 // keep = rebuild only the building (enemies, shots and pickups stay): used by The Golden Watch
 function loadFloor(n, variant, keep = false) {
+  if (!keep) { clearKeycard(); explore = null; }
   if (!keep) { worldRoll = worldRollGoal = 0; rewinding = false; vhs(false); }
   if (keep) { if (G.floor) scene.remove(G.floor.group); flying.length = 0; } else clearFloor();
   G.floorNum = n;
@@ -1071,7 +1175,7 @@ function continueRun(sv, fullHp = false) {
   hideScreens();
   score = sv.score || 0; floorStartScore = score;
   perkLv = { ...(sv.perks || {}) }; mutLv = { ...(sv.mut || {}) }; rerolls = sv.rerolls ?? 1; recalc();
-  P.revives = sv.revives ?? M.revives; runCash = sv.cash || 0; runChar = sv.char || 'temp'; setDiff(sv.diff ?? 1); setRunMode(sv.rmode || 'story', sv.dailyKey); runId = sv.runId || Date.now(); rushIdx = sv.rushIdx || 0; rushTime = sv.rushTime || 0; setNgp(!!sv.ngp && sv.rmode !== 'daily', sv.ngp); setRoam(!!sv.roam && roamUnlocked()); setSleeve(CHAR[runChar]?.sleeve ?? 0xd2d2cc);
+  P.revives = sv.revives ?? M.revives; runCash = sv.cash || 0; runChar = sv.char || 'temp'; setDiff(sv.diff ?? 1); setRunMode(sv.rmode || 'story', sv.dailyKey); runId = sv.runId || Date.now(); rushIdx = sv.rushIdx || 0; rushTime = sv.rushTime || 0; setNgp(!!sv.ngp && sv.rmode !== 'daily', sv.ngp); setRoam(roamUnlocked() ? roamLevel(sv.roam) : 0); setSleeve(CHAR[runChar]?.sleeve ?? 0xd2d2cc);
   P.hp = fullHp ? M.maxHp : Math.max(1, Math.min(M.maxHp, sv.hp || M.maxHp));
   P.inv = sv.inv.filter((s) => GUN[s.id]).map((s) => ({ ...s }));
   if (!P.inv.length) P.inv = [{ id: 'pistol', ammo: GUN.pistol.mag }];
@@ -1137,7 +1241,7 @@ function startFloor(n, sameVariant = false) {
   gunsThisFloor = 0;
   equip(P.slot, true);
   // autosave: a run can always be continued from the start of this floor
-  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls, revives: P.revives, cash: runCash, char: runChar, diff: runDiff, rmode: runMode, runId, rushIdx, rushTime, dailyKey: daily && daily.key, mut: mutLv, ngp: G.ngp ? G.ngpLv : 0, roam: G.roam ? 1 : 0 });
+  saveRun({ floor: n, variant: G.variant, score, hp: P.hp, inv: P.inv.map((s) => ({ id: s.id, ammo: s.ammo })), slot: P.slot, perks: perkLv, rerolls, revives: P.revives, cash: runCash, char: runChar, diff: runDiff, rmode: runMode, runId, rushIdx, rushTime, dailyKey: daily && daily.key, mut: mutLv, ngp: G.ngp ? G.ngpLv : 0, roam: G.roam ? (G.roamFull ? 2 : 1) : 0 });
   statMax('maxFloor', n); checkAch();
   P.windUsed = false;
   tutorialPending = n === 1 && !tutorialDone();
@@ -1185,6 +1289,7 @@ function beginCombat() {
   for (const e of G.enemies) if (e.state === 'dormant') { const en = e; setTimeout(() => en.activate(), 150 + k++ * 220); }
   if (area.tutorial && !tutorial) { tutorial = new Tutorial(tutCtx); tutorial.start(); ui.tutSkip.classList.remove('hidden'); }
   snapRoomStart();
+  if (area.idx === 0 && !G.keycard) placeKeycard();
   if (area.boss) { ui.bossbar.classList.remove('hidden'); bossCard({ ...area.boss.def, name: area.boss.displayName || area.boss.def.name }, area.boss.def.brain ? area.boss.def.brain.hint : 'PERFORMANCE REVIEW'); }
   updateHud(true);
 }
@@ -1236,7 +1341,11 @@ function areaCleared() {
   sfx.clear();
   const rooms = G.floor.rooms;
   const i = area.idx;
-  if (i < rooms.length - 1) {
+  if (i < rooms.length - 1 && G.roamFull) { // FULL Free Roam: walk on yourself
+    banner('AREA CLEAR', 'MOVE ON TO THE NEXT ROOM', 1.4); autoReload();
+    explore = { i, prepared: false, ambush: G.forceAmbush || Math.random() < Math.min(0.5, 0.22 + G.floorNum * 0.01) };
+    G.forceAmbush = false;
+  } else if (i < rooms.length - 1) {
     banner('AREA CLEAR', null, 1.2);
     run(function* () {
       yield 1.1;
@@ -1259,6 +1368,10 @@ function areaCleared() {
   } else if (runMode === 'story' && G.floorNum >= TOP_FLOOR) {
     banner('THE CHAIRMAN IS DEAD', null, 1.6);
     run(function* () { yield 1.6; fade(1, 0.5); yield 0.6; endingAfterBoss(); });
+  } else if (G.roamFull) {
+    banner('FLOOR CLEAR', PC ? 'GET IN THE ELEVATOR AND PRESS E' : 'GET IN THE ELEVATOR', 1.8); autoReload();
+    const el = rooms[i].exitElevator;
+    run(function* () { yield 0.8; sfx.ding(); yield 0.3; el.target = 1; sfx.door(); explore = { i, elevator: el }; });
   } else {
     banner('FLOOR CLEAR', null, 1.6);
     const room = rooms[i], el = room.exitElevator;
@@ -1878,9 +1991,10 @@ window.addEventListener('keydown', (e) => {
   if (cutscene) return;
   if (e.key === 'r' || e.key === 'R') startReload();
   const k = e.key.toLowerCase();
-  if (G.roam && ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { e.preventDefault(); roamKeys.add(k); }
+  if (G.roam && ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift', 'c', 'control'].includes(k)) { e.preventDefault(); roamKeys.add(k); }
   else if (k === 's' || k === 'arrowdown') { e.preventDefault(); duck(); }
-  if (G.roam && (k === 'c' || k === 'control' || k === ' ')) { e.preventDefault(); duck(); }
+  if (G.roam && k === ' ') { e.preventDefault(); duck(); }
+  if (G.roam && k === 'e') useThing();
   if (e.key === 'q' || e.key === 'Q' || e.key === 'Tab') { e.preventDefault(); swapWeapon(); }
   if ((e.key === 'Escape' && performance.now() - lockLostT > 400) || e.key === 'p' || e.key === 'P') togglePause();
   if (e.key === 'e' || e.key === 'E') swapWeapon();
@@ -1937,10 +2051,11 @@ function openModeSelect(onPick) {
   { // FREE ROAM add-on (100% completion)
     const un = roamUnlocked();
     const row = document.createElement('div'); row.className = 'hq-row roam-row' + (un ? '' : ' dim');
-    row.innerHTML = `<div class="hq-info"><b style="color:#60ff80">FREE ROAM ADD-ON</b><span>Walk around the room during fights instead of standing in one spot. ${PC ? 'WASD / arrow keys to move, C / Ctrl / Space to duck.' : 'Move with the joystick on the left.'} Works with every mode.</span>${un ? '' : `<small class="req">UNLOCK: BEAT STORY ON EASY, MEDIUM, HARD AND EXTRA HARD (${endingsDone()}/4)</small>`}</div>`;
-    const b = document.createElement('button'); b.className = 'hq-buy' + (un ? (profile.roam ? ' on' : '') : ' off');
-    b.textContent = un ? (profile.roam ? 'ON' : 'OFF') : 'LOCKED';
-    b.addEventListener('click', (e) => { e.stopPropagation(); if (!un) { sfx.empty(); return; } sfx.tap(); profile.roam = !profile.roam; flushProfile(true); openModeSelect(onPick); });
+    row.innerHTML = `<div class="hq-info"><b style="color:#60ff80">FREE ROAM ADD-ON</b><span><b>FULL:</b> walk the whole floor yourself: clear a room, walk to the next one (the fight starts when you step in), find keycards for locked doors, take the elevator. <b>ROOM:</b> move inside each fight, the walk between rooms is automatic. ${PC ? 'WASD move, mouse look, SHIFT sprint, hold C / CTRL crouch, SPACE duck, E use.' : 'Left stick moves (push all the way to sprint), right stick looks.'} Works with every mode.</span>${un ? '' : `<small class="req">UNLOCK: BEAT STORY ON EASY, MEDIUM, HARD AND EXTRA HARD (${endingsDone()}/4)</small>`}</div>`;
+    const lv = roamLevel(profile.roam);
+    const b = document.createElement('button'); b.className = 'hq-buy' + (un ? (lv ? ' on' : '') : ' off');
+    b.textContent = un ? ['OFF', 'ROOM', 'FULL'][lv] : 'LOCKED';
+    b.addEventListener('click', (e) => { e.stopPropagation(); if (!un) { sfx.empty(); return; } sfx.tap(); profile.roam = [2, 0, 1][lv]; flushProfile(true); openModeSelect(onPick); });
     row.append(b); box.append(row);
   }
   for (const m of MODES) {
@@ -1989,6 +2104,7 @@ onBtn('confirmNo', () => closeConfirm(true));
 onBtn('tutSkip', () => { sfx.tap(); if (tutorial) tutorial.finish(); });
 onBtn('reloadBtn', startReload);
 onBtn('duckBtn', duck);
+$('useBtn').addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); useThing(); });
 $('rewindBtn').addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); initAudio(); useWatch(); });
 onBtn('weaponBtn', swapWeapon);
 onBtn('pauseBtn', togglePause);
@@ -2321,7 +2437,8 @@ function update(dt) {
     G.floor.update(dt);
     for (const el of G.floor.elevators) if (el.closeAt && now > el.closeAt) { el.target = 0; el.closeAt = 0; }
   }
-  roamUpdate(dt);
+  roamUpdate(dt); exploreUpdate(dt); keycardUpdate(dt);
+  if (dt > 0) { G.playerVel.subVectors(G.camPos, lastCamPos).multiplyScalar(1 / dt); if (G.playerVel.length() > 12) G.playerVel.set(0, 0, 0); } lastCamPos.copy(G.camPos);
   propBoxT -= dt; if (propBoxT <= 0) { propBoxT = 0.25; refreshPropBoxes(); }
   if (mode === 'combat') { stats.t += dt; if (runMode === 'rush' && !paused) rushTime += dt; }
 
@@ -2343,7 +2460,7 @@ function update(dt) {
   if (G.twist && G.twist.regen && mode === 'combat' && P.hp > 0) healP(G.twist.regen * dt);
   if (M.regen && mode === 'combat' && P.hp > 0) healP(M.regen * dt); // Gills
   P.duckT = Math.max(0, P.duckT - dt); P.duckCd = Math.max(0, P.duckCd - dt);
-  G.duck += ((P.duckT > 0 ? 1 : 0) - G.duck) * Math.min(1, dt * 16);
+  G.duck += ((P.duckT > 0 || crouching() ? 1 : 0) - G.duck) * Math.min(1, dt * 16);
   G.playerPos.copy(G.camPos); G.playerPos.y -= G.duck * 0.65;
   effects.update(dt);
   updateCorpses(dt);
@@ -2625,8 +2742,8 @@ initDev({
     });
   },
   allEndings: () => { profile.endings = { ...(profile.endings || {}), 0: 1, 1: 1, 2: 1, 3: 1 }; touch(); flushProfile(true); toast('NEW GAME+ AND FREE ROAM UNLOCKED'); },
-  addon: (k) => !!profile[k],
-  toggleAddon: (k) => { if (k === 'ngp' ? !ngpUnlocked() : !roamUnlocked()) { profile.endings = { ...(profile.endings || {}), 0: 1, 1: 1, 2: 1, 3: 1 }; } profile[k] = !profile[k]; touch(); flushProfile(true); if (mode === 'title') titleNgp(); toast(`${k === 'ngp' ? 'NEW GAME+' : 'FREE ROAM'} ${profile[k] ? 'ON' : 'OFF'} (NEXT RUN)`); },
+  addon: (k) => (k === 'roam' ? ['OFF', 'ROOM', 'FULL'][roamLevel(profile[k])] : profile[k] ? 'ON' : 'OFF'),
+  toggleAddon: (k) => { if (k === 'ngp' ? !ngpUnlocked() : !roamUnlocked()) { profile.endings = { ...(profile.endings || {}), 0: 1, 1: 1, 2: 1, 3: 1 }; } profile[k] = k === 'roam' ? [2, 0, 1][roamLevel(profile[k])] : !profile[k]; touch(); flushProfile(true); if (mode === 'title') titleNgp(); toast(`${k === 'ngp' ? 'NEW GAME+' : 'FREE ROAM'} ${k === 'roam' ? ['OFF', 'ROOM', 'FULL'][roamLevel(profile[k])] : profile[k] ? 'ON' : 'OFF'} (NEXT RUN)`); },
   pause: () => { devWasPaused = paused; paused = true; ui.pause.classList.add('hidden'); hold = null; },
   resume: () => { paused = devWasPaused; if (paused) { ui.pause.classList.remove('hidden'); $('pausePerks').innerHTML = perkSummary(); } },
   info: () => `${G.enemies.filter((e) => e.alive).length} ENEMIES · ${drawCalls} DRAWS`,

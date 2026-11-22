@@ -331,3 +331,7 @@ body.roam #rewindBtn { bottom: 290px; }
 #vhs i.b2 { height: 4%; animation-duration: .9s; animation-delay: -.3s; }
 @keyframes vhsBar { from { top: 105%; } to { top: -12%; } }
 @keyframes vhsBlink { 50% { opacity: .25; } }
+/* FULL Free Roam: "use" prompt (elevator) */
+#useBtn { position: absolute; left: 50%; bottom: 24%; transform: translateX(-50%); z-index: 31; font-family: inherit; font-size: 20px; color: #fff0c0; padding: 10px 18px;
+  background: rgba(40, 30, 10, .75); border: 3px solid #f0c860; border-radius: 8px; animation: usePulse 1s ease-in-out infinite; }
+@keyframes usePulse { 50% { border-color: #fff8d0; } }

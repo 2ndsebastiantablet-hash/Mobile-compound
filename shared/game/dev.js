@@ -57,8 +57,8 @@ function render() {
   const un = section('UNLOCKS & ADD-ONS');
   btn(un, 'UNLOCK EVERYTHING', () => { ctx.unlockAll(); render(); });
   btn(un, 'MARK ALL 4 ENDINGS SEEN', () => { ctx.allEndings(); render(); });
-  btn(un, `NEW GAME+: ${ctx.addon('ngp') ? 'ON' : 'OFF'}`, () => { ctx.toggleAddon('ngp'); render(); }, ctx.addon('ngp') ? 'on' : '');
-  btn(un, `FREE ROAM: ${ctx.addon('roam') ? 'ON' : 'OFF'}`, () => { ctx.toggleAddon('roam'); render(); }, ctx.addon('roam') ? 'on' : '');
+  btn(un, `NEW GAME+: ${ctx.addon('ngp')}`, () => { ctx.toggleAddon('ngp'); render(); }, ctx.addon('ngp') !== 'OFF' ? 'on' : '');
+  btn(un, `FREE ROAM: ${ctx.addon('roam')}`, () => { ctx.toggleAddon('roam'); render(); }, ctx.addon('roam') !== 'OFF' ? 'on' : '');
   const en = section('PLAY ENDING CUTSCENE');
   ['EASY', 'MEDIUM', 'HARD', 'EXTRA HARD'].forEach((n, i) => btn(en, n, () => { closeDev(); ctx.ending(i); }));
   if (!ctx.inRun()) { box.append(el('div', 'dev-h', 'START A RUN FOR CHEATS, WEAPONS, PERKS AND SPAWNING')); return; }

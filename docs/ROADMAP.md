@@ -85,14 +85,15 @@ Balance comes *after* the new mechanics because perks and upgrades change diffic
 
 **🏁 MILESTONE: BETA.** Gameplay feature complete (audio still to come). Wider testing and store preparation start.
 
-## Phase 7: PC Free Roam (3–5 sessions · weeks 7–10)
+## Phase 7: Free Roam ✅ MOSTLY DONE (v0.19–v0.21) · wider rooms and branching paths still to come
 - [x] First step shipped in v0.17: the FREE ROAM add-on lets you walk around the current room during fights (both versions)
-- [ ] WASD + mouse-look controller, collision, sprint, crouch
-- [ ] Room-triggered combat instead of auto-walking; elevator interaction
-- [ ] AI rework: steering around furniture, cover relative to a moving player, flanking
-- [ ] Bosses adapted to a moving player
-- [ ] Wider rooms, side offices, branching paths, keycards
-- [ ] Balance for a player who can dodge
+- [x] WASD + mouse-look controller, collision, sprint, crouch (v0.19-v0.21; phones: two sticks)
+- [x] Room-triggered combat instead of auto-walking; elevator interaction (FULL Free Roam, v0.21)
+- [x] AI rework: steering around furniture, cover relative to a moving player, flanking, leading shots (v0.21)
+- [x] Bosses adapted to a moving player (they already aim and charge at wherever you are)
+- [x] Keycards and locked doors (v0.21)
+- [ ] Wider rooms, side offices, branching paths (needs a level-generator rework)
+- [~] Balance for a player who can dodge: enemies lead their shots; needs real playtesting
 
 ## Phase 8: Monetization & packaging (2–3 sessions · weeks 10–11)
 - [ ] **Mobile (free):** rewarded ads (revive, double cash, reroll perks), "Remove Ads" purchase, cosmetic shop
