@@ -114,7 +114,7 @@ function cluster() {
   return null;
 }
 
-function focusOn(e) { S.side = 0; S.target = e; S.state = 'dash'; S.t = 0; S.focusT = 0; S.restT = 0; S.waitT = 0; C.sfx.slash(); }
+function focusOn(e) { S.side = 0; S.hitT = 0; S.target = e; S.state = 'dash'; S.t = 0; S.focusT = 0; S.restT = 0; S.waitT = 0; C.sfx.slash(); }
 function laser(to, col = 0x80ffff) {
   const from = S.g.localToWorld(V().set(0.34, 0.95, -0.2));
   C.effects.beam(from, to, col, 0.04, 0.12);
@@ -287,4 +287,5 @@ export function spiritUpdate(dt, active, equipped) {
   S.aura.material.color.set(focused() ? 0xff9a40 : 0x40c8ff);
   if (S.od > 0) { S.od -= dt; if (S.od <= 0 || (!S.odQueue.length && S.state === 'guard')) { S.od = 0; C.post.grade(C.moodGrade()); } }
 }
+export const spiritDebug = () => (S ? { state: S.state, target: S.target && S.target.type, hp: S.target && +S.target.hp.toFixed(1), targetable: S.target && S.target.targetable, hits: S.hits, wait: S.waitT } : null);
 export function spiritFill() { ensure(); S.gauge = 1; } // dev / tests
