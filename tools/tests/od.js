@@ -1,0 +1,20 @@
+const { chromium } = require('playwright');
+(async () => {
+  const b = await chromium.launch({ args: ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'] });
+  const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
+  const errs = []; p.on('pageerror', e => errs.push(e.message + ' ' + (e.stack || '').split('\n')[1]));
+  await p.goto('http://localhost:8080/versions/pc/');
+  await p.evaluate(() => { localStorage.clear(); localStorage.setItem('overtime.tutorialDone', 'true'); localStorage.setItem('overtime.settings', JSON.stringify({ lock: 0, dev: 1 })); localStorage.setItem('overtime.dev', JSON.stringify({ god: true })); });
+  await p.reload(); await p.waitForTimeout(800);
+  await p.evaluate(() => window.__game.startGame(9));
+  await p.waitForFunction(() => window.__game.mode === 'combat', null, { timeout: 25000 });
+  await p.evaluate(() => { window.__game.giveGun('spirit'); }); await p.waitForTimeout(800);
+  const n0 = await p.evaluate(() => window.__game.G.enemies.filter(e => e.alive).length);
+  await p.evaluate(() => { window.__game.spiritFill(); window.__game.startReload(); });
+  await p.waitForTimeout(500); await p.screenshot({ path: 'od_1.png' });
+  console.log('overdrive on', await p.evaluate(() => window.__game.overdrive));
+  await p.waitForTimeout(2500); await p.screenshot({ path: 'od_2.png' });
+  await p.waitForTimeout(4000);
+  console.log('enemies', n0, '->', await p.evaluate(() => window.__game.G.enemies.filter(e => e.alive).length), 'od', await p.evaluate(() => window.__game.overdrive), errs);
+  await b.close();
+})();

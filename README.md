@@ -1,5 +1,7 @@
 # OVERTIME
 
+> **New to this project (or a new Claude Code session)? Start with [docs/HANDOFF.md](docs/HANDOFF.md).**
+
 A retro on-rails shooter set in a 30-floor office tower, with a mobile (portrait, touch) version and a PC (landscape, mouse & keyboard) version. A free-roam PC version is planned. You stand in place with a fixed camera and shoot enemies. When an area is clear you walk to the next one automatically. Clear every area on a floor, ride the elevator up, and keep climbing until you reach the boardroom.
 
 The look is a low-res, chunky-pixel 3D style in the spirit of mid-90s shooters. Everything is drawn in code at runtime: blocky box models, tiny nearest-filtered textures, flat fluorescent lighting and fog. The game ships no image or audio files. Every texture, model, sound effect and music loop is generated procedurally.

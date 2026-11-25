@@ -1,0 +1,28 @@
+const { chromium } = require('playwright');
+(async () => {
+  const pc = process.argv[2] !== 'm';
+  const b = await chromium.launch({ args: ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'] });
+  const p = await b.newPage({ viewport: pc ? { width: 1280, height: 720 } : { width: 390, height: 844 } });
+  const errs = []; p.on('pageerror', e => errs.push(e.message + ' ' + (e.stack || '').split('\n')[1])); p.on('console', m => { if (m.type() === 'error') errs.push(m.text().slice(0, 200)); });
+  await p.goto(`http://localhost:8080/versions/${pc ? 'pc' : 'mobile'}/`);
+  await p.evaluate(() => { localStorage.clear(); localStorage.setItem('overtime.tutorialDone', 'true'); localStorage.setItem('overtime.profile', JSON.stringify({ bestiary: { grunt: { k: 12, s: { 0: 1, 1: 1, 4: 1 } }, walker: { k: 3, s: { 0: 1, 2: 1 } }, blob: { k: 5, s: { 0: 1, 3: 1 } }, boss_stapler: { k: 1, s: { 0: 1 } } } })); });
+  await p.reload(); await p.waitForTimeout(900);
+  await p.click('#hqBtn'); await p.waitForTimeout(200);
+  await p.click('#hqTabs button[data-tab="log"]'); await p.waitForTimeout(300);
+  await p.screenshot({ path: `log_${pc?'pc':'m'}_list.png` });
+  await p.evaluate(() => [...document.querySelectorAll('#hqBody .hq-row')].find(r => r.textContent.includes('CLERK')).click());
+  await p.waitForTimeout(800);
+  await p.screenshot({ path: `log_${pc?'pc':'m'}_grunt.png` });
+  await p.evaluate(() => [...document.querySelectorAll('.log-skins .hq-buy')].find(x => x.textContent === 'GOLDEN').click());
+  await p.waitForTimeout(600);
+  await p.screenshot({ path: `log_${pc?'pc':'m'}_gold.png` });
+  await p.evaluate(() => [...document.querySelectorAll('#hqBody .hq-buy')][0].click());
+  await p.waitForTimeout(200);
+  await p.evaluate(() => [...document.querySelectorAll('#hqBody .hq-row')].find(r => r.textContent.includes('MECH WALKER')).click());
+  await p.waitForTimeout(400);
+  await p.evaluate(() => [...document.querySelectorAll('.log-skins .hq-buy')].find(x => x.textContent === 'ARCTIC').click());
+  await p.waitForTimeout(600);
+  await p.screenshot({ path: `log_${pc?'pc':'m'}_walker.png` });
+  console.log(errs);
+  await b.close();
+})();
